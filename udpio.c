@@ -212,7 +212,7 @@ static int udp_srv_event(udp_srv_t *srv, int fd)
 void udp_srv_clear(udp_srv_t *srv)
 {
 	io_channel_clear(&srv->chan);
-	memset(&srv->iremote, 0, sizeof(&srv->iremote));
+	memset(&srv->iremote, 0, sizeof(srv->iremote));
 }
 
 
