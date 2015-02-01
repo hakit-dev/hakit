@@ -5,6 +5,7 @@
 #include "buf.h"
 #include "tcpio.h"
 #include "udpio.h"
+#include "command.h"
 
 typedef struct comm_s comm_t;
 
