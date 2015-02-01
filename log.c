@@ -39,7 +39,7 @@ static void log_flush(void)
 			log_buf.len--;
 			log_buf.base[log_buf.len] = '\0';
 
-			syslog(LOG_DEBUG, (char *) log_buf.base);
+			syslog(LOG_DEBUG, "%s", (char *) log_buf.base);
 
 			log_buf.len = 0;
 		}
