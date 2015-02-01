@@ -21,4 +21,4 @@ include defs.mk
 
 $(ARCH_LIB): $(OBJS)
 
-$(ARCH_BIN): test.o $(ARCH_LIB)
+$(ARCH_BIN): $(ARCH)/test.o $(ARCH_LIB)
