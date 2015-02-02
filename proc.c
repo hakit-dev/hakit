@@ -5,6 +5,7 @@
 #include <malloc.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #include "log.h"
 #include "proc.h"
@@ -14,25 +15,33 @@ static hakit_proc_t *procs = NULL;
 static int nprocs = 0;
 
 
-static hakit_proc_t *proc_add(void)
+static hakit_proc_t *proc_find_free(void)
 {
-	hakit_proc_t *proc = NULL;
 	int i;
 
 	/* Find a free entry in proc table */
 	for (i = 0; i < nprocs; i++) {
-		proc = &procs[i];
-		if (proc->pid == 0) {
-			goto DONE;
+		if (procs[i].state == HAKIT_PROC_ST_FREE) {
+			return &procs[i];
 		}
 	}
 
-	/* If none found, allocate a new one */
-	nprocs++;
-	procs = (hakit_proc_t *) realloc(procs, nprocs * sizeof(hakit_proc_t));
-	proc = &procs[nprocs-1];
+	return NULL;
+}
 
-DONE:
+
+static hakit_proc_t *proc_add(void)
+{
+	/* Find a free entry in proc table */
+	hakit_proc_t *proc = proc_find_free();
+
+	/* If none found, allocate a new one */
+	if (proc == NULL) {
+		nprocs++;
+		procs = (hakit_proc_t *) realloc(procs, nprocs * sizeof(hakit_proc_t));
+		proc = &procs[nprocs-1];
+	}
+
 	memset(proc, 0, sizeof(hakit_proc_t));
 	return proc;
 }
@@ -40,19 +49,107 @@ DONE:
 
 static void proc_remove(hakit_proc_t *proc)
 {
-	proc->pid = 0;
+	proc->state = HAKIT_PROC_ST_FREE;
+}
+
+
+static void proc_term(hakit_proc_t *proc)
+{
+	proc->cb_stdout = NULL;
+	proc->cb_stderr = NULL;
+	proc->cb_term = NULL;
+
+	if (proc->stdout_tag) {
+		sys_remove(proc->stdout_tag);
+		proc->stdout_tag = 0;
+	}
+
+	if (proc->stderr_tag) {
+		sys_remove(proc->stderr_tag);
+		proc->stderr_tag = 0;
+	}
+
+	if (proc->sigchld_tag) {
+		sys_remove(proc->sigchld_tag);
+		proc->sigchld_tag = 0;
+	}
+
+	if (proc->kill_timeout_tag) {
+		sys_remove(proc->kill_timeout_tag);
+		proc->kill_timeout_tag = 0;
+	}
+
+	if (proc->stdin_fd > 0) {
+		close(proc->stdin_fd);
+		proc->stdin_fd = 0;
+	}
+
+	if (proc->stdout_fd > 0) {
+		close(proc->stdout_fd);
+		proc->stdout_fd = 0;
+	}
+
+	if (proc->stderr_fd > 0) {
+		close(proc->stderr_fd);
+		proc->stderr_fd = 0;
+	}
+}
+
+
+static int proc_stdout(hakit_proc_t *proc, char *buf, int size)
+{
+	//TODO
+	return 1;
+}
+
+
+static int proc_stderr(hakit_proc_t *proc, char *buf, int size)
+{
+	//TODO
+	return 1;
 }
 
 
 static int proc_sigchld(hakit_proc_t *proc, pid_t pid)
 {
+	int status = 0;
+
 	log_debug(1, "proc_sigchld pid=%d", pid);
-	proc_remove(proc);
+
+	if (pid == proc->pid) {
+		proc->pid = 0;
+
+		/* Cancel kill timeout */
+		if (proc->kill_timeout_tag) {
+			sys_remove(proc->kill_timeout_tag);
+			proc->kill_timeout_tag = 0;
+		}
+
+		if (waitpid(pid, &status, WNOHANG) == pid) {
+			if (proc->cb_term != NULL) {
+				proc->cb_term(proc->user_data, status);
+			}
+		}
+		else {
+			log_str("WARNING: Failed to ack process termination (pid=%d)", pid);
+		}
+
+		proc_term(proc);
+		proc_remove(proc);
+	}
+	else {
+		log_str("WARNING: Caught SIGCHLD from unknown process (pid=%d)", pid);
+	}
+
 	return 0;
 }
 
 
-hakit_proc_t *proc_start(int argc, char *argv[])
+hakit_proc_t *proc_start(int argc, char *argv[],
+			 proc_out_func_t cb_stdout,
+			 proc_out_func_t cb_stderr,
+			 proc_term_func_t cb_term,
+			 void *user_data)
 {
 	hakit_proc_t *proc = NULL;
 	int p_in[2] = {-1,-1};
@@ -141,19 +238,30 @@ hakit_proc_t *proc_start(int argc, char *argv[])
 		proc = proc_add();
 		proc->pid = pid;
 		close(p_in[0]);
-		proc->fd_in = p_in[1];
-		proc->fd_out = p_out[0];
+		proc->stdin_fd = p_in[1];
+		proc->stdout_fd = p_out[0];
 		close(p_out[1]);
-		proc->fd_err = p_err[0];
+		proc->stderr_fd = p_err[0];
 		close(p_err[1]);
 
 		/* Enable close-on-exec mode on local pipe endpoints */
-		fcntl(proc->fd_in, F_SETFD, FD_CLOEXEC);
-		fcntl(proc->fd_out, F_SETFD, FD_CLOEXEC);
-		fcntl(proc->fd_err, F_SETFD, FD_CLOEXEC);
+		fcntl(proc->stdin_fd, F_SETFD, FD_CLOEXEC);
+		fcntl(proc->stdout_fd, F_SETFD, FD_CLOEXEC);
+		fcntl(proc->stderr_fd, F_SETFD, FD_CLOEXEC);
+
+		/* Hook stdio handler */
+		proc->stdout_tag = sys_io_watch(proc->stdout_fd, (sys_io_func_t) proc_stdout, proc);
+		proc->stderr_tag = sys_io_watch(proc->stderr_fd, (sys_io_func_t) proc_stderr, proc);
 
 		/* Hook sigchld handler */
 		proc->sigchld_tag = sys_child_watch(pid, (sys_child_func_t) proc_sigchld, proc);
+
+		proc->cb_stdout = cb_stdout;
+		proc->cb_stderr = cb_stderr;
+		proc->cb_term = cb_term;
+		proc->user_data = user_data;
+
+		proc->state = HAKIT_PROC_ST_RUN;
 
 		break;
 	}
@@ -162,12 +270,28 @@ hakit_proc_t *proc_start(int argc, char *argv[])
 }
 
 
-void proc_stop(hakit_proc_t * proc)
+static int proc_kill_timeout(hakit_proc_t * proc)
 {
+	proc->kill_timeout_tag = 0;
+
+	log_str("WARNING: Process pid=%s takes too long to terminate - Killing it", proc->pid);
+	kill(proc->pid, SIGKILL);
+
+	proc_term(proc);
+	proc_remove(proc);
+
+	return 0;
 }
 
 
-int proc_init(void)
+void proc_stop(hakit_proc_t * proc)
 {
-	return 0;
+	if (proc->state == HAKIT_PROC_ST_RUN) {
+		log_debug(1, "Sending process pid=%s the TERM signal", proc->pid);
+		kill(proc->pid, SIGTERM);
+		proc->state = HAKIT_PROC_ST_KILL;
+
+		/* Start kill timeout */
+		proc->kill_timeout_tag = sys_timeout(1000, (sys_func_t) proc_kill_timeout, proc);
+	}
 }

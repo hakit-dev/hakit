@@ -5,12 +5,41 @@
 
 #include "sys.h"
 
-typedef struct {
+typedef enum {
+	HAKIT_PROC_ST_FREE=0,
+	HAKIT_PROC_ST_RUN,
+	HAKIT_PROC_ST_KILL,
+} hakit_proc_state_t;
+
+typedef struct hakit_proc_s hakit_proc_t;
+
+typedef void (*proc_out_func_t)(void *user_data, char *buf, int size);
+typedef void (*proc_term_func_t)(void *user_data, int status);
+
+struct hakit_proc_s {
+	hakit_proc_state_t state;
 	pid_t pid;
-	int fd_in;
-	int fd_out;
-	int fd_err;
+	int stdin_fd;
+	int stdout_fd;
+	int stderr_fd;
+	sys_tag_t stdout_tag;
+	sys_tag_t stderr_tag;
 	sys_tag_t sigchld_tag;
-} hakit_proc_t;
+	sys_tag_t kill_timeout_tag;
+	proc_out_func_t cb_stdout;
+	proc_out_func_t cb_stderr;
+	proc_term_func_t cb_term;
+	void *user_data;
+};
+
+
+extern hakit_proc_t *proc_start(int argc, char *argv[],
+				proc_out_func_t cb_stdout,
+				proc_out_func_t cb_stderr,
+				proc_term_func_t cb_term,
+				void *user_data);
+
+extern void proc_stop(hakit_proc_t * proc);
+
 
 #endif /* __HAKIT_PROC_H__ */
