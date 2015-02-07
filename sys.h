@@ -6,7 +6,7 @@
 typedef unsigned int sys_tag_t;
 typedef int (*sys_func_t)(void *arg);
 typedef int (*sys_io_func_t)(void *arg, int fd);
-typedef int (*sys_child_func_t)(void *arg, pid_t pid);
+typedef int (*sys_child_func_t)(void *arg, pid_t pid, int status);
 
 extern int sys_init(void);
 

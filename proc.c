@@ -59,15 +59,8 @@ static void proc_term(hakit_proc_t *proc)
 	proc->cb_stderr = NULL;
 	proc->cb_term = NULL;
 
-	if (proc->stdout_tag) {
-		sys_remove(proc->stdout_tag);
-		proc->stdout_tag = 0;
-	}
-
-	if (proc->stderr_tag) {
-		sys_remove(proc->stderr_tag);
-		proc->stderr_tag = 0;
-	}
+	io_channel_close(&proc->stdout);
+	io_channel_close(&proc->stderr);
 
 	if (proc->sigchld_tag) {
 		sys_remove(proc->sigchld_tag);
@@ -83,38 +76,40 @@ static void proc_term(hakit_proc_t *proc)
 		close(proc->stdin_fd);
 		proc->stdin_fd = 0;
 	}
-
-	if (proc->stdout_fd > 0) {
-		close(proc->stdout_fd);
-		proc->stdout_fd = 0;
-	}
-
-	if (proc->stderr_fd > 0) {
-		close(proc->stderr_fd);
-		proc->stderr_fd = 0;
-	}
 }
 
 
-static int proc_stdout(hakit_proc_t *proc, char *buf, int size)
+static int proc_stdout(hakit_proc_t *proc, char *buf, int len)
 {
-	//TODO
+	log_debug(2, "proc_stdout len=%d", len);
+
+	if (len > 0) {
+		if (proc->cb_stdout != NULL) {
+			proc->cb_stdout(proc->user_data, buf, len);
+		}
+	}
+
 	return 1;
 }
 
 
-static int proc_stderr(hakit_proc_t *proc, char *buf, int size)
+static int proc_stderr(hakit_proc_t *proc, char *buf, int len)
 {
-	//TODO
+	log_debug(2, "proc_stderr len=%d", len);
+
+	if (len > 0) {
+		if (proc->cb_stderr != NULL) {
+			proc->cb_stderr(proc->user_data, buf, len);
+		}
+	}
+
 	return 1;
 }
 
 
-static int proc_sigchld(hakit_proc_t *proc, pid_t pid)
+static int proc_sigchld(hakit_proc_t *proc, pid_t pid, int status)
 {
-	int status = 0;
-
-	log_debug(1, "proc_sigchld pid=%d", pid);
+	log_debug(2, "proc_sigchld pid=%d status=%d", pid, status);
 
 	if (pid == proc->pid) {
 		proc->pid = 0;
@@ -125,13 +120,8 @@ static int proc_sigchld(hakit_proc_t *proc, pid_t pid)
 			proc->kill_timeout_tag = 0;
 		}
 
-		if (waitpid(pid, &status, WNOHANG) == pid) {
-			if (proc->cb_term != NULL) {
-				proc->cb_term(proc->user_data, status);
-			}
-		}
-		else {
-			log_str("WARNING: Failed to ack process termination (pid=%d)", pid);
+		if (proc->cb_term != NULL) {
+			proc->cb_term(proc->user_data, status);
 		}
 
 		proc_term(proc);
@@ -161,6 +151,8 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 		log_str("PANIC: Cannot start process with empty command line");
 		return NULL;
 	}
+
+	log_debug(1, "proc_start %s ...", argv[0]);
 
 	/* Check access to command */
 	if (access(argv[0], X_OK) == -1) {
@@ -209,7 +201,7 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 		close(p_out[0]);
 		close(p_out[1]);
 
-		if (dup2(p_err[1], STDOUT_FILENO) == -1) {
+		if (dup2(p_err[1], STDERR_FILENO) == -1) {
 			log_str("ERROR: Cannot dup2 proc stderr: %s", strerror(errno));
 			exit(254);
 		}
@@ -239,23 +231,22 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 		proc->pid = pid;
 		close(p_in[0]);
 		proc->stdin_fd = p_in[1];
-		proc->stdout_fd = p_out[0];
 		close(p_out[1]);
-		proc->stderr_fd = p_err[0];
 		close(p_err[1]);
 
-		/* Enable close-on-exec mode on local pipe endpoints */
-		fcntl(proc->stdin_fd, F_SETFD, FD_CLOEXEC);
-		fcntl(proc->stdout_fd, F_SETFD, FD_CLOEXEC);
-		fcntl(proc->stderr_fd, F_SETFD, FD_CLOEXEC);
-
 		/* Hook stdio handler */
-		proc->stdout_tag = sys_io_watch(proc->stdout_fd, (sys_io_func_t) proc_stdout, proc);
-		proc->stderr_tag = sys_io_watch(proc->stderr_fd, (sys_io_func_t) proc_stderr, proc);
+		io_channel_setup(&proc->stdout, p_out[0], (io_func_t) proc_stdout, proc);
+		io_channel_setup(&proc->stderr, p_err[0], (io_func_t) proc_stderr, proc);
 
 		/* Hook sigchld handler */
 		proc->sigchld_tag = sys_child_watch(pid, (sys_child_func_t) proc_sigchld, proc);
 
+		/* Enable close-on-exec mode on local pipe endpoints */
+		fcntl(proc->stdin_fd, F_SETFD, FD_CLOEXEC);
+		fcntl(proc->stdout.fd, F_SETFD, FD_CLOEXEC);
+		fcntl(proc->stderr.fd, F_SETFD, FD_CLOEXEC);
+
+		/* Setup callbacks */
 		proc->cb_stdout = cb_stdout;
 		proc->cb_stderr = cb_stderr;
 		proc->cb_term = cb_term;

@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include "sys.h"
+#include "io.h"
 
 typedef enum {
 	HAKIT_PROC_ST_FREE=0,
@@ -20,10 +21,8 @@ struct hakit_proc_s {
 	hakit_proc_state_t state;
 	pid_t pid;
 	int stdin_fd;
-	int stdout_fd;
-	int stderr_fd;
-	sys_tag_t stdout_tag;
-	sys_tag_t stderr_tag;
+	io_channel_t stdout;
+	io_channel_t stderr;
 	sys_tag_t sigchld_tag;
 	sys_tag_t kill_timeout_tag;
 	proc_out_func_t cb_stdout;

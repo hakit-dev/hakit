@@ -39,6 +39,7 @@ typedef struct {
 		} timeout;
 		struct {
 			pid_t pid;
+			int status;
 		} child;
 	} d;
 } sys_source_t;
@@ -88,6 +89,8 @@ static sys_source_t *sys_source_add(sys_func_t func, void *arg)
 void sys_remove(sys_tag_t tag)
 {
 	int i;
+
+	log_debug(3, "sys_remove(%d)", tag);
 
 	for (i = 0; i < NSOURCES; i++) {
 		sys_source_t *src = &sources[i];
@@ -163,7 +166,7 @@ static int sys_callback(sys_source_t *src)
 			ret = ((sys_io_func_t) src->func)(src->arg, src->d.io.fd);
 			break;
 		case SYS_TYPE_CHILD:
-			ret = ((sys_child_func_t) src->func)(src->arg, src->d.child.pid);
+			ret = ((sys_child_func_t) src->func)(src->arg, src->d.child.pid, src->d.child.status);
 			break;
 		default:
 			ret = src->func(src->arg);
@@ -278,11 +281,14 @@ void sys_run(void)
 		int child_status;
 		pid_t child_pid;
 		while ((child_pid = waitpid(-1, &child_status, WNOHANG)) > 0) {
+			log_debug(3, "sys_run: waitpid => pid=%d status=%d", child_pid, child_status);
+
 			for (i = 0; i < NSOURCES; i++) {
 				sys_source_t *src = &sources[i];
 
 				if (src->type == SYS_TYPE_CHILD) {
 					if (src->d.child.pid == child_pid) {
+						src->d.child.status = child_status;
 						sys_callback(src);
 						sys_source_clear(src);
 					}
@@ -313,6 +319,7 @@ void sys_run(void)
 
 void sys_quit(void)
 {
+	log_debug(3, "sys_quit");
 	quit_requested = 1;
 }
 

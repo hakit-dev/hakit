@@ -37,10 +37,11 @@ int io_blocking(int fd, int blocking)
 static int io_channel_event(io_channel_t *chan, int fd)
 {
 	int ret = 1;
-	char buf[4096];
+	char buf[BUFSIZ+1];
 	int len;
 
-	while ((len = read(fd, buf, sizeof(buf))) > 0) {
+	while ((len = read(fd, buf, sizeof(buf)-1)) > 0) {
+		buf[len] = 0;
 		if (chan->func != NULL) {
 			chan->func(chan->user_data, buf, len);
 		}
@@ -85,6 +86,18 @@ void io_channel_clear(io_channel_t *chan)
 	chan->tag = 0;
 	chan->func = NULL;
 	chan->user_data = NULL;
+}
+
+
+void io_channel_close(io_channel_t *chan)
+{
+	if (chan->tag) {
+		sys_remove(chan->tag);
+	}
+	if (chan->fd >= 0) {
+		close(chan->fd);
+	}
+	io_channel_clear(chan);
 }
 
 

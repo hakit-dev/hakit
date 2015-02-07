@@ -18,6 +18,8 @@ extern int io_blocking(int fd, int blocking);
 
 extern void io_channel_setup(io_channel_t *chan, int fd, io_func_t func, void *user_data);
 extern void io_channel_clear(io_channel_t *chan);
+
+extern void io_channel_close(io_channel_t *chan);
 extern int io_channel_write(io_channel_t *chan, char *buf, int len);
 
 #endif /* __IO_H__ */

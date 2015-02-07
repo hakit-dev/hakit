@@ -189,7 +189,7 @@ int options_parse(int *_argc, char *argv[], char *parameter_string)
 			}
 		}
 		else {
-			i++;
+			break;
 		}
 	}
 
