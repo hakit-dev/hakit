@@ -1,5 +1,5 @@
-#ifndef __STK_OPTIONS_H__
-#define __STK_OPTIONS_H__
+#ifndef __HAKIT_OPTIONS_H__
+#define __HAKIT_OPTIONS_H__
 
 #ifdef __cplusplus
 extern "C" {
@@ -34,4 +34,4 @@ extern void options_usage(void);
 }
 #endif
 
-#endif /* __STK_OPTIONS_H__ */
+#endif /* __HAKIT_OPTIONS_H__ */
