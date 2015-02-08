@@ -1,5 +1,5 @@
-#ifndef __TYPES_H__
-#define __TYPES_H__
+#ifndef __HAKIT_TYPES_H__
+#define __HAKIT_TYPES_H__
 
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
 #define CEIL_DIV(x, y) (((x)+(y)-1) / (y))
@@ -34,4 +34,4 @@
 #define xstr(s) str(s)
 #define str(s) #s
 
-#endif  /* __TYPE_H__ */
+#endif  /* __HAKIT_TYPE_H__ */

@@ -15,7 +15,7 @@ typedef enum {
 
 typedef struct {
 	hakit_proc_state_t state;
-	int pid;
+	pid_t pid;
 	int stdin_fd;
 	io_channel_t stdout;
 	io_channel_t stderr;

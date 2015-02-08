@@ -1,5 +1,5 @@
-#ifndef __IO_H__
-#define __IO_H__
+#ifndef __HAKIT_IO_H__
+#define __HAKIT_IO_H__
 
 #include "sys.h"
 
@@ -22,4 +22,4 @@ extern void io_channel_clear(io_channel_t *chan);
 extern void io_channel_close(io_channel_t *chan);
 extern int io_channel_write(io_channel_t *chan, char *buf, int len);
 
-#endif /* __IO_H__ */
+#endif /* __HAKIT_IO_H__ */

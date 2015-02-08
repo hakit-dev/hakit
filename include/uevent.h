@@ -1,5 +1,5 @@
-#ifndef __UEVENT_H__
-#define __UEVENT_H__
+#ifndef __HAKIT_UEVENT_H__
+#define __HAKIT_UEVENT_H__
 
 typedef struct {
 	char buf[2048+512];
@@ -19,4 +19,4 @@ extern int uevent_init(void);
 extern int uevent_add(char *action, char *subsystem, uevent_func_t func, void *user_data);
 extern char *uevent_getenv(uevent_data_t *d, char *env);
 
-#endif /* __UEVENT_H__ */
+#endif /* __HAKIT_UEVENT_H__ */

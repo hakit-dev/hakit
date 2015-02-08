@@ -1,5 +1,5 @@
-#ifndef __HTTP_SERVER_H__
-#define __HTTP_SERVER_H__
+#ifndef __HAKIT_HTTP_SERVER_H__
+#define __HAKIT_HTTP_SERVER_H__
 
 #include "tcpio.h"
 
@@ -24,4 +24,4 @@ extern void http_server_alias(http_server_t *http, char *location, http_server_h
 extern int http_send_file(tcp_sock_t *client, char *fname);
 extern void http_send_buf(tcp_sock_t *client, char *ctype, buf_t *cbuf);
 
-#endif /* __HTTP_SERVER_H__ */
+#endif /* __HAKIT_HTTP_SERVER_H__ */

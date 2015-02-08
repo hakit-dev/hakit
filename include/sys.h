@@ -1,5 +1,5 @@
-#ifndef __SYS_H__
-#define __SYS_H__
+#ifndef __HAKIT_SYS_H__
+#define __HAKIT_SYS_H__
 
 #include <sys/types.h>
 
@@ -20,4 +20,4 @@ extern void sys_remove(sys_tag_t tag);
 extern void sys_run(void);
 extern void sys_quit(void);
 
-#endif /* __SYS_H__ */
+#endif /* __HAKIT_SYS_H__ */

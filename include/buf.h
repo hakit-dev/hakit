@@ -1,5 +1,5 @@
-#ifndef __BUF_H__
-#define __BUF_H__
+#ifndef __HAKIT_BUF_H__
+#define __HAKIT_BUF_H__
 
 typedef struct {
 	unsigned char *base;
@@ -25,4 +25,4 @@ extern int buf_set_int(buf_t *buf, int v);
 
 extern int buf_file_load(buf_t *buf, char *filename, int silent);
 
-#endif /* __BUF_H__ */
+#endif /* __HAKIT_BUF_H__ */

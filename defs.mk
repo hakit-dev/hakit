@@ -5,8 +5,11 @@ RANLIB = $(CROSS_COMPILE)ranlib
 CFLAGS  = -Wall -O2
 LDFLAGS =
 
-ifneq ($(HAKIT),)
-CFLAGS  += -Wall -O2 -I$(HAKIT)
+ifeq ($(HAKIT),)
+VPATH = os:core
+CFLAGS  += -I. -Iinclude -Ios
+else
+CFLAGS  += -I$(HAKIT)/include
 LDFLAGS += -L$(HAKIT)/$(ARCH) -lhakit
 endif
 

@@ -1,5 +1,5 @@
-#ifndef __COMMAND_H__
-#define __COMMAND_H__
+#ifndef __HAKIT_COMMAND_H__
+#define __HAKIT_COMMAND_H__
 
 #include "buf.h"
 #include "io.h"
@@ -19,4 +19,4 @@ extern void command_clear(command_t *cmd);
 extern int command_recv(command_t *cmd, char *buf, int len);
 extern int command_parse(char *line, char ***_argv);
 
-#endif /* __COMMAND_H__ */
+#endif /* __HAKIT_COMMAND_H__ */
