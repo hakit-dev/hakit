@@ -1,10 +1,11 @@
 #ifndef __HAKIT_PROC_H__
 #define __HAKIT_PROC_H__
 
-#include <unistd.h>
-
 #include "sys.h"
 #include "io.h"
+
+typedef void (*proc_out_func_t)(void *user_data, char *buf, int size);
+typedef void (*proc_term_func_t)(void *user_data, int status);
 
 typedef enum {
 	HAKIT_PROC_ST_FREE=0,
@@ -12,14 +13,9 @@ typedef enum {
 	HAKIT_PROC_ST_KILL,
 } hakit_proc_state_t;
 
-typedef struct hakit_proc_s hakit_proc_t;
-
-typedef void (*proc_out_func_t)(void *user_data, char *buf, int size);
-typedef void (*proc_term_func_t)(void *user_data, int status);
-
-struct hakit_proc_s {
+typedef struct {
 	hakit_proc_state_t state;
-	pid_t pid;
+	int pid;
 	int stdin_fd;
 	io_channel_t stdout;
 	io_channel_t stderr;
@@ -29,7 +25,7 @@ struct hakit_proc_s {
 	proc_out_func_t cb_stderr;
 	proc_term_func_t cb_term;
 	void *user_data;
-};
+} hakit_proc_t;
 
 
 extern hakit_proc_t *proc_start(int argc, char *argv[],
