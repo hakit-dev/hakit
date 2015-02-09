@@ -20,7 +20,7 @@ typedef struct {
 	io_channel_t stdout;
 	io_channel_t stderr;
 	sys_tag_t sigchld_tag;
-	sys_tag_t kill_timeout_tag;
+	sys_tag_t timeout_tag;
 	proc_out_func_t cb_stdout;
 	proc_out_func_t cb_stderr;
 	proc_term_func_t cb_term;

@@ -182,6 +182,34 @@ static int sys_callback(sys_source_t *src)
 }
 
 
+static void sys_waitpid(void)
+{
+	pid_t pid;
+	int status;
+	int i;
+
+	while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+		log_debug(3, "sys_waitpid => pid=%d status=%d", pid, status);
+
+		for (i = 0; i < NSOURCES; i++) {
+			sys_source_t *src = &sources[i];
+
+			if (src->type == SYS_TYPE_CHILD) {
+				if (src->d.child.pid == pid) {
+					src->d.child.status = status;
+					sys_callback(src);
+					sys_source_clear(src);
+				}
+			}
+		}
+	}
+
+	if ((pid < 0) && (errno != ECHILD)) {
+		log_str("PANIC: waitpid: %s", strerror(errno));
+	}
+}
+
+
 void sys_run(void)
 {
 	int i;
@@ -277,29 +305,8 @@ void sys_run(void)
 			}
 		}
 
-		/* Check SIGCHLD events */
-		int child_status;
-		pid_t child_pid;
-		while ((child_pid = waitpid(-1, &child_status, WNOHANG)) > 0) {
-			log_debug(3, "sys_run: waitpid => pid=%d status=%d", child_pid, child_status);
-
-			for (i = 0; i < NSOURCES; i++) {
-				sys_source_t *src = &sources[i];
-
-				if (src->type == SYS_TYPE_CHILD) {
-					if (src->d.child.pid == child_pid) {
-						src->d.child.status = child_status;
-						sys_callback(src);
-						sys_source_clear(src);
-					}
-				}
-			}
-		}
-
-		if ((child_pid < 0) && (errno != ECHILD)) {
-			log_str("PANIC: waitpid: %s", strerror(errno));
-			break;
-		}
+		/* Check for SIGCHLD events */
+		sys_waitpid();
 	}
 
 	log_debug(1, "Leaving processing loop");
@@ -345,4 +352,3 @@ int sys_init(void)
 	signal(SIGPIPE, SIG_IGN);
 	return 0;
 }
- 

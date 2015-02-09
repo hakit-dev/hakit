@@ -8,6 +8,7 @@
 #include <signal.h>
 
 #include "log.h"
+#include "sys.h"
 #include "proc.h"
 
 
@@ -53,6 +54,15 @@ static void proc_remove(hakit_proc_t *proc)
 }
 
 
+static void proc_timeout_cancel(hakit_proc_t *proc)
+{
+	if (proc->timeout_tag) {
+		sys_remove(proc->timeout_tag);
+		proc->timeout_tag = 0;
+	}
+}
+
+
 static void proc_term(hakit_proc_t *proc)
 {
 	proc->cb_stdout = NULL;
@@ -67,15 +77,20 @@ static void proc_term(hakit_proc_t *proc)
 		proc->sigchld_tag = 0;
 	}
 
-	if (proc->kill_timeout_tag) {
-		sys_remove(proc->kill_timeout_tag);
-		proc->kill_timeout_tag = 0;
-	}
+	proc_timeout_cancel(proc);
 
 	if (proc->stdin_fd > 0) {
 		close(proc->stdin_fd);
 		proc->stdin_fd = 0;
 	}
+}
+
+
+static int proc_hangup_timeout(hakit_proc_t *proc)
+{
+	log_debug(2, "proc_hangup_timeout");
+	proc_stop(proc);
+	return 0;
 }
 
 
@@ -87,6 +102,10 @@ static int proc_stdout(hakit_proc_t *proc, char *buf, int len)
 		if (proc->cb_stdout != NULL) {
 			proc->cb_stdout(proc->user_data, buf, len);
 		}
+	}
+	else if (len == 0) {
+		proc_timeout_cancel(proc);
+		proc->timeout_tag = sys_timeout(100, (sys_func_t) proc_hangup_timeout, proc);
 	}
 
 	return 1;
@@ -115,10 +134,7 @@ static int proc_sigchld(hakit_proc_t *proc, pid_t pid, int status)
 		proc->pid = 0;
 
 		/* Cancel kill timeout */
-		if (proc->kill_timeout_tag) {
-			sys_remove(proc->kill_timeout_tag);
-			proc->kill_timeout_tag = 0;
-		}
+		proc_timeout_cancel(proc);
 
 		if (proc->cb_term != NULL) {
 			proc->cb_term(proc->user_data, status);
@@ -152,7 +168,7 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 		return NULL;
 	}
 
-	log_debug(1, "proc_start %s ...", argv[0]);
+	log_debug(2, "proc_start %s ...", argv[0]);
 
 	/* Check access to command */
 	if (access(argv[0], X_OK) == -1) {
@@ -227,6 +243,8 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 		break;
 
 	default : /* Parent */
+		log_debug(2, "  => pid=%d", pid);
+
 		proc = proc_add();
 		proc->pid = pid;
 		close(p_in[0]);
@@ -263,7 +281,7 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 
 static int proc_kill_timeout(hakit_proc_t * proc)
 {
-	proc->kill_timeout_tag = 0;
+	proc->timeout_tag = 0;
 
 	log_str("WARNING: Process pid=%s takes too long to terminate - Killing it", proc->pid);
 	kill(proc->pid, SIGKILL);
@@ -277,12 +295,14 @@ static int proc_kill_timeout(hakit_proc_t * proc)
 
 void proc_stop(hakit_proc_t * proc)
 {
+	//log_debug(2, "proc_stop pid=%d state=%d", proc->pid, proc->state);
+
 	if (proc->state == HAKIT_PROC_ST_RUN) {
-		log_debug(1, "Sending process pid=%s the TERM signal", proc->pid);
+		log_debug(2, "Sending process pid=%d the TERM signal", proc->pid);
 		kill(proc->pid, SIGTERM);
 		proc->state = HAKIT_PROC_ST_KILL;
 
 		/* Start kill timeout */
-		proc->kill_timeout_tag = sys_timeout(1000, (sys_func_t) proc_kill_timeout, proc);
+		proc->timeout_tag = sys_timeout(1000, (sys_func_t) proc_kill_timeout, proc);
 	}
 }
