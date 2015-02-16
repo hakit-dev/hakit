@@ -46,6 +46,8 @@ int main(int argc, char *argv[])
 		exit(2);
 	}
 
+	sys_init();
+
 	log_str("Test mode: %d", opt_mode);
 
 	if (opt_mode) {
