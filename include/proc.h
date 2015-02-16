@@ -36,5 +36,8 @@ extern hakit_proc_t *proc_start(int argc, char *argv[],
 
 extern void proc_stop(hakit_proc_t * proc);
 
+extern int proc_write(hakit_proc_t * proc, char *buf, int size);
+extern int proc_printf(hakit_proc_t * proc, char *fmt, ...);
+
 
 #endif /* __HAKIT_PROC_H__ */

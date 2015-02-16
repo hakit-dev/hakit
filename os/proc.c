@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <errno.h>
 #include <malloc.h>
@@ -94,6 +95,23 @@ static int proc_hangup_timeout(hakit_proc_t *proc)
 }
 
 
+static void proc_print_buf(hakit_proc_t *proc, char *tag, char *buf, int len)
+{
+	int i = 0;
+
+	while (i < len) {
+		char *str = &buf[i];
+		while ((i < len) && (buf[i] != '\n')) {
+			i++;
+		}
+		if (i < len) {
+			buf[i++] = '\0';
+		}
+		log_str("[%d] %s: %s", proc->pid, tag, str);
+	}
+}
+
+
 static int proc_stdout(hakit_proc_t *proc, char *buf, int len)
 {
 	log_debug(2, "proc_stdout len=%d", len);
@@ -101,6 +119,9 @@ static int proc_stdout(hakit_proc_t *proc, char *buf, int len)
 	if (len > 0) {
 		if (proc->cb_stdout != NULL) {
 			proc->cb_stdout(proc->user_data, buf, len);
+		}
+		else {
+			proc_print_buf(proc, "stdout", buf, len);
 		}
 	}
 	else if (len == 0) {
@@ -119,6 +140,9 @@ static int proc_stderr(hakit_proc_t *proc, char *buf, int len)
 	if (len > 0) {
 		if (proc->cb_stderr != NULL) {
 			proc->cb_stderr(proc->user_data, buf, len);
+		}
+		else {
+			proc_print_buf(proc, "stderr", buf, len);
 		}
 	}
 
@@ -305,4 +329,33 @@ void proc_stop(hakit_proc_t * proc)
 		/* Start kill timeout */
 		proc->timeout_tag = sys_timeout(1000, (sys_func_t) proc_kill_timeout, proc);
 	}
+}
+
+
+int proc_write(hakit_proc_t * proc, char *buf, int size)
+{
+	if (proc->stdin_fd < 0) {
+		log_str("WARNING: Writing to closed process input (pid=%d)", proc->pid);
+		return 0;
+	}
+
+	return write(proc->stdin_fd, buf, size);
+}
+
+
+int proc_printf(hakit_proc_t * proc, char *fmt, ...)
+{
+	va_list ap;
+	char buf[1024];
+	int size;
+
+	va_start(ap, fmt);
+	size = vsnprintf(buf, sizeof(buf), fmt, ap);
+	va_end(ap);
+
+	if (size <= 0) {
+		return size;
+	}
+
+	return proc_write(proc, buf, size);
 }
