@@ -90,6 +90,7 @@ static void proc_term(hakit_proc_t *proc)
 static int proc_hangup_timeout(hakit_proc_t *proc)
 {
 	log_debug(2, "proc_hangup_timeout");
+	proc->timeout_tag = 0;
 	proc_stop(proc);
 	return 0;
 }
@@ -112,7 +113,7 @@ static void proc_print_buf(hakit_proc_t *proc, char *tag, char *buf, int len)
 }
 
 
-static int proc_stdout(hakit_proc_t *proc, char *buf, int len)
+static void proc_stdout(hakit_proc_t *proc, char *buf, int len)
 {
 	log_debug(2, "proc_stdout len=%d", len);
 
@@ -124,16 +125,14 @@ static int proc_stdout(hakit_proc_t *proc, char *buf, int len)
 			proc_print_buf(proc, "stdout", buf, len);
 		}
 	}
-	else if (len == 0) {
+	else {
 		proc_timeout_cancel(proc);
 		proc->timeout_tag = sys_timeout(100, (sys_func_t) proc_hangup_timeout, proc);
 	}
-
-	return 1;
 }
 
 
-static int proc_stderr(hakit_proc_t *proc, char *buf, int len)
+static void proc_stderr(hakit_proc_t *proc, char *buf, int len)
 {
 	log_debug(2, "proc_stderr len=%d", len);
 
@@ -145,8 +144,6 @@ static int proc_stderr(hakit_proc_t *proc, char *buf, int len)
 			proc_print_buf(proc, "stderr", buf, len);
 		}
 	}
-
-	return 1;
 }
 
 
@@ -307,7 +304,7 @@ static int proc_kill_timeout(hakit_proc_t * proc)
 {
 	proc->timeout_tag = 0;
 
-	log_str("WARNING: Process pid=%s takes too long to terminate - Killing it", proc->pid);
+	log_str("WARNING: Process pid=%d takes too long to terminate - Killing it", proc->pid);
 	kill(proc->pid, SIGKILL);
 
 	proc_term(proc);
@@ -319,15 +316,24 @@ static int proc_kill_timeout(hakit_proc_t * proc)
 
 void proc_stop(hakit_proc_t * proc)
 {
-	//log_debug(2, "proc_stop pid=%d state=%d", proc->pid, proc->state);
-
 	if (proc->state == HAKIT_PROC_ST_RUN) {
 		log_debug(2, "Sending process pid=%d the TERM signal", proc->pid);
-		kill(proc->pid, SIGTERM);
 		proc->state = HAKIT_PROC_ST_KILL;
 
-		/* Start kill timeout */
-		proc->timeout_tag = sys_timeout(1000, (sys_func_t) proc_kill_timeout, proc);
+		if (kill(proc->pid, SIGTERM) == 0) {
+			/* Start kill timeout */
+			proc->timeout_tag = sys_timeout(1000, (sys_func_t) proc_kill_timeout, proc);
+		}
+		else {
+			log_debug(2, "  => %s", strerror(errno));
+
+			if (proc->cb_term != NULL) {
+				proc->cb_term(proc->user_data, -1);
+			}
+
+			proc_term(proc);
+			proc_remove(proc);
+		}
 	}
 }
 

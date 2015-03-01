@@ -188,6 +188,8 @@ static void sys_waitpid(void)
 	int status;
 	int i;
 
+	log_debug(4, "(sys_waitpid)");
+
 	while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
 		log_debug(3, "sys_waitpid => pid=%d status=%d", pid, status);
 
@@ -234,7 +236,7 @@ void sys_run(void)
 			sys_source_t *src = &sources[i];
 
 			if (src->type == SYS_TYPE_TIMEOUT) {
-				if (src->d.timeout.t < now) {
+				if (src->d.timeout.t <= now) {
 					/* Timer expired => invoke timeout callback */
 					if (sys_callback(src)) {
 						if (src->type == SYS_TYPE_TIMEOUT) {
@@ -252,7 +254,7 @@ void sys_run(void)
 			sys_source_t *src = &sources[i];
 
 			if (src->type == SYS_TYPE_TIMEOUT) {
-				//log_debug(3, "sys_run/1: TIMEOUT tag=%u %llu %llu", src->tag, src->d.timeout.t, now);
+				log_debug(4, "sys_run/1: TIMEOUT tag=%u %llu %llu", src->tag, src->d.timeout.t, now);
 				if (src->d.timeout.t > now) {
 					unsigned long long dt = src->d.timeout.t - now;
 					if ((delay == 0) || (dt < delay)) {
@@ -262,7 +264,7 @@ void sys_run(void)
 			}
 
 			else if (src->type == SYS_TYPE_IO) {
-				//log_debug(3, "sys_run/1: IO tag=%u", src->tag);
+				log_debug(4, "sys_run/1: IO tag=%u", src->tag);
 				FD_SET(src->d.io.fd, &rfds);
 				if (src->d.io.fd > fdmax) {
 					fdmax = src->d.io.fd;
@@ -270,7 +272,7 @@ void sys_run(void)
 			}
 
 			else if (src->type == SYS_TYPE_REMOVED) {
-				//log_debug(3, "sys_run/1: REMOVED tag=%u", src->tag);
+				log_debug(4, "sys_run/1: REMOVED tag=%u", src->tag);
 				sys_source_clear(src);
 			}
 		}
@@ -282,9 +284,9 @@ void sys_run(void)
 		}
 
 		/* Wait for something to happen */
-		//log_debug(3, "sys_run/2: select(delay=%d)", delay);
+		log_debug(4, "sys_run/2: select(delay=%d)", delay);
 		int status = select(fdmax+1, &rfds, NULL, NULL, ptv);
-		//log_debug(3, "sys_run/3: select => status=%d", status);
+		log_debug(4, "sys_run/3: select => status=%d", status);
 
 		if (status < 0) {
 			if ((errno != EAGAIN) && (errno != EINTR)) {
@@ -342,13 +344,20 @@ static void sys_quit_signal(int sig)
 }
 
 
+static void sys_sigchld(int sig)
+{
+	/* Child death will be acknowledged by waitpid(),
+	   as this signal will cause select() to be interrupted (EAGAIN) */
+}
+
+
 int sys_init(void)
 {
 	signal(SIGHUP, sys_quit_signal);
 	signal(SIGINT, sys_quit_signal);
 	signal(SIGQUIT, sys_quit_signal);
 	signal(SIGTERM, sys_quit_signal);
-	signal(SIGCHLD, SIG_IGN);
+	signal(SIGCHLD, sys_sigchld);
 	signal(SIGPIPE, SIG_IGN);
 	return 0;
 }
