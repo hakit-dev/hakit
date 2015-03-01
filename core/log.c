@@ -88,7 +88,7 @@ void log_debug(int level, const char *fmt, ...)
 }
 
 
-void log_hex(unsigned char *buf, int size)
+void log_data_hex(unsigned char *buf, int size)
 {
 	int i;
 
@@ -100,50 +100,55 @@ void log_hex(unsigned char *buf, int size)
 }
 
 
-void log_debug_data(unsigned char *buf, int size)
+void log_data_str(unsigned char *buf, int size)
 {
+	int crlf = 0;
 	int i;
 
-	if (opt_debug >= 3) {
+	for (i = 0; i < size; i++) {
+		unsigned char c = buf[i];
+
+		if (crlf >= 4) {
+			log_printf("...");
+			break;
+		}
+
+		if ((c < ' ') || (c > 127)) {
+			switch (c) {
+			case '\n':
+				log_printf("\\n");
+				crlf++;
+				break;
+			case '\r':
+				log_printf("\\r");
+				crlf++;
+				break;
+			default:
+				log_printf("\\x%02X", c);
+				crlf = 0;
+				break;
+			}
+		}
+		else {
+			log_putc(c);
+			crlf = 0;
+		}
+	}
+}
+
+
+void log_debug_data(unsigned char *buf, int size)
+{
+	if (opt_debug >= 4) {
 		log_printf("  = ");
-		log_hex(buf, size);
+		log_data_hex(buf, size);
 		log_putc('\n');
 	}
 
 
-	if (opt_debug >= 2) {
-		int crlf = 0;
-
+	if (opt_debug >= 3) {
 		log_printf("  = \"");
-		for (i = 0; i < size; i++) {
-			unsigned char c = buf[i];
-
-			if (crlf >= 4) {
-				log_printf("...");
-				break;
-			}
-
-			if ((c < ' ') || (c > 127)) {
-				switch (c) {
-				case '\n':
-					log_printf("\\n");
-					crlf++;
-					break;
-				case '\r':
-					log_printf("\\r");
-					crlf++;
-					break;
-				default:
-					log_printf("\\x%02X", c);
-					crlf = 0;
-					break;
-				}
-			}
-			else {
-				log_putc(c);
-				crlf = 0;
-			}
-		}
+		log_data_str(buf, size);
 		log_putc('"');
 		log_putc('\n');
 	}

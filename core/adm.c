@@ -7,22 +7,19 @@
 #include "comm.h"
 
 
-#define NAME "hakit-comm-test"
-
+#define NAME "hakit-adm"
 
 //===================================================
 // Command line arguments
 //==================================================
 
-int opt_mode = 0;
-
 const char *options_summary = "HAKit comm test";
 
 const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0, OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
-	{ "mode",   'm', 0, OPTIONS_TYPE_INT,  &opt_mode,    "Test mode" },
 	{ NULL }
 };
+
 
 
 static void sink_event(comm_t *comm, char *name, char *value)
@@ -47,16 +44,7 @@ int main(int argc, char *argv[])
 		exit(2);
 	}
 
-	log_str("Test mode: %d", opt_mode);
-
-	if (opt_mode) {
-		comm_sink_register(&comm, "A", (comm_sink_func_t) sink_event, &comm);
-		comm_source_register(&comm, "B", 0);
-	}
-	else {
-		comm_sink_register(&comm, "B", (comm_sink_func_t) sink_event, &comm);
-		comm_source_register(&comm, "A", 0);
-	}
+	comm_monitor(&comm, (comm_sink_func_t) sink_event, &comm);
 
 	sys_run();
 

@@ -5,7 +5,7 @@ LIB=libhakit.a
 ARCH_LIB = $(OUTDIR)/$(LIB)
 ARCH_LIBS = $(ARCH_LIB)
 
-BINS = hakit-test-proc hakit-test-comm
+BINS = hakit-test-proc hakit-test-comm hakit-adm
 ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 SRCS = options.c logio.c log.c sys.c io.c buf.c command.c \
@@ -22,3 +22,4 @@ $(ARCH_LIB): $(OBJS)
 
 $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIB)
 $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIB)
+$(OUTDIR)/hakit-adm: $(OUTDIR)/adm.o $(ARCH_LIB)

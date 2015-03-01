@@ -197,7 +197,7 @@ static int udp_srv_event(udp_srv_t *srv, int fd)
 	/* Reject datagrams from myself */
 	if (foreach_interface(&srv->iremote, udp_srv_local_addr)) {
 		log_debug(2, "udp_srv_event: filtered packet from %s", ip_addr(NULL, &srv->iremote));
-		return 0;
+		return 1;
 	}
 
 	log_debug(1, "udp_srv_event: %d bytes from %s", len, ip_addr(NULL, &srv->iremote));
