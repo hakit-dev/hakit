@@ -130,15 +130,26 @@ int options_parse(int *_argc, char *argv[], char *parameter_string)
 					}
 				}
 				else {
-					if ((args[1] != '\0') && (args[1] == entry->short_opt) && (args[2] == '\0')) {
+					if ((args[1] != '\0') && (args[1] == entry->short_opt)) {
 						found = entry;
 						stride++;
 
-						if (entry->value_symbol != NULL) {
-							int i1 = i+1;
-							if (i1 < argc) {
-								value = strdup(argv[i1]);
-								stride++;
+						if (args[2] == '\0') {
+							if (entry->value_symbol != NULL) {
+								int i1 = i+1;
+								if (i1 < argc) {
+									value = strdup(argv[i1]);
+									stride++;
+								}
+								else {
+									options_help();
+									return -1;
+								}
+							}
+						}
+						else {
+							if (entry->value_symbol != NULL) {
+								value = strdup(&args[2]);
 							}
 							else {
 								options_help();
