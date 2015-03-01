@@ -59,7 +59,7 @@ static int setsockopt_keepalive(int sock)
  * TCP socket
  */
 
-void tcp_sock_shutdown(tcp_sock_t *tcp_sock)
+static void tcp_sock_shutdown_(tcp_sock_t *tcp_sock, int silent)
 {
 	if (tcp_sock->chan.tag > 0) {
 		sys_remove(tcp_sock->chan.tag);
@@ -67,11 +67,19 @@ void tcp_sock_shutdown(tcp_sock_t *tcp_sock)
 	}
 
 	if (tcp_sock->chan.fd >= 0) {
-		log_debug(1, "Shutting down connection [%d]", tcp_sock->chan.fd);
+		if (!silent) {
+			log_str("Shutting down connection [%d]", tcp_sock->chan.fd);
+		}
 		shutdown(tcp_sock->chan.fd, 2);
 		close(tcp_sock->chan.fd);
 		tcp_sock->chan.fd = -1;
 	}
+}
+
+
+void tcp_sock_shutdown(tcp_sock_t *tcp_sock)
+{
+	tcp_sock_shutdown_(tcp_sock, 0);
 }
 
 
@@ -83,8 +91,8 @@ static void tcp_sock_event(tcp_sock_t *tcp_sock, char *buf, int len)
 	}
 
 	if (buf == NULL) {
-		log_debug(1, "Connection [%d] closed", tcp_sock->chan.fd);
-		tcp_sock_shutdown(tcp_sock);
+		log_str("Connection [%d] closed by peer", tcp_sock->chan.fd);
+		tcp_sock_shutdown_(tcp_sock, 1);
 	}
 }
 
@@ -143,7 +151,7 @@ int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func
 
 	/* Signal connection */
 	char *s_addr = ip_addr(NULL, &iremote);
-	log_debug(1, "Connection [%d] established with %s", sock, s_addr);
+	log_str("Connection [%d] established with %s", sock, s_addr);
 
 	tcp_sock_setup(tcp_sock, sock, func, NULL);
 

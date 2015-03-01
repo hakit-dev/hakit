@@ -49,12 +49,12 @@ static int io_channel_event(io_channel_t *chan, int fd)
 
 	if (len < 0) {
 		if ((errno != EAGAIN) && (errno != EINTR)) {
-			log_debug(1, "io_channel_event [%d] ERROR: %s", fd, strerror(errno));
+			log_str("ERROR: io_channel_event [%d]: %s", fd, strerror(errno));
 			ret = 0;
 		}
 	}
 	else if (len == 0) {
-		log_debug(1, "io_channel_event [%d] HANGUP", fd);
+		log_debug(3, "io_channel_event [%d] HANGUP", fd);
 		ret = 0;
 	}
 

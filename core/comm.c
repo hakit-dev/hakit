@@ -183,8 +183,7 @@ static void comm_node_send_initial_values(comm_node_t *node)
 	int i;
 
 	for (i = 0; i < comm->nsources; i++) {
-		comm_source_t *source = &comm->sources[i];
-		comm_source_send_initial_value(source, node);
+		comm_source_send_initial_value(&comm->sources[i], node);
 	}
 }
 
@@ -194,7 +193,7 @@ static int comm_node_connect(comm_node_t *node)
 	node->connect_attempts++;
 
 	if (node->connect_attempts > 4) {
-		log_str("Too many connection attempts on node '%s': giving up", node->name);
+		log_str("Too many connections attempted on node '%s': giving up", node->name);
 		node->timeout_tag = 0;
 		comm_node_remove(node);
 		return 0;
@@ -525,6 +524,8 @@ static void comm_source_attach_node(comm_source_t *source, comm_node_t *node)
 
 static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *node)
 {
+	log_debug(3, "comm_source_send_initial_value source='%s' event=%d node='%s'", source->name, source->event, node->name);
+
 	/* Do not send initial value if source is declared as an event */
 	if (source->event) {
 		return;
@@ -536,7 +537,7 @@ static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *n
 		char str[size];
 		int len;
 
-		len = snprintf(str, size, "set %s=\"%s\"", source->name, source->value.base);
+		len = snprintf(str, size-1, "set %s=\"%s\"", source->name, source->value.base);
 		log_debug(2, "comm_source_send_initial_value cmd='%s' node='%s'", str, node->name);
 		str[len++] = '\n';
 
@@ -552,7 +553,7 @@ static void comm_source_send_(comm_source_t *source)
 	int len;
 	int i;
 
-	len = snprintf(str, size, "set %s=\"%s\"", source->name, source->value.base);
+	len = snprintf(str, size-1, "set %s=\"%s\"", source->name, source->value.base);
 	log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->nnodes);
 	str[len++] = '\n';
 
@@ -710,6 +711,10 @@ static void comm_udp_event(comm_t *comm, unsigned char *buf, int size)
 	case UDP_TYPE_SOURCE:
 		/* If monitor mode enabled, tell sender we need to receive all sources events from it */
 		if (comm->monitor_func != NULL) {
+			for (i = 0; i < argc; i++) {
+				comm->monitor_func(comm, argv[i], NULL);
+			}
+
 			buf[1] = UDP_TYPE_SINK;
 			udp_srv_send_reply(&comm->udp_srv, (char *) buf, size);
 		}

@@ -200,7 +200,7 @@ static int udp_srv_event(udp_srv_t *srv, int fd)
 		return 1;
 	}
 
-	log_debug(1, "udp_srv_event: %d bytes from %s", len, ip_addr(NULL, &srv->iremote));
+	log_debug(2, "udp_srv_event: %d bytes from %s", len, ip_addr(NULL, &srv->iremote));
 	if (srv->chan.func != NULL) {
 		srv->chan.func(srv->chan.user_data, buf, len);
 	}
