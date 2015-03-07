@@ -85,6 +85,7 @@ static comm_node_t *comm_node_alloc(comm_t *comm)
 	for (i = 0; i < comm->nnodes; i++) {
 		node = &comm->nodes[i];
 		if (node->name == NULL) {
+			log_debug(2, "comm_node_alloc -> %d (reused)", i);
 			return node;
 		}
 	}
@@ -94,6 +95,8 @@ static comm_node_t *comm_node_alloc(comm_t *comm)
 	comm->nodes = realloc(comm->nodes, sizeof(comm_node_t) * comm->nnodes);
 	node = &comm->nodes[i];
 	memset(node, 0, sizeof(comm_node_t));
+
+	log_debug(2, "comm_node_alloc -> %d (new)", i);
 
 	tcp_sock_clear(&node->tcp_sock);
 	tcp_sock_set_data(&node->tcp_sock, node);
@@ -167,9 +170,8 @@ static void comm_node_remove(comm_node_t *node)
 	tcp_sock_set_data(&node->tcp_sock, NULL);
 	tcp_sock_shutdown(&node->tcp_sock);
 
-	/* Destroy command buffering context */
-	command_destroy(node->cmd);
-	node->cmd = NULL;
+	/* Clear command buffering context */
+	command_clear(node->cmd);
 
 	/* Free node entry for future use */
 	free(node->name);
