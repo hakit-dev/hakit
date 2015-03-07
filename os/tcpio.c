@@ -151,7 +151,7 @@ int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func
 
 	/* Signal connection */
 	char *s_addr = ip_addr(NULL, &iremote);
-	log_str("Connection [%d] established with %s", sock, s_addr);
+	log_str("Outgoing connection [%d] established to %s", sock, s_addr);
 
 	tcp_sock_setup(tcp_sock, sock, func, NULL);
 
@@ -239,7 +239,7 @@ static int tcp_srv_csock_accept(tcp_srv_t *srv)
 
 	/* Signal connection */
 	char *s_addr = ip_addr(NULL, &srv->iremote);
-	log_str("Connection [%d] established with %s", sock, s_addr);
+	log_str("Incomming connection [%d] established from %s", sock, s_addr);
 	if (srv->func != NULL) {
 		srv->func(&srv->dsock[dnum], TCP_IO_CONNECT, s_addr, strlen(s_addr));
 	}
