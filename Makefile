@@ -1,5 +1,5 @@
 ARCH ?= $(shell arch)
-OUTDIR = $(ARCH)
+OUTDIR = out/$(ARCH)
 
 LIB=libhakit.a
 ARCH_LIB = $(OUTDIR)/$(LIB)

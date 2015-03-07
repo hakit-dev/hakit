@@ -10,7 +10,7 @@ VPATH = os:core
 CFLAGS  += -I. -Iinclude -Ios
 else
 CFLAGS  += -I$(HAKIT)/include
-LDFLAGS += -L$(HAKIT)/$(ARCH) -lhakit
+LDFLAGS += -L$(HAKIT)/out/$(ARCH) -lhakit
 endif
 
 $(OUTDIR):
