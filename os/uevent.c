@@ -11,15 +11,20 @@
 #include "sys.h"
 #include "uevent.h"
 
+/* Disable uevent if not supported by kernel */
+#ifdef NETLINK_KOBJECT_UEVENT
+#define HAKIT_UEVENT_ENABLED
 
 static sys_tag_t uevent_tag = 0;
 
 static uevent_hook_t *uevent_hooks = NULL;
 static int uevent_nhooks = 0;
+#endif
 
 
 int uevent_add(char *action, char *subsystem, uevent_func_t func, void *user_data)
 {
+#ifdef HAKIT_UEVENT_ENABLED
 	uevent_hook_t *hook;
 
 	log_debug(2, "uevent_add: action='%s' subsystem='%s'", action, subsystem);
@@ -47,11 +52,15 @@ int uevent_add(char *action, char *subsystem, uevent_func_t func, void *user_dat
 	}
 
 	return 0;
+#else
+	return -1;
+#endif /* HAKIT_UEVENT_ENABLED */
 }
 
 
 char *uevent_getenv(uevent_data_t *d, char *env)
 {
+#ifdef HAKIT_UEVENT_ENABLED
 	char env_str[strlen(env)+2];
 	int env_len;
 	int i;
@@ -69,10 +78,13 @@ char *uevent_getenv(uevent_data_t *d, char *env)
 
 		i += len + 1;
 	}
+#endif /* HAKIT_UEVENT_ENABLED */
 
 	return NULL;
 }
 
+
+#ifdef HAKIT_UEVENT_ENABLED
 
 static int uevent_event(void *arg, int fd)
 {
@@ -130,9 +142,12 @@ static int uevent_event(void *arg, int fd)
 	return 1;
 }
 
+#endif /* HAKIT_UEVENT_ENABLED */
+
 
 int uevent_init(void)
 {
+#ifdef HAKIT_UEVENT_ENABLED
 	int sock;
 	int buffersize = 16 * 1024 * 1024;
 	struct sockaddr_nl snl;
@@ -169,4 +184,8 @@ int uevent_init(void)
 	uevent_tag = sys_io_watch(sock, uevent_event, NULL);
 
 	return 0;
+#else
+	log_str("ERROR: Netlink uevent not supported by this kernel");
+	return -1;
+#endif /* HAKIT_UEVENT_ENABLED */
 }
