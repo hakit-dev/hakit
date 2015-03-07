@@ -55,11 +55,13 @@ int command_recv(command_t *cmd, char *buf, int len)
 		int i = 0;
 
 		while (i < len) {
+			int i0 = i;
+
 			while ((i < len) && (buf[i] != '\n')) {
 				i++;
 			}
 
-			buf_append(&cmd->line, (unsigned char *) buf, i);
+			buf_append(&cmd->line, (unsigned char *) &buf[i0], i-i0);
 
 			if (i < len) {
 				if (cmd->handler != NULL) {

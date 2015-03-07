@@ -537,7 +537,7 @@ static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *n
 		char str[size];
 		int len;
 
-		len = snprintf(str, size-1, "set %s=\"%s\"", source->name, source->value.base);
+		len = snprintf(str, size-1, "set %s=%s", source->name, source->value.base);
 		log_debug(2, "comm_source_send_initial_value cmd='%s' node='%s'", str, node->name);
 		str[len++] = '\n';
 
@@ -553,7 +553,7 @@ static void comm_source_send_(comm_source_t *source)
 	int len;
 	int i;
 
-	len = snprintf(str, size-1, "set %s=\"%s\"", source->name, source->value.base);
+	len = snprintf(str, size-1, "set %s=%s", source->name, source->value.base);
 	log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->nnodes);
 	str[len++] = '\n';
 
@@ -919,7 +919,14 @@ static void comm_command(comm_t *comm, char *line, tcp_sock_t *tcp_sock)
 	}
 
 	argc = command_parse(line, &argv);
-	log_debug(2, "  => %d arguments", argc);
+	if (opt_debug >= 2) {
+		int i;
+		log_printf("  =>");
+		for (i = 0; i < argc; i++) {
+			log_printf(" [%d]=\"%s\"", i, argv[i]);
+		}
+		log_printf("\n");
+	}
 
 	if (argc > 0) {
 		buf_t out_buf;
