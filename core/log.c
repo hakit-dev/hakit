@@ -40,6 +40,7 @@ void log_tstamp(void)
 	static struct timeval t0 = {0,0};
 	struct timeval t;
 	int dt_sec, dt_usec;
+	char str[32];
 
 	if (t0.tv_sec == 0) {
 		gettimeofday(&t0, NULL);
@@ -54,7 +55,9 @@ void log_tstamp(void)
 		dt_sec--;
 	}
 
-	log_printf("%d.%06d ", dt_sec, dt_usec);
+	strftime(str, sizeof(str), "%d-%b-%Y %H:%M:%S", localtime(&t.tv_sec));
+
+	log_printf("%s %d.%06d ", str, dt_sec, dt_usec);
 }
 
 
