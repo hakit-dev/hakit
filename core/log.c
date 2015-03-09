@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdarg.h>
+#include <time.h>
 #include <sys/time.h>
 
 #include "options.h"
