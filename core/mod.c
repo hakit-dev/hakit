@@ -3,7 +3,6 @@
 #include <malloc.h>
 
 #include "log.h"
-
 #include "mod.h"
 
 
@@ -11,12 +10,18 @@
  * HAKit properties collection
  */
 
+static void hk_prop_init(hk_prop_t *prop)
+{
+	hk_tab_init(&prop->tab, sizeof(hk_prop_entry_t));
+}
+
+
 static hk_prop_entry_t *hk_prop_find(hk_prop_t *prop, char *name)
 {
 	int i;
 
-	for (i = 0; i < prop->n; i++) {
-		hk_prop_entry_t *entry = &prop->tab[i];
+	for (i = 0; i < prop->tab.nmemb; i++) {
+		hk_prop_entry_t *entry = ((hk_prop_entry_t *) &prop->tab.buf) + i;
 		if (strcmp(entry->name, name) == 0) {
 			return entry;
 		}
@@ -31,11 +36,7 @@ void hk_prop_set(hk_prop_t *prop, char *name, char *value)
 	hk_prop_entry_t *entry = hk_prop_find(prop, name);
 
 	if (entry == NULL) {
-		int i = prop->n;
-		prop->n++;
-		prop->tab = (hk_prop_entry_t *) realloc(prop->tab, sizeof(hk_prop_entry_t) * prop->n);
-
-		entry = &prop->tab[i];
+		entry = hk_tab_push(&prop->tab);
 		entry->name = strdup(name);
 	}
 	else {
@@ -64,8 +65,8 @@ void hk_prop_foreach(hk_prop_t *prop, hk_prop_foreach_func func, char *user_data
 {
 	int i;
 
-	for (i = 0; i < prop->n; i++) {
-		hk_prop_entry_t *entry = &prop->tab[i];
+	for (i = 0; i < prop->tab.nmemb; i++) {
+		hk_prop_entry_t *entry = ((hk_prop_entry_t *) &prop->tab.buf) + i;
 		if (!func(user_data, entry->name, entry->value)) {
 			return;
 		}
@@ -77,16 +78,15 @@ void hk_prop_foreach(hk_prop_t *prop, hk_prop_foreach_func func, char *user_data
  * HAKit module class definition
  */
 
-static hk_class_t *classes = NULL;
-static int nclasses = 0;
+HK_TAB_DECLARE(classes, hk_class_t);
 
 
 hk_class_t *hk_class_find(char *name)
 {
 	int i;
 
-	for (i = 0; i < nclasses; i++) {
-		hk_class_t *hc = &classes[i];
+	for (i = 0; i < classes.nmemb; i++) {
+		hk_class_t *hc = ((hk_class_t *) classes.buf) + i;
 		if (strcmp(hc->name, name) == 0) {
 			return hc;
 		}
@@ -99,35 +99,25 @@ hk_class_t *hk_class_find(char *name)
 hk_class_t *hk_class_create(char *name)
 {
 	hk_class_t *hc = hk_class_find(name);
-	int i;
 
 	if (hc != NULL) {
 		log_str("ERROR: Class '%s' created more than once", name);
 		return NULL;
 	}
 
-	i = nclasses;
-	nclasses++;
-	classes = (hk_class_t *) realloc(classes, sizeof(hk_class_t) * nclasses);
-
-	hc = &classes[i];
-	memset(hc, 0, sizeof(hk_class_t));
+	hc = hk_tab_push(&classes);
 
 	hc->name = strdup(name);
+	hk_prop_init(&hc->prop);
+	hk_tab_init(&hc->pads, sizeof(hk_pad_t));
 
 	return hc;
 }
 
+
 hk_pad_t *hk_class_pad_add(hk_class_t *hc, char *name, hk_pad_input_func func)
 {
-	hk_pad_t *pad;
-	int i;
-
-	i = hc->npads;
-	hc->npads++;
-	hc->pads = (hk_pad_t *) realloc(hc->pads, sizeof(hk_pad_t) * hc->npads);
-
-	pad = &hc->pads[i];
+	hk_pad_t *pad = hk_tab_push(&hc->pads);
 	pad->name = strdup(name);
 	pad->func = func;
 
@@ -137,12 +127,23 @@ hk_pad_t *hk_class_pad_add(hk_class_t *hc, char *name, hk_pad_input_func func)
 
 void hk_class_pad_foreach(hk_class_t *hc, hk_class_pad_foreach_func func, void *user_data)
 {
-	int i;
+	hk_tab_foreach(&hc->pads, (hk_tab_foreach_func) func, user_data);
+}
 
-	for (i = 0; i < hc->npads; i++) {
-		hk_pad_t *pad = &hc->pads[i];
-		if (!func(user_data, pad)) {
-			return;
-		}
-	}
+
+void hk_class_prop_set(hk_class_t *hc, char *name, char *value)
+{
+	hk_prop_set(&hc->prop, name, value);
+}
+
+
+char *hk_class_prop_get(hk_class_t *hc, char *name)
+{
+	return hk_prop_get(&hc->prop, name);
+}
+
+
+void hk_class_prop_foreach(hk_class_t *hc, hk_prop_foreach_func func, char *user_data)
+{
+	hk_prop_foreach(&hc->prop, func, user_data);
 }

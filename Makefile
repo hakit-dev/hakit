@@ -10,7 +10,7 @@ ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 OS_SRCS = logio.c sys.c io.c iputils.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c
-CORE_SRCS = options.c log.c buf.c command.c comm.c mod.c \
+CORE_SRCS = options.c log.c buf.c tab.c command.c comm.c mod.c \
 	http.c http_server.c eventq.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)

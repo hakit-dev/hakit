@@ -1,6 +1,8 @@
 #ifndef __HAKIT_MOD_H__
 #define __HAKIT_MOD_H__
 
+#include "tab.h"
+
 /*
  * HAKit properties collection
  */
@@ -11,8 +13,7 @@ typedef struct {
 } hk_prop_entry_t;
 
 typedef struct {
-	hk_prop_entry_t *tab;
-	int n;
+	hk_tab_t tab;
 } hk_prop_t;
 
 typedef int (*hk_prop_foreach_func)(void *user_data, char *name, char *value);
@@ -39,14 +40,17 @@ struct hk_pad_s {
 typedef struct {
 	char *name;
 	hk_prop_t prop;
-	hk_pad_t *pads;
-	int npads;
+	hk_tab_t pads;
 } hk_class_t;
 
 
 extern hk_class_t *hk_class_create(char *name);
 extern hk_pad_t *hk_class_pad_add(hk_class_t *hc, char *name, hk_pad_input_func func);
 extern void hk_class_pad_foreach(hk_class_t *hc, hk_class_pad_foreach_func func, void *user_data);
+
+extern void hk_class_prop_set(hk_class_t *hc, char *name, char *value);
+extern char *hk_class_prop_get(hk_class_t *hc, char *name);
+extern void hk_class_prop_foreach(hk_class_t *hc, hk_prop_foreach_func func, char *user_data);
 
 
 /*
