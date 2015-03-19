@@ -13,6 +13,16 @@ void hk_tab_init(hk_tab_t *tab, int msize)
 }
 
 
+void hk_tab_alloc(hk_tab_t *tab, int msize, int nmemb)
+{
+	int size = nmemb * msize;
+	tab->buf = malloc(size);
+	tab->nmemb = nmemb;
+	tab->msize = msize;
+	memset(tab->buf, 0, size);
+}
+
+
 void *hk_tab_push(hk_tab_t *tab)
 {
 	void *p;
