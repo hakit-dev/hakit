@@ -6,8 +6,8 @@ CFLAGS  = -Wall -O2
 LDFLAGS =
 
 ifeq ($(HAKIT),)
-VPATH = os:core
-CFLAGS  += -I. -Iinclude -Ios
+VPATH = os:core:classes
+CFLAGS  += -I. -Iinclude -Ios -Iclasses
 else
 CFLAGS  += -I$(HAKIT)/include
 LDFLAGS += -L$(HAKIT)/out/$(ARCH) -lhakit

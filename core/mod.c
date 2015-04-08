@@ -1,4 +1,14 @@
+/*
+ * HAKit - The Home Automation KIT
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
+#include <stdarg.h>
 #include <string.h>
 #include <malloc.h>
 
@@ -10,7 +20,7 @@
  * HAKit module class definition
  */
 
-static HK_TAB_DECLARE(classes, hk_class_t);
+static HK_TAB_DECLARE(classes, hk_class_t *);
 
 
 hk_class_t *hk_class_find(char *name)
@@ -28,74 +38,55 @@ hk_class_t *hk_class_find(char *name)
 }
 
 
-hk_class_t *hk_class_create(char *name)
+void hk_class_register(hk_class_t *class)
 {
-	hk_class_t *hc = hk_class_find(name);
+	hk_class_t **pclass;
 
-	if (hc != NULL) {
-		log_str("ERROR: Class '%s' already exists", name);
-		return NULL;
+	if (hk_class_find(class->name) != NULL) {
+		log_str("ERROR: Class '%s' already exists", class->name);
+		return;
 	}
 
-	hc = hk_tab_push(&classes);
-
-	hc->name = strdup(name);
-	hk_prop_init(&hc->props);
-	hk_tab_init(&hc->pads, sizeof(hk_pad_t));
-
-	return hc;
+	pclass = hk_tab_push(&classes);
+	*pclass = class;
 }
 
 
-hk_pad_t *hk_class_pad_add(hk_class_t *hc, char *name, hk_pad_input_func func)
-{
-	hk_pad_t *pad = hk_tab_push(&hc->pads);
+/*
+ * HAKit module pads
+ */
 
-	pad->id = hc->pads.nmemb;
+hk_pad_t *hk_pad_create(hk_obj_t *obj, char *fmt, ...)
+{
+	char name[64];
+	va_list ap;
+	hk_pad_t *pad;
+
+	va_start(ap, fmt);
+	vsnprintf(name, sizeof(name), fmt, ap);
+	va_end(ap);
+
+	pad = hk_tab_push(&obj->pads);
+	pad->obj = obj;
 	pad->name = strdup(name);
-	pad->func = func;
+	pad->state = -1;
 
 	return pad;
 }
 
 
-void hk_class_pad_foreach(hk_class_t *hc, hk_class_pad_foreach_func func, void *user_data)
-{
-	hk_tab_foreach(&hc->pads, (hk_tab_foreach_func) func, user_data);
-}
-
-
-hk_pad_t *hk_class_pad_find(hk_class_t *hc, char *name)
+hk_pad_t *hk_pad_find(hk_obj_t *obj, char *name)
 {
 	int i;
 
-	for (i = 0; i < hc->pads.nmemb; i++) {
-		hk_pad_t *pad = ((hk_pad_t *) hc->pads.buf) + i;
+	for (i = 0; i < obj->pads.nmemb; i++) {
+		hk_pad_t *pad = ((hk_pad_t *) obj->pads.buf) + i;
 		if (strcmp(pad->name, name) == 0) {
 			return pad;
 		}
 	}
 
 	return NULL;
-}
-
-
-
-void hk_class_prop_set(hk_class_t *hc, char *name, char *value)
-{
-	hk_prop_set(&hc->props, name, value);
-}
-
-
-char *hk_class_prop_get(hk_class_t *hc, char *name)
-{
-	return hk_prop_get(&hc->props, name);
-}
-
-
-void hk_class_prop_foreach(hk_class_t *hc, hk_prop_foreach_func func, char *user_data)
-{
-	hk_prop_foreach(&hc->props, func, user_data);
 }
 
 
@@ -133,28 +124,37 @@ hk_net_t *hk_net_create(char *name)
 	net = hk_tab_push(&nets);
 
 	net->name = strdup(name);
-	hk_tab_init(&net->targets, sizeof(hk_net_target_t));
+	hk_tab_init(&net->ppads, sizeof(hk_pad_t *));
 
 	return net;
 }
 
 
-void hk_net_connect(hk_net_t *net, hk_obj_t *obj, hk_pad_t *pad)
+int hk_net_connect(hk_net_t *net, hk_pad_t *pad)
 {
-	hk_net_target_t *target;
+	hk_pad_t **ppad;
 	int i;
 
 	/* Ensure pad is not bound to this net */
-	for (i = 0; i < net->targets.nmemb; i++) {
-		target = ((hk_net_target_t *) net->targets.buf) + i;
-		if (target->pad == pad) {
-			return;
+	for (i = 0; i < net->ppads.nmemb; i++) {
+		ppad = &((hk_pad_t **) net->ppads.buf)[i];
+		if (*ppad == pad) {
+			log_str("WARNING: pad '%s.%s' already connected to net '%s'", pad->obj->name, pad->name, net->name);
+			return 1;
 		}
 	}
 
-	target = hk_tab_push(&net->targets);
-	target->obj = obj;
-	target->pad = pad;
+	/* Check pad is not already connected */
+	if (pad->net != NULL) {
+		log_str("ERROR: pad '%s.%s' already connected to net '%s'", pad->obj->name, pad->name, net->name);
+		return 0;
+	}
+
+	ppad = hk_tab_push(&net->ppads);
+	*ppad = pad;
+	pad->net = net;
+
+	return 1;
 }
 
 
@@ -165,25 +165,44 @@ void hk_net_connect(hk_net_t *net, hk_obj_t *obj, hk_pad_t *pad)
 static HK_TAB_DECLARE(objs, hk_obj_t);
 
 
-hk_obj_t *hk_obj_create(char *name, hk_class_t *class)
+hk_obj_t *hk_obj_init(hk_obj_t *obj, char *name, hk_class_t *class)
 {
-	hk_obj_t *obj = hk_tab_push(&objs);
-	int size;
-
-	obj->class = class;
-
-	obj->name = strdup(name);
-
-	size = sizeof(hk_net_t *) * class->pads.nmemb;
-	obj->nets = (hk_net_t **) malloc(size);
-	memset(obj->nets, 0, size);
-
-	hk_prop_init(&obj->props);
+	if (obj != NULL) {
+		obj->name = strdup(name);
+		obj->class = class;
+		hk_prop_init(&obj->props);
+		hk_tab_init(&obj->pads, sizeof(hk_pad_t));
+	}
 
 	return obj;
 }
 
 
+hk_obj_t *hk_obj_create(char *name, hk_class_t *class)
+{
+	return hk_obj_init(hk_tab_push(&objs), name, class);
+}
+
+
+void hk_obj_prop_set(hk_obj_t *obj, char *name, char *value)
+{
+	hk_prop_set(&obj->props, name, value);
+}
+
+
+char *hk_obj_prop_get(hk_obj_t *obj, char *name)
+{
+	return hk_prop_get(&obj->props, name);
+}
+
+
+void hk_obj_prop_foreach(hk_obj_t *obj, hk_prop_foreach_func func, char *user_data)
+{
+       hk_prop_foreach(&obj->props, func, user_data);
+}
+
+
+#if 0
 int hk_obj_connect(hk_obj_t *obj, char *pad_name, char *net_name)
 {
 	hk_pad_t *pad;
@@ -207,24 +226,6 @@ int hk_obj_connect(hk_obj_t *obj, char *pad_name, char *net_name)
 	return 0;
 }
 
-
-
-void hk_obj_prop_set(hk_obj_t *obj, char *name, char *value)
-{
-	hk_prop_set(&obj->props, name, value);
-}
-
-
-char *hk_obj_prop_get(hk_obj_t *obj, char *name)
-{
-	char *value = hk_prop_get(&obj->props, name);
-
-	if (value == NULL) {
-		value = hk_class_prop_get(obj->class, name);
-	}
-
-	return value;
-}
 
 
 void hk_obj_update_str(hk_obj_t *obj, char *pad_name, char *value)
@@ -252,3 +253,4 @@ void hk_obj_update_str(hk_obj_t *obj, char *pad_name, char *value)
 		}
 	}
 }
+#endif

@@ -1,4 +1,14 @@
+/*
+ * HAKit - The Home Automation KIT
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
 
@@ -54,6 +64,17 @@ char *hk_prop_get(hk_prop_t *props, char *name)
 	}
 
 	return entry->value;
+}
+
+
+int hk_prop_get_int(hk_prop_t *props, char *name)
+{
+	char *s = hk_prop_get(props, name);
+	if (s == NULL) {
+		return 0;
+	}
+
+	return strtol(s, NULL, 0);
 }
 
 

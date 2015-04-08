@@ -1,3 +1,12 @@
+/*
+ * HAKit - The Home Automation KIT
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #ifndef __HAKIT_PROP_H__
 #define __HAKIT_PROP_H__
 
@@ -21,6 +30,7 @@ typedef int (*hk_prop_foreach_func)(void *user_data, char *name, char *value);
 extern void hk_prop_init(hk_prop_t *props);
 extern void hk_prop_set(hk_prop_t *props, char *name, char *value);
 extern char *hk_prop_get(hk_prop_t *props, char *name);
+extern int hk_prop_get_int(hk_prop_t *props, char *name);
 extern void hk_prop_foreach(hk_prop_t *props, hk_prop_foreach_func func, char *user_data);
 
 #endif /* __HAKIT_PROP_H__ */
