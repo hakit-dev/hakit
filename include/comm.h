@@ -5,6 +5,7 @@
 #include "buf.h"
 #include "tcpio.h"
 #include "udpio.h"
+#include "tab.h"
 #include "command.h"
 
 /* Default HAKit communication port */
@@ -13,6 +14,7 @@
 typedef struct comm_s comm_t;
 
 typedef struct {
+	int id;
 	char *name;
 	tcp_sock_t tcp_sock;
 	int connect_attempts;
@@ -37,8 +39,7 @@ typedef struct {
 	char *name;
 	buf_t value;
 	int event;
-	comm_node_t **nodes;
-	int nnodes;
+	hk_tab_t node_ids;
 } comm_source_t;
 
 

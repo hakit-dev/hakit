@@ -95,6 +95,7 @@ static comm_node_t *comm_node_alloc(comm_t *comm)
 	comm->nodes = realloc(comm->nodes, sizeof(comm_node_t) * comm->nnodes);
 	node = &comm->nodes[i];
 	memset(node, 0, sizeof(comm_node_t));
+	node->id = i;
 
 	log_debug(2, "comm_node_alloc -> %d (new)", i);
 
@@ -143,10 +144,11 @@ void comm_node_detach_from_sources(comm_t *comm, comm_node_t *node)
 	for (i = 0; i < comm->nsources; i++) {
 		comm_source_t *source = &comm->sources[i];
 		if (source->name != NULL) {
-			for (j = 0; j < source->nnodes; j++) {
-				if (source->nodes[j] == node) {
+			for (j = 0; j < source->node_ids.nmemb; j++) {
+				int node_id = ((int *) source->node_ids.buf)[j];
+				if (node_id == node->id) {
 					log_debug(2, "  source='%s'", source->name);
-					source->nodes[j] = NULL;
+					((int *) source->node_ids.buf)[j] = -1;
 				}
 			}
 		}
@@ -444,6 +446,8 @@ static comm_source_t *comm_source_alloc(comm_t *comm)
 	source->id = i;
 	buf_init(&source->value);
 
+	hk_tab_init(&source->node_ids, sizeof(int));
+
 	return source;
 }
 
@@ -490,8 +494,9 @@ static int comm_source_node_attached(comm_source_t *source, comm_node_t *node)
 		return 0;
 	}
 
-	for (i = 0; i < source->nnodes; i++) {
-		if (source->nodes[i] == node) {
+	for (i = 0; i < source->node_ids.nmemb; i++) {
+		int node_id = ((int *) source->node_ids.buf)[i];
+		if (node_id == node->id) {
 			return 1;
 		}
 	}
@@ -508,19 +513,18 @@ static void comm_source_attach_node(comm_source_t *source, comm_node_t *node)
 		return;
 	}
 
-	for (i = 0; i < source->nnodes; i++) {
-		if (source->nodes[i] == NULL) {
-			source->nodes[i] = node;
+	for (i = 0; i < source->node_ids.nmemb; i++) {
+		int *pnode_id = &((int *) source->node_ids.buf)[i];
+		if (*pnode_id < 0) {
+			*pnode_id = node->id;
 			return;
 		}
 	}
 
-	i = source->nnodes;
-	source->nnodes++;
-	source->nodes = realloc(source->nodes, sizeof(source->nodes) * source->nnodes);
-	source->nodes[i] = node;
+	int *pnode_id = hk_tab_push(&source->node_ids);
+	*pnode_id = node->id;
 
-	log_debug(2, "comm_source_attach_node source='%s' node='%s' (%d elements)", source->name, node->name, source->nnodes);
+	log_debug(2, "comm_source_attach_node source='%s' node='%s' (%d elements)", source->name, node->name, source->node_ids.nmemb);
 }
 
 
@@ -548,20 +552,22 @@ static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *n
 }
 
 
-static void comm_source_send_(comm_source_t *source)
+void comm_source_send(comm_t *comm, int id)
 {
+	comm_source_t *source = &comm->sources[id];
 	int size = strlen(source->name) + source->value.len + 10;
 	char str[size];
 	int len;
 	int i;
 
 	len = snprintf(str, size-1, "set %s=%s", source->name, source->value.base);
-	log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->nnodes);
+	log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->node_ids.nmemb);
 	str[len++] = '\n';
 
-	for (i = 0; i < source->nnodes; i++) {
-		comm_node_t *node = source->nodes[i];
-		if (node != NULL) {
+	for (i = 0; i < source->node_ids.nmemb; i++) {
+		int node_id = ((int *) source->node_ids.buf)[i];
+		if (node_id >= 0) {
+			comm_node_t *node = &comm->nodes[node_id];
 			log_debug(2, "  node='%s'", node->name);
 			tcp_sock_write(&node->tcp_sock, str, len);
 		}
@@ -569,18 +575,11 @@ static void comm_source_send_(comm_source_t *source)
 }
 
 
-void comm_source_send(comm_t *comm, int id)
-{
-	comm_source_t *source = &comm->sources[id];
-	comm_source_send_(source);
-}
-
-
 void comm_source_update_str(comm_t *comm, int id, char *value)
 {
 	comm_source_t *source = &comm->sources[id];
 	buf_set_str(&source->value, value);
-	comm_source_send_(source);
+	comm_source_send(comm, id);
 }
 
 
@@ -588,7 +587,7 @@ void comm_source_update_int(comm_t *comm, int id, int value)
 {
 	comm_source_t *source = &comm->sources[id];
 	buf_set_int(&source->value, value);
-	comm_source_send_(source);
+	comm_source_send(comm, id);
 }
 
 
@@ -805,8 +804,9 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 				int k;
 
 				if (source->name != NULL) {
-					for (k = 0; k < source->nnodes; k++) {
-						if (source->nodes[k] == node) {
+					for (k = 0; k < source->node_ids.nmemb; k++) {
+						int node_id = ((int *) source->node_ids.buf)[k];
+						if (node_id == i) {
 							buf_append_str(out_buf, " ");
 							buf_append_str(out_buf, source->name);
 						}
@@ -827,9 +827,10 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 			buf_append_str(out_buf, "  ");
 			buf_append_str(out_buf, source->name);
 
-			for (j = 0; j < source->nnodes; j++) {
-				comm_node_t *node = &comm->nodes[j];
-				if (node->name != NULL) {
+			for (j = 0; j < source->node_ids.nmemb; j++) {
+				int node_id = ((int *) source->node_ids.buf)[j];
+				if (node_id >= 0) {
+					comm_node_t *node = &comm->nodes[node_id];
 					buf_append_str(out_buf, " ");
 					buf_append_str(out_buf, node->name);
 				}
