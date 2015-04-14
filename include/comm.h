@@ -1,3 +1,12 @@
+/*
+ * HAKit - The Home Automation KIT - www.hakit.net
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #ifndef __HAKIT_COMM_H__
 #define __HAKIT_COMM_H__
 
@@ -13,6 +22,11 @@
 
 typedef struct comm_s comm_t;
 
+
+/*
+ * Nodes
+ */
+
 typedef struct {
 	int id;
 	char *name;
@@ -24,6 +38,10 @@ typedef struct {
 } comm_node_t;
 
 
+/*
+ * Sinks
+ */
+
 typedef void (*comm_sink_func_t)(void *user_data, char *name, char *value);
 
 typedef struct {
@@ -34,24 +52,29 @@ typedef struct {
 } comm_sink_t;
 
 
+/*
+ * Sources
+ */
+
 typedef struct {
 	int id;
 	char *name;
 	buf_t value;
 	int event;
-	hk_tab_t node_ids;
+	hk_tab_t nodes;       // Table of (comm_node_t *)
 } comm_source_t;
 
+
+/*
+ * Communication engine
+ */
 
 struct comm_s {
 	udp_srv_t udp_srv;
 	tcp_srv_t tcp_srv;
-	comm_node_t *nodes;
-	int nnodes;
-	comm_sink_t *sinks;
-	int nsinks;
-	comm_source_t *sources;
-	int nsources;
+	hk_tab_t nodes;       // Table of (comm_node_t *)
+	hk_tab_t sinks;       // Table of (comm_sink_t)
+	hk_tab_t sources;     // Table of (comm_source_t)
 	sys_tag_t advertise_tag;
 	io_channel_t chan_stdin;
 	comm_sink_func_t monitor_func;

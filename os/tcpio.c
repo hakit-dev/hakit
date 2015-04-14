@@ -1,3 +1,12 @@
+/*
+ * HAKit - The Home Automation KIT - www.hakit.net
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -117,7 +126,7 @@ static void tcp_sock_setup(tcp_sock_t *tcp_sock, int sock, tcp_func_t func, void
 }
 
 
-int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func)
+int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func, void *user_data)
 {
 	struct hostent *hp;
 	struct sockaddr_in iremote;
@@ -153,7 +162,7 @@ int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func
 	char *s_addr = ip_addr(NULL, &iremote);
 	log_str("Outgoing connection [%d] established to %s", sock, s_addr);
 
-	tcp_sock_setup(tcp_sock, sock, func, NULL);
+	tcp_sock_setup(tcp_sock, sock, func, user_data);
 
 	return sock;
 }

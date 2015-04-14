@@ -1,3 +1,12 @@
+/*
+ * HAKit - The Home Automation KIT - www.hakit.net
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,9 +63,9 @@ static comm_node_t *comm_node_retrieve(comm_t *comm, char *name)
 {
 	int i;
 
-	for (i = 0; i < comm->nnodes; i++) {
-		comm_node_t *node = &comm->nodes[i];
-		if (node->name != NULL) {
+	for (i = 0; i < comm->nodes.nmemb; i++) {
+		comm_node_t *node = HK_TAB_VALUE(comm->nodes, comm_node_t *, i);
+		if (node != NULL) {
 			if (strcmp(node->name, name) == 0) {
 				return node;
 			}
@@ -79,28 +88,30 @@ static void comm_node_command(char *line, comm_node_t *node)
 
 static comm_node_t *comm_node_alloc(comm_t *comm)
 {
-	comm_node_t *node = NULL;
+	comm_node_t *node;
 	int i;
 
-	for (i = 0; i < comm->nnodes; i++) {
-		node = &comm->nodes[i];
-		if (node->name == NULL) {
+	/* Alloc node descriptor */
+	node = (comm_node_t *) malloc(sizeof(comm_node_t));
+	memset(node, 0, sizeof(comm_node_t));
+
+	/* Find entry in node table */
+	for (i = 0; i < comm->nodes.nmemb; i++) {
+		comm_node_t *node2 = HK_TAB_VALUE(comm->nodes, comm_node_t *, i);
+		if (node2 == NULL) {
 			log_debug(2, "comm_node_alloc -> %d (reused)", i);
-			return node;
+			break;
 		}
 	}
 
-	i = comm->nnodes;
-	comm->nnodes++;
-	comm->nodes = realloc(comm->nodes, sizeof(comm_node_t) * comm->nnodes);
-	node = &comm->nodes[i];
-	memset(node, 0, sizeof(comm_node_t));
+	if (i >= comm->nodes.nmemb) {
+		log_debug(2, "comm_node_alloc -> %d (new)", i);
+		*((comm_node_t **) hk_tab_push(&comm->nodes)) = node;
+	}
+
+	/* Init node entry */
 	node->id = i;
-
-	log_debug(2, "comm_node_alloc -> %d (new)", i);
-
 	tcp_sock_clear(&node->tcp_sock);
-	tcp_sock_set_data(&node->tcp_sock, node);
 	node->comm = comm;
 	node->cmd = command_new((command_handler_t) comm_node_command, node);
 
@@ -110,8 +121,8 @@ static comm_node_t *comm_node_alloc(comm_t *comm)
 
 static void comm_node_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rsize)
 {
-	comm_node_t *node = container_of(tcp_sock, comm_node_t, tcp_sock);
-	log_debug(2, "comm_node_event [%d] node='%s'", tcp_sock->chan.fd, node->name);
+	comm_node_t *node = tcp_sock_get_data(tcp_sock);
+	log_debug(2, "comm_node_event [%d] node=#%d='%s'", tcp_sock->chan.fd, node->id, node->name);
 	log_debug_data((unsigned char *) rbuf, rsize);
 
 	switch (io) {
@@ -124,12 +135,16 @@ static void comm_node_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int r
 		break;
 	case TCP_IO_HUP:
 		log_debug(2, "  HUP");
+
+		/* Clear command context */
 		command_clear(node->cmd);
+
+		/* Try to reconnect immediately */
 		node->connect_attempts = 0;
 		comm_node_connect(node);
 		break;
 	default:
-		log_str("  PANIC: unknown event caught");
+		log_debug(2, "  PANIC: unknown event caught");
 		break;
 	}
 }
@@ -139,16 +154,16 @@ void comm_node_detach_from_sources(comm_t *comm, comm_node_t *node)
 {
 	int i, j;
 
-	log_debug(2, "comm_node_detach_from_sources node='%s'", node->name);
+	log_debug(2, "comm_node_detach_from_sources node=#%d='%s'", node->id, node->name);
 
-	for (i = 0; i < comm->nsources; i++) {
-		comm_source_t *source = &comm->sources[i];
+	for (i = 0; i < comm->sources.nmemb; i++) {
+		comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
 		if (source->name != NULL) {
-			for (j = 0; j < source->node_ids.nmemb; j++) {
-				int node_id = ((int *) source->node_ids.buf)[j];
-				if (node_id == node->id) {
+			for (j = 0; j < source->nodes.nmemb; j++) {
+				comm_node_t **pnode = HK_TAB_PTR(source->nodes, comm_node_t *, j);
+				if (*pnode == node) {
 					log_debug(2, "  source='%s'", source->name);
-					((int *) source->node_ids.buf)[j] = -1;
+					*pnode = NULL;
 				}
 			}
 		}
@@ -158,8 +173,12 @@ void comm_node_detach_from_sources(comm_t *comm, comm_node_t *node)
 
 static void comm_node_remove(comm_node_t *node)
 {
-	log_debug(2, "comm_node_remove node='%s'", node->name);
+	log_debug(2, "comm_node_remove node=#%d='%s'", node->id, node->name);
 
+	/* Free node entry for future use */
+	HK_TAB_VALUE(node->comm->nodes, comm_node_t *, node->id) = NULL;
+
+	/* Kill running timeout */
 	if (node->timeout_tag) {
 		sys_remove(node->timeout_tag);
 		node->timeout_tag = 0;
@@ -175,9 +194,13 @@ static void comm_node_remove(comm_node_t *node)
 	/* Clear command buffering context */
 	command_clear(node->cmd);
 
-	/* Free node entry for future use */
+	/* Free node name */
 	free(node->name);
 	node->name = NULL;
+
+	/* Free node descriptor */
+	memset(node, 0, sizeof(comm_node_t));
+	free(node);
 }
 
 
@@ -186,8 +209,9 @@ static void comm_node_send_initial_values(comm_node_t *node)
 	comm_t *comm = node->comm;
 	int i;
 
-	for (i = 0; i < comm->nsources; i++) {
-		comm_source_send_initial_value(&comm->sources[i], node);
+	for (i = 0; i < comm->sources.nmemb; i++) {
+		comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
+		comm_source_send_initial_value(source, node);
 	}
 }
 
@@ -197,14 +221,14 @@ static int comm_node_connect(comm_node_t *node)
 	node->connect_attempts++;
 
 	if (node->connect_attempts > 4) {
-		log_str("Too many connections attempted on node '%s': giving up", node->name);
+		log_str("Too many connections attempted on node #%d='%s': giving up", node->id, node->name);
 		node->timeout_tag = 0;
 		comm_node_remove(node);
 		return 0;
 	}
 
-	log_str("Connecting to node '%s' (%d/4)", node->name, node->connect_attempts);
-	if (tcp_sock_connect(&node->tcp_sock, node->name, node->comm->udp_srv.port, comm_node_event) > 0) {
+	log_str("Connecting to node #%d='%s' (%d/4)", node->id, node->name, node->connect_attempts);
+	if (tcp_sock_connect(&node->tcp_sock, node->name, node->comm->udp_srv.port, comm_node_event, node) > 0) {
 		node->timeout_tag = 0;
 		comm_node_send_initial_values(node);
 		return 0;
@@ -255,25 +279,26 @@ static comm_node_t *comm_node_add(comm_t *comm, char *name)
 
 static void comm_sink_advertise(comm_t *comm, int reply)
 {
+	int nsinks = comm->sinks.nmemb;
 	buf_t buf;
 	int i;
 
-	if (comm->nsinks <= 0) {
+	if (nsinks <= 0) {
 		return;
 	}
 
-	log_str("Advertising %d sink%s as %s", comm->nsinks, (comm->nsinks > 1) ? "s":"", reply ? "reply":"broadcast");
+	log_str("Advertising %d sink%s as %s", nsinks, (nsinks > 1) ? "s":"", reply ? "reply":"broadcast");
 
 	buf_init(&buf);
 
-	for (i = 0; i < comm->nsinks; i++) {
-		char *name = comm->sinks[i].name;
-		if (name != NULL) {
+	for (i = 0; i < nsinks; i++) {
+		comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
+		if (sink->name != NULL) {
 			if (buf.len == 0) {
 				buf_append_byte(&buf, UDP_SIGN);
 				buf_append_byte(&buf, UDP_TYPE_SINK);
 			}
-			buf_append_str(&buf, name);
+			buf_append_str(&buf, sink->name);
 			buf_append_byte(&buf, 0);
 
 			if (buf.len > ADVERTISE_MAXLEN) {
@@ -294,8 +319,8 @@ static comm_sink_t *comm_sink_retrieve(comm_t *comm, char *name)
 {
 	int i;
 
-	for (i = 0; i < comm->nsinks; i++) {
-		comm_sink_t *sink = &comm->sinks[i];
+	for (i = 0; i < comm->sinks.nmemb; i++) {
+		comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
 		if (sink->name != NULL) {
 			if (strcmp(sink->name, name) == 0) {
 				return sink;
@@ -312,19 +337,15 @@ static comm_sink_t *comm_sink_alloc(comm_t *comm)
 	comm_sink_t *sink = NULL;
 	int i;
 
-	for (i = 0; i < comm->nsinks; i++) {
-		sink = &comm->sinks[i];
+	for (i = 0; i < comm->sinks.nmemb; i++) {
+		sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
 		if (sink->name == NULL) {
 			return sink;
 		}
 	}
 
-	i = comm->nsinks;
-	comm->nsinks++;
-	comm->sinks = realloc(comm->sinks, sizeof(comm_sink_t) * comm->nsinks);
-	sink = &comm->sinks[i];
+	sink = hk_tab_push(&comm->sinks);
 
-	memset(sink, 0, sizeof(comm_sink_t));
 	buf_init(&sink->value);
 
 	return sink;
@@ -349,7 +370,7 @@ static void comm_sink_create(comm_t *comm, char *name, comm_sink_func_t func, vo
 void comm_sink_register(comm_t *comm, char *name, comm_sink_func_t func, void *user_data)
 {
 	comm_sink_create(comm, name, func, user_data);
-	log_debug(2, "comm_sink_register sink='%s' (%d elements)", name, comm->nsinks);
+	log_debug(2, "comm_sink_register sink='%s' (%d elements)", name, comm->sinks.nmemb);
 	comm_advertise(comm, ADVERTISE_DELAY);
 }
 
@@ -372,25 +393,26 @@ void comm_sink_unregister(comm_t *comm, char *name)
 
 static void comm_source_advertise(comm_t *comm, int reply)
 {
+	int nsources = comm->sources.nmemb;
 	buf_t buf;
 	int i;
 
-	if (comm->nsources <= 0) {
+	if (nsources <= 0) {
 		return;
 	}
 
-	log_str("Advertising %d source%s as %s", comm->nsources, (comm->nsources > 1) ? "s":"", reply ? "reply":"broadcast");
+	log_str("Advertising %d source%s as %s", nsources, (nsources > 1) ? "s":"", reply ? "reply":"broadcast");
 
 	buf_init(&buf);
 
-	for (i = 0; i < comm->nsources; i++) {
-		char *name = comm->sources[i].name;
-		if (name != NULL) {
+	for (i = 0; i < nsources; i++) {
+		comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
+		if (source->name != NULL) {
 			if (buf.len == 0) {
 				buf_append_byte(&buf, UDP_SIGN);
 				buf_append_byte(&buf, UDP_TYPE_SOURCE);
 			}
-			buf_append_str(&buf, name);
+			buf_append_str(&buf, source->name);
 			buf_append_byte(&buf, 0);
 
 			if (buf.len > ADVERTISE_MAXLEN) {
@@ -411,8 +433,8 @@ static comm_source_t *comm_source_retrieve(comm_t *comm, char *name)
 {
 	int i;
 
-	for (i = 0; i < comm->nsources; i++) {
-		comm_source_t *source = &comm->sources[i];
+	for (i = 0; i < comm->sources.nmemb; i++) {
+		comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
 		if (source->name != NULL) {
 			if (strcmp(source->name, name) == 0) {
 				return source;
@@ -429,24 +451,21 @@ static comm_source_t *comm_source_alloc(comm_t *comm)
 	comm_source_t *source = NULL;
 	int i;
 
-	for (i = 0; i < comm->nsources; i++) {
-		source = &comm->sources[i];
+	for (i = 0; i < comm->sources.nmemb; i++) {
+		source = HK_TAB_PTR(comm->sources, comm_source_t, i);
 		if (source->name == NULL) {
 			source->id = i;
 			return source;
 		}
 	}
 
-	i = comm->nsources;
-	comm->nsources++;
-	comm->sources = realloc(comm->sources, sizeof(comm_source_t) * comm->nsources);
-	source = &comm->sources[i];
+	i = comm->sources.nmemb;
+	source = hk_tab_push(&comm->sources);
 
-	memset(source, 0, sizeof(comm_source_t));
 	source->id = i;
 	buf_init(&source->value);
 
-	hk_tab_init(&source->node_ids, sizeof(int));
+	hk_tab_init(&source->nodes, sizeof(comm_node_t *));
 
 	return source;
 }
@@ -461,7 +480,7 @@ int comm_source_register(comm_t *comm, char *name, int event)
 		source->name = strdup(name);
 	}
 
-	log_debug(2, "comm_source_register name='%s' (%d elements)", name, comm->nsources);
+	log_debug(2, "comm_source_register name='%s' (%d elements)", name, comm->sources.nmemb);
 
 	buf_set_str(&source->value, "");
 	source->event = event;
@@ -494,9 +513,9 @@ static int comm_source_node_attached(comm_source_t *source, comm_node_t *node)
 		return 0;
 	}
 
-	for (i = 0; i < source->node_ids.nmemb; i++) {
-		int node_id = ((int *) source->node_ids.buf)[i];
-		if (node_id == node->id) {
+	for (i = 0; i < source->nodes.nmemb; i++) {
+		comm_node_t *node2 = HK_TAB_VALUE(source->nodes, comm_node_t *, i);
+		if (node2 == node) {
 			return 1;
 		}
 	}
@@ -513,24 +532,24 @@ static void comm_source_attach_node(comm_source_t *source, comm_node_t *node)
 		return;
 	}
 
-	for (i = 0; i < source->node_ids.nmemb; i++) {
-		int *pnode_id = &((int *) source->node_ids.buf)[i];
-		if (*pnode_id < 0) {
-			*pnode_id = node->id;
+	for (i = 0; i < source->nodes.nmemb; i++) {
+		comm_node_t **pnode = HK_TAB_PTR(source->nodes, comm_node_t *, i);
+		if (*pnode == NULL) {
+			*pnode = node;
 			return;
 		}
 	}
 
-	int *pnode_id = hk_tab_push(&source->node_ids);
-	*pnode_id = node->id;
+	comm_node_t **pnode = hk_tab_push(&source->nodes);
+	*pnode = node;
 
-	log_debug(2, "comm_source_attach_node source='%s' node='%s' (%d elements)", source->name, node->name, source->node_ids.nmemb);
+	log_debug(2, "comm_source_attach_node source='%s' node=#%d='%s' (%d elements)", source->name, node->id, node->name, source->nodes.nmemb);
 }
 
 
 static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *node)
 {
-	log_debug(3, "comm_source_send_initial_value source='%s' event=%d node='%s'", source->name, source->event, node->name);
+	log_debug(3, "comm_source_send_initial_value source='%s' event=%d node=#%d='%s'", source->name, source->event, node->id, node->name);
 
 	/* Do not send initial value if source is declared as an event */
 	if (source->event) {
@@ -544,7 +563,7 @@ static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *n
 		int len;
 
 		len = snprintf(str, size-1, "set %s=%s", source->name, source->value.base);
-		log_debug(2, "comm_source_send_initial_value cmd='%s' node='%s'", str, node->name);
+		log_debug(2, "comm_source_send_initial_value cmd='%s' node=#%d='%s'", str, node->id, node->name);
 		str[len++] = '\n';
 
 		tcp_sock_write(&node->tcp_sock, str, len);
@@ -554,40 +573,57 @@ static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *n
 
 void comm_source_send(comm_t *comm, int id)
 {
-	comm_source_t *source = &comm->sources[id];
-	int size = strlen(source->name) + source->value.len + 10;
-	char str[size];
-	int len;
-	int i;
+	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
 
-	len = snprintf(str, size-1, "set %s=%s", source->name, source->value.base);
-	log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->node_ids.nmemb);
-	str[len++] = '\n';
+	if (source->name != NULL) {
+		int size = strlen(source->name) + source->value.len + 10;
+		char str[size];
+		int len;
+		int i;
 
-	for (i = 0; i < source->node_ids.nmemb; i++) {
-		int node_id = ((int *) source->node_ids.buf)[i];
-		if (node_id >= 0) {
-			comm_node_t *node = &comm->nodes[node_id];
-			log_debug(2, "  node='%s'", node->name);
-			tcp_sock_write(&node->tcp_sock, str, len);
+		len = snprintf(str, size-1, "set %s=%s", source->name, source->value.base);
+		log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->nodes.nmemb);
+		str[len++] = '\n';
+
+		for (i = 0; i < source->nodes.nmemb; i++) {
+			comm_node_t *node = HK_TAB_VALUE(source->nodes, comm_node_t *, i);
+			if (node != NULL) {
+				log_debug(2, "  node=#%d='%s'", node->id, node->name);
+				tcp_sock_write(&node->tcp_sock, str, len);
+			}
 		}
+	}
+	else {
+		log_str("PANIC: Attempting to send data to unknown source #%d\n", id);
 	}
 }
 
 
 void comm_source_update_str(comm_t *comm, int id, char *value)
 {
-	comm_source_t *source = &comm->sources[id];
-	buf_set_str(&source->value, value);
-	comm_source_send(comm, id);
+	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
+
+	if (source->name != NULL) {
+		buf_set_str(&source->value, value);
+		comm_source_send(comm, id);
+	}
+	else {
+		log_str("PANIC: Attempting to update unknown source #%d\n", id);
+	}
 }
 
 
 void comm_source_update_int(comm_t *comm, int id, int value)
 {
-	comm_source_t *source = &comm->sources[id];
-	buf_set_int(&source->value, value);
-	comm_source_send(comm, id);
+	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
+
+	if (source->name != NULL) {
+		buf_set_int(&source->value, value);
+		comm_source_send(comm, id);
+	}
+	else {
+		log_str("PANIC: Attempting to update unknown source #%d\n", id);
+	}
 }
 
 
@@ -789,24 +825,24 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 {
 	int i;
 
-	buf_append_fmt(out_buf, "Nodes: %d\n", comm->nnodes);
+	buf_append_fmt(out_buf, "Nodes: %d\n", comm->nodes.nmemb);
 
-	for (i = 0; i < comm->nnodes; i++) {
-		comm_node_t *node = &comm->nodes[i];
+	for (i = 0; i < comm->nodes.nmemb; i++) {
+		comm_node_t *node = HK_TAB_VALUE(comm->nodes, comm_node_t *, i);
 		int j;
 
 		if (node->name != NULL) {
 			buf_append_str(out_buf, "  ");
 			buf_append_str(out_buf, node->name);
 
-			for (j = 0; j < comm->nsources; j++) {
-				comm_source_t *source = &comm->sources[j];
+			for (j = 0; j < comm->sources.nmemb; j++) {
+				comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, j);
 				int k;
 
 				if (source->name != NULL) {
-					for (k = 0; k < source->node_ids.nmemb; k++) {
-						int node_id = ((int *) source->node_ids.buf)[k];
-						if (node_id == i) {
+					for (k = 0; k < source->nodes.nmemb; k++) {
+						comm_node_t *node2 = HK_TAB_VALUE(source->nodes, comm_node_t *, k);
+						if (node2 == node) {
 							buf_append_str(out_buf, " ");
 							buf_append_str(out_buf, source->name);
 						}
@@ -818,19 +854,18 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 		}
 	}
 
-	buf_append_fmt(out_buf, "Sources: %d\n", comm->nsources);
-	for (i = 0; i < comm->nsources; i++) {
-		comm_source_t *source = &comm->sources[i];
+	buf_append_fmt(out_buf, "Sources: %d\n", comm->sources.nmemb);
+	for (i = 0; i < comm->sources.nmemb; i++) {
+		comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
 		int j;
 
 		if (source->name != NULL) {
 			buf_append_str(out_buf, "  ");
 			buf_append_str(out_buf, source->name);
 
-			for (j = 0; j < source->node_ids.nmemb; j++) {
-				int node_id = ((int *) source->node_ids.buf)[j];
-				if (node_id >= 0) {
-					comm_node_t *node = &comm->nodes[node_id];
+			for (j = 0; j < source->nodes.nmemb; j++) {
+				comm_node_t *node = HK_TAB_VALUE(source->nodes, comm_node_t *, j);
+				if (node != NULL) {
 					buf_append_str(out_buf, " ");
 					buf_append_str(out_buf, node->name);
 				}
@@ -840,9 +875,9 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 		}
 	}
 
-	buf_append_fmt(out_buf, "Sinks: %d\n", comm->nsinks);
-	for (i = 0; i < comm->nsinks; i++) {
-		comm_sink_t *sink = &comm->sinks[i];
+	buf_append_fmt(out_buf, "Sinks: %d\n", comm->sinks.nmemb);
+	for (i = 0; i < comm->sinks.nmemb; i++) {
+		comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
 
 		if (sink->name != NULL) {
 			buf_append_str(out_buf, "  ");
@@ -1037,6 +1072,9 @@ int comm_init(comm_t *comm, int port)
 	memset(comm, 0, sizeof(comm_t));
 	udp_srv_clear(&comm->udp_srv);
 	tcp_srv_clear(&comm->tcp_srv);
+	hk_tab_init(&comm->nodes, sizeof(comm_node_t *));
+	hk_tab_init(&comm->sinks, sizeof(comm_sink_t));
+	hk_tab_init(&comm->sources, sizeof(comm_source_t));
 
 	if (udp_check_interfaces() <= 0) {
 		goto DONE;

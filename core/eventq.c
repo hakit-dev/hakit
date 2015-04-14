@@ -1,3 +1,12 @@
+/*
+ * HAKit - The Home Automation KIT - www.hakit.net
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -199,7 +208,7 @@ static int http_client_get(char *url)
 	tcp_sock_clear(&eventq_http_sock);
 	buf_cleanup(&eventq_http_buf);
 
-	if (tcp_sock_connect(&eventq_http_sock, url, port, http_client_handler) > 0) {
+	if (tcp_sock_connect(&eventq_http_sock, url, port, http_client_handler, NULL) > 0) {
 		buf_t req;
 
 		buf_init(&req);
