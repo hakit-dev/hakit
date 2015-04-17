@@ -22,6 +22,7 @@ typedef struct {
 	int ninputs;
 	hk_pad_t **inputs;
 	hk_pad_t *output;
+	int inv;
 } ctx_t;
 
 
@@ -48,6 +49,7 @@ static hk_obj_t *_new(hk_obj_t *obj)
 	}
 
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
+	ctx->inv = hk_prop_get_int(&obj->props, "inv");
 
 	return obj;
 }
@@ -69,6 +71,10 @@ static void _input(hk_pad_t *pad, char *value)
 	}
 
 	if (state != ctx->output->state) {
+		if (ctx->inv) {
+			state = 1 - state;
+		}
+
 		ctx->output->state = state;
 		hk_pad_update_int(ctx->output, state);
 	}
