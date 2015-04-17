@@ -8,6 +8,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <malloc.h>
 
 #include "log.h"
@@ -43,10 +44,10 @@ static hk_obj_t *_new(hk_obj_t *obj)
 	obj->ctx = ctx;
 
 	for (i = 0; i < ninputs; i++) {
-		ctx->inputs[i] = hk_pad_create(obj, "in%d", i+1);
+		ctx->inputs[i] = hk_pad_create(obj, HK_PAD_IN, "in%d", i+1);
 	}
 
-	ctx->output = hk_pad_create(obj, "out");
+	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 
 	return obj;
 }
@@ -54,6 +55,23 @@ static hk_obj_t *_new(hk_obj_t *obj)
 
 static void _input(hk_pad_t *pad, char *value)
 {
+	ctx_t *ctx = pad->obj->ctx;
+	int state = 1;
+	int i;
+
+	pad->state = atoi(value) ? 1:0;
+
+	for (i = 0; i < ctx->ninputs; i++) {
+		if (ctx->inputs[i]->state == 0) {
+			state = 0;
+			break;
+		}
+	}
+
+	if (state != ctx->output->state) {
+		ctx->output->state = state;
+		hk_pad_update_int(ctx->output, state);
+	}
 }
 
 

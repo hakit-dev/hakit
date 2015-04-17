@@ -41,15 +41,26 @@ extern hk_class_t *hk_class_find(char *name);
  * HAKit module pads
  */
 
+typedef enum {
+	HK_PAD_IN=0,
+	HK_PAD_OUT,
+	HK_PAD_IO,
+} hk_pad_dir_t;
+
 struct hk_pad_s {
 	hk_obj_t *obj;
+	hk_pad_dir_t dir;
 	char *name;
-	int state;
 	hk_net_t *net;
+	int lock;
+	int state;
 };
 
-extern hk_pad_t *hk_pad_create(hk_obj_t *obj, char *fmt, ...);
+extern hk_pad_t *hk_pad_create(hk_obj_t *obj, hk_pad_dir_t dir, char *fmt, ...);
 extern hk_pad_t *hk_pad_find(hk_obj_t *obj, char *name);
+
+extern void hk_pad_update_str(hk_pad_t *pad, char *value);
+extern void hk_pad_update_int(hk_pad_t *pad, int value);
 
 
 /**
@@ -58,7 +69,7 @@ extern hk_pad_t *hk_pad_find(hk_obj_t *obj, char *name);
 
 struct hk_net_s {
 	char *name;
-	hk_tab_t ppads;
+	hk_tab_t ppads;  /**< Table of (hk_pad_t *) */
 };
 
 extern hk_net_t *hk_net_create(char *name);
@@ -74,7 +85,7 @@ struct hk_obj_s {
 	char *name;
 	hk_class_t *class;   /**< Class object is based on */
 	hk_prop_t props;     /**< Object properties */
-	hk_tab_t pads;       /**< Object pads */
+	hk_tab_t pads;       /**< Object pads : table of (hk_pad_t) */
 	void *ctx;           /**< Class-specific context */
 };
 

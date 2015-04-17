@@ -20,6 +20,10 @@ all: $(OUTDIR) $(ARCH_LIBS) $(ARCH_BINS)
 
 include defs.mk
 
+VERSION := $(shell git describe --long --always --dirty 2>/dev/null || cat $(ROOT_DIR)VERSION 2>/dev/null)
+SHORT_VERSION := $(shell echo $(VERSION) | sed -e 's/-dirty$$//' -e 's/-[a-zA-Z0-9]\+$$//')
+CFLAGS += -DHAKIT_VERSION="$(VERSION)"
+
 $(ARCH_LIB): $(OBJS)
 
 $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIB)
