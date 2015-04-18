@@ -30,7 +30,7 @@ void *hk_tab_push(hk_tab_t *tab)
 	tab->nmemb++;
 	tab->buf = realloc(tab->buf, tab->msize * tab->nmemb);
 
-	p = tab->buf + i;
+	p = tab->buf + (tab->msize * i);
 	memset(p, 0, tab->msize);
 
 	return p;
