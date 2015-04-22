@@ -42,7 +42,7 @@ void hk_tab_foreach(hk_tab_t *tab, hk_tab_foreach_func func, char *user_data)
 	int i;
 
 	for (i = 0; i < tab->nmemb; i++) {
-		void *p = tab->buf + (i * tab->nmemb);
+		void *p = tab->buf + (tab->msize * i);
 		if (!func(user_data, p)) {
 			return;
 		}

@@ -89,6 +89,7 @@ static void comm_node_command(char *line, comm_node_t *node)
 static comm_node_t *comm_node_alloc(comm_t *comm)
 {
 	comm_node_t *node;
+	comm_node_t **pnode;
 	int i;
 
 	/* Alloc node descriptor */
@@ -97,17 +98,19 @@ static comm_node_t *comm_node_alloc(comm_t *comm)
 
 	/* Find entry in node table */
 	for (i = 0; i < comm->nodes.nmemb; i++) {
-		comm_node_t *node2 = HK_TAB_VALUE(comm->nodes, comm_node_t *, i);
-		if (node2 == NULL) {
-			log_debug(2, "comm_node_alloc -> %d (reused)", i);
+		pnode = HK_TAB_PTR(comm->nodes, comm_node_t *, i);
+		if (*pnode == NULL) {
+			log_debug(2, "comm_node_alloc -> #%d (reused)", i);
 			break;
 		}
 	}
 
 	if (i >= comm->nodes.nmemb) {
-		log_debug(2, "comm_node_alloc -> %d (new)", i);
-		*((comm_node_t **) hk_tab_push(&comm->nodes)) = node;
+		log_debug(2, "comm_node_alloc -> #%d (new)", i);
+		pnode = hk_tab_push(&comm->nodes);
 	}
+
+	*pnode = node;
 
 	/* Init node entry */
 	node->id = i;
@@ -176,7 +179,8 @@ static void comm_node_remove(comm_node_t *node)
 	log_debug(2, "comm_node_remove node=#%d='%s'", node->id, node->name);
 
 	/* Free node entry for future use */
-	HK_TAB_VALUE(node->comm->nodes, comm_node_t *, node->id) = NULL;
+	comm_node_t **pnode = HK_TAB_PTR(node->comm->nodes, comm_node_t *, node->id);
+	*pnode = NULL;
 
 	/* Kill running timeout */
 	if (node->timeout_tag) {
