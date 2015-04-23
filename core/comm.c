@@ -224,17 +224,17 @@ static int comm_node_connect(comm_node_t *node)
 {
 	node->connect_attempts++;
 
-	if (node->connect_attempts > 4) {
-		log_str("Too many connections attempted on node #%d='%s': giving up", node->id, node->name);
-		node->timeout_tag = 0;
-		comm_node_remove(node);
-		return 0;
-	}
-
 	log_str("Connecting to node #%d='%s' (%d/4)", node->id, node->name, node->connect_attempts);
 	if (tcp_sock_connect(&node->tcp_sock, node->name, node->comm->udp_srv.port, comm_node_event, node) > 0) {
 		node->timeout_tag = 0;
 		comm_node_send_initial_values(node);
+		return 0;
+	}
+
+	if (node->connect_attempts > 4) {
+		log_str("Too many connections attempted on node #%d='%s': giving up", node->id, node->name);
+		node->timeout_tag = 0;
+		comm_node_remove(node);
 		return 0;
 	}
 
