@@ -12,11 +12,11 @@ OS_SRCS = logio.c sys.c io.c iputils.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c
 CORE_SRCS = options.c log.c buf.c tab.c command.c comm.c mod.c prop.c \
 	http.c http_server.c eventq.c
-CLASSES_SRCS = and.c
-SRCS = $(OS_SRCS) $(CORE_SRCS) $(CLASSES_SRCS)
+SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
 all: $(OUTDIR) $(ARCH_LIBS) $(ARCH_BINS)
+	make -C classes
 
 include defs.mk
 
@@ -29,3 +29,6 @@ $(ARCH_LIB): $(OBJS)
 $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIB)
 $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIB)
 $(OUTDIR)/hakit-adm: $(OUTDIR)/adm.o $(ARCH_LIB)
+
+clean::
+	make -C classes clean
