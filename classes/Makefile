@@ -1,4 +1,4 @@
-CLASSES := and
+CLASSES := sink source and
 
 all:
 	for dir in $(CLASSES); do \
