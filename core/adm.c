@@ -22,16 +22,14 @@ const options_entry_t options_entries[] = {
 
 
 
-static void sink_event(comm_t *comm, char *name, char *value)
+static void sink_event(void *user_data, char *name, char *value)
 {
-	log_str("-- sink_event %s='%s'", name, value);
+	log_str("-- %s='%s'", name, value);
 }
 
 
 int main(int argc, char *argv[])
 {
-	comm_t comm;
-
 	log_init(NAME);
 
 	if (options_parse(&argc, argv, NULL) != 0) {
@@ -40,11 +38,11 @@ int main(int argc, char *argv[])
 
 	sys_init();
 
-	if (comm_init(&comm, HAKIT_COMM_PORT)) {
+	if (comm_init()) {
 		exit(2);
 	}
 
-	comm_monitor(&comm, (comm_sink_func_t) sink_event, &comm);
+	comm_monitor((comm_sink_func_t) sink_event, NULL);
 
 	sys_run();
 

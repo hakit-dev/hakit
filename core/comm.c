@@ -22,42 +22,32 @@
 #include "udpio.h"
 #include "command.h"
 #include "comm.h"
+#include "comm_priv.h"
 
 
-#define ADVERTISE_DELAY 1000
-#define ADVERTISE_MAXLEN 1200
+#define HAKIT_COMM_PORT 5678   // Default HAKit communication port
 
-#define UDP_SIGN        0xAC
-#define UDP_TYPE_SINK   0x01
-#define UDP_TYPE_SOURCE 0x02
-#define UDP_TYPE_MONITOR 0x03
+#define ADVERTISE_DELAY 1000   // Delay before advertising a newly registered sink/source
+#define ADVERTISE_MAXLEN 1200  // Maxim advertising packet length
+
+#define UDP_SIGN        0xAC   // Advertising packet signature
+#define UDP_TYPE_SINK   0x01   // Advertising field type: sink
+#define UDP_TYPE_SOURCE 0x02   // Advertising field type: source
+#define UDP_TYPE_MONITOR 0x03  // Advertising field type: monitor
 
 
+/* Local functions forward declarations */
+static void comm_udp_send(comm_t *comm, buf_t *buf, int reply);
 static void comm_advertise(comm_t *comm, unsigned long delay);
 static void comm_command(comm_t *comm, char *line, tcp_sock_t *tcp_sock);
+static int comm_node_connect(comm_node_t *node);
+static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *node);
 
-
-static void comm_udp_send(comm_t *comm, buf_t *buf, int reply)
-{
-	if (reply) {
-		udp_srv_send_reply(&comm->udp_srv, (char *) buf->base, buf->len);
-	}
-	else {
-		udp_srv_send_bcast(&comm->udp_srv, (char *) buf->base, buf->len);
-	}
-
-	buf->len = 0;
-}
 
 
 /*
  * Nodes
  */
-
-static int comm_node_connect(comm_node_t *node);
-
-static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *node);
-
 
 static comm_node_t *comm_node_retrieve(comm_t *comm, char *name)
 {
@@ -153,7 +143,7 @@ static void comm_node_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int r
 }
 
 
-void comm_node_detach_from_sources(comm_t *comm, comm_node_t *node)
+static void comm_node_detach_from_sources(comm_t *comm, comm_node_t *node)
 {
 	int i, j;
 
@@ -371,7 +361,7 @@ static void comm_sink_create(comm_t *comm, char *name, comm_sink_func_t func, vo
 }
 
 
-void comm_sink_register(comm_t *comm, char *name, comm_sink_func_t func, void *user_data)
+static void comm_sink_register_(comm_t *comm, char *name, comm_sink_func_t func, void *user_data)
 {
 	comm_sink_create(comm, name, func, user_data);
 	log_debug(2, "comm_sink_register sink='%s' (%d elements)", name, comm->sinks.nmemb);
@@ -379,7 +369,8 @@ void comm_sink_register(comm_t *comm, char *name, comm_sink_func_t func, void *u
 }
 
 
-void comm_sink_unregister(comm_t *comm, char *name)
+#if 0
+static void comm_sink_unregister_(comm_t *comm, char *name)
 {
 	comm_sink_t *sink = comm_sink_retrieve(comm, name);
 
@@ -389,6 +380,7 @@ void comm_sink_unregister(comm_t *comm, char *name)
 		memset(sink, 0, sizeof(comm_sink_t));
 	}
 }
+#endif
 
 
 /*
@@ -475,7 +467,7 @@ static comm_source_t *comm_source_alloc(comm_t *comm)
 }
 
 
-int comm_source_register(comm_t *comm, char *name, int event)
+static int comm_source_register_(comm_t *comm, char *name, int event)
 {
 	comm_source_t *source = comm_source_retrieve(comm, name);
 
@@ -495,7 +487,8 @@ int comm_source_register(comm_t *comm, char *name, int event)
 }
 
 
-void comm_source_unregister(comm_t *comm, char *name)
+#if 0
+static void comm_source_unregister_(comm_t *comm, char *name)
 {
 	comm_source_t *source = comm_source_retrieve(comm, name);
 
@@ -507,6 +500,7 @@ void comm_source_unregister(comm_t *comm, char *name)
 		memset(source, 0, sizeof(comm_source_t));
 	}
 }
+#endif
 
 
 static int comm_source_node_attached(comm_source_t *source, comm_node_t *node)
@@ -575,7 +569,7 @@ static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *n
 }
 
 
-void comm_source_send(comm_t *comm, int id)
+static void comm_source_send(comm_t *comm, int id)
 {
 	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
 
@@ -603,7 +597,7 @@ void comm_source_send(comm_t *comm, int id)
 }
 
 
-void comm_source_update_str(comm_t *comm, int id, char *value)
+static void comm_source_update_str_(comm_t *comm, int id, char *value)
 {
 	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
 
@@ -617,7 +611,7 @@ void comm_source_update_str(comm_t *comm, int id, char *value)
 }
 
 
-void comm_source_update_int(comm_t *comm, int id, int value)
+static void comm_source_update_int_(comm_t *comm, int id, int value)
 {
 	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
 
@@ -634,6 +628,19 @@ void comm_source_update_int(comm_t *comm, int id, int value)
 /*
  * UDP Commands
  */
+
+static void comm_udp_send(comm_t *comm, buf_t *buf, int reply)
+{
+	if (reply) {
+		udp_srv_send_reply(&comm->udp_srv, (char *) buf->base, buf->len);
+	}
+	else {
+		udp_srv_send_bcast(&comm->udp_srv, (char *) buf->base, buf->len);
+	}
+
+	buf->len = 0;
+}
+
 
 static void comm_udp_event_sink(comm_t *comm, int argc, char **argv)
 {
@@ -1069,7 +1076,7 @@ static void comm_advertise(comm_t *comm, unsigned long delay)
 }
 
 
-int comm_init(comm_t *comm, int port)
+static int comm_init_(comm_t *comm, int port)
 {
 	int ret = -1;
 
@@ -1114,7 +1121,7 @@ DONE:
 }
 
 
-void comm_monitor(comm_t *comm, comm_sink_func_t func, void *user_data)
+static void comm_monitor_(comm_t *comm, comm_sink_func_t func, void *user_data)
 {
 	buf_t buf;
 
@@ -1128,4 +1135,46 @@ void comm_monitor(comm_t *comm, comm_sink_func_t func, void *user_data)
 	buf_append_byte(&buf, UDP_TYPE_MONITOR);
 	comm_udp_send(comm, &buf, 0);
 	buf_cleanup(&buf);
+}
+
+
+/*
+ * Global context primitives
+ */
+
+static comm_t hk_comm;
+
+int comm_init(void)
+{
+	return comm_init_(&hk_comm, HAKIT_COMM_PORT);
+}
+
+
+void comm_monitor(comm_sink_func_t func, void *user_data)
+{
+	comm_monitor_(&hk_comm, func, user_data);
+}
+
+
+void comm_sink_register(char *name, comm_sink_func_t func, void *user_data)
+{
+	comm_sink_register_(&hk_comm, name, func, user_data);
+}
+
+
+int comm_source_register(char *name, int event)
+{
+	return comm_source_register_(&hk_comm, name, event);
+}
+
+
+void comm_source_update_str(int id, char *value)
+{
+	comm_source_update_str_(&hk_comm, id, value);
+}
+
+
+void comm_source_update_int(int id, int value)
+{
+	comm_source_update_int_(&hk_comm, id, value);
 }

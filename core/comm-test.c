@@ -25,7 +25,7 @@ const options_entry_t options_entries[] = {
 };
 
 
-static void sink_event(comm_t *comm, char *name, char *value)
+static void sink_event(void *user_data, char *name, char *value)
 {
 	log_str("-- sink_event %s='%s'", name, value);
 }
@@ -33,8 +33,6 @@ static void sink_event(comm_t *comm, char *name, char *value)
 
 int main(int argc, char *argv[])
 {
-	comm_t comm;
-
 	log_init(NAME);
 
 	if (options_parse(&argc, argv, NULL) != 0) {
@@ -43,19 +41,19 @@ int main(int argc, char *argv[])
 
 	sys_init();
 
-	if (comm_init(&comm, HAKIT_COMM_PORT)) {
+	if (comm_init()) {
 		exit(2);
 	}
 
 	log_str("Test mode: %d", opt_mode);
 
 	if (opt_mode) {
-		comm_sink_register(&comm, "A", (comm_sink_func_t) sink_event, &comm);
-		comm_source_register(&comm, "B", 0);
+		comm_sink_register("A", (comm_sink_func_t) sink_event, NULL);
+		comm_source_register("B", 0);
 	}
 	else {
-		comm_sink_register(&comm, "B", (comm_sink_func_t) sink_event, &comm);
-		comm_source_register(&comm, "A", 0);
+		comm_sink_register("B", (comm_sink_func_t) sink_event, NULL);
+		comm_source_register("A", 0);
 	}
 
 	sys_run();
