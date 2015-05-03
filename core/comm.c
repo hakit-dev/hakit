@@ -18,6 +18,7 @@
 #include "options.h"
 #include "buf.h"
 #include "iputils.h"
+#include "netif.h"
 #include "tcpio.h"
 #include "udpio.h"
 #include "command.h"
@@ -26,6 +27,8 @@
 
 
 #define HAKIT_COMM_PORT 5678   // Default HAKit communication port
+
+#define INTERFACE_CHECK_DELAY 60000   // Check for available network interfaces once per minute
 
 #define ADVERTISE_DELAY 1000   // Delay before advertising a newly registered sink/source
 #define ADVERTISE_MAXLEN 1200  // Maxim advertising packet length
@@ -38,7 +41,7 @@
 
 /* Local functions forward declarations */
 static void comm_udp_send(comm_t *comm, buf_t *buf, int reply);
-static void comm_advertise(comm_t *comm, unsigned long delay);
+static void comm_advertise(comm_t *comm);
 static void comm_command(comm_t *comm, char *line, tcp_sock_t *tcp_sock);
 static int comm_node_connect(comm_node_t *node);
 static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *node);
@@ -365,7 +368,7 @@ static void comm_sink_register_(comm_t *comm, char *name, comm_sink_func_t func,
 {
 	comm_sink_create(comm, name, func, user_data);
 	log_debug(2, "comm_sink_register sink='%s' (%d elements)", name, comm->sinks.nmemb);
-	comm_advertise(comm, ADVERTISE_DELAY);
+	comm_advertise(comm);
 }
 
 
@@ -481,7 +484,7 @@ static int comm_source_register_(comm_t *comm, char *name, int event)
 	buf_set_str(&source->value, "");
 	source->event = event;
 
-	comm_advertise(comm, ADVERTISE_DELAY);
+	comm_advertise(comm);
 
 	return source->id;
 }
@@ -1057,22 +1060,34 @@ static int comm_advertise_now(comm_t *comm)
 }
 
 
-static void comm_advertise(comm_t *comm, unsigned long delay)
+static void comm_advertise(comm_t *comm)
 {
 	if (comm->advertise_tag != 0) {
 		sys_remove(comm->advertise_tag);
 		comm->advertise_tag = 0;
 	}
 
-	/* If no delay is provided, choose a random one */
-	if (delay == 0) {
-		comm_sink_advertise(comm, 1);
-		comm_source_advertise(comm, 1);
+	log_debug(2, "Will send sink/source advertisement in %lu ms", ADVERTISE_DELAY);
+	comm->advertise_tag = sys_timeout(ADVERTISE_DELAY, (sys_func_t) comm_advertise_now, comm);
+}
+
+
+static int comm_check_interfaces(comm_t *comm)
+{
+	int ninterfaces = netif_check_interfaces();
+
+	if (ninterfaces != comm->ninterfaces) {
+		comm->ninterfaces = ninterfaces;
+
+		netif_show_interfaces();
+
+		if (ninterfaces > 0) {
+			log_str("Network interface change detected: retriggering advertisement");
+			comm_advertise(comm);
+		}
 	}
-	else {
-		log_debug(2, "Will send sink/source advertisement in %lu ms", delay);
-		comm->advertise_tag = sys_timeout(delay, (sys_func_t) comm_advertise_now, comm);
-	}
+
+	return 1;
 }
 
 
@@ -1087,10 +1102,6 @@ static int comm_init_(comm_t *comm, int port)
 	hk_tab_init(&comm->sinks, sizeof(comm_sink_t));
 	hk_tab_init(&comm->sources, sizeof(comm_source_t));
 
-	if (udp_check_interfaces() <= 0) {
-		goto DONE;
-	}
-
 	if (udp_srv_init(&comm->udp_srv, port, (io_func_t) comm_udp_event, comm)) {
 		goto DONE;
 	}
@@ -1103,6 +1114,10 @@ static int comm_init_(comm_t *comm, int port)
 		command_t *cmd = command_new((command_handler_t) comm_command_stdin, comm);
 		io_channel_setup(&comm->chan_stdin, STDIN_FILENO, (io_func_t) command_recv, cmd);
 	}
+
+	/* Init network interface check */
+	comm->ninterfaces = netif_show_interfaces();
+	sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) comm_check_interfaces, comm);
 
 	ret = 0;
 

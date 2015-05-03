@@ -66,6 +66,7 @@ typedef struct {
  */
 
 struct comm_s {
+	int ninterfaces;
 	udp_srv_t udp_srv;
 	tcp_srv_t tcp_srv;
 	hk_tab_t nodes;       // Table of (comm_node_t *)

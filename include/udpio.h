@@ -5,12 +5,16 @@
 
 
 /*
- * UDP communication primitives
+ * UDP send to host
  */
-extern int udp_check_interfaces(void);
-
 extern int udp_send(int fd, char *addr, int port, char *buf, int size);
+
+
+/*
+ * UDP send to broadcast
+ */
 extern int udp_send_bcast(int fd, int port, char *buf, int size);
+
 
 /*
  * UDP server

@@ -4,54 +4,16 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
-#include <net/if.h>
-#include <ifaddrs.h>
 
 #include "log.h"
 #include "iputils.h"
+#include "netif.h"
 #include "udpio.h"
 
 
-static int foreach_interface(void *user_data, int (*func)(void *user_data, struct ifaddrs *current))
-{
-	struct ifaddrs* ifap = NULL;
-	struct ifaddrs* current;
-	int ret = 0;
-
-	if (getifaddrs(&ifap)) {
-		log_str("ERROR: getifaddrs: %s", strerror(errno));
-		return -1;
-	}
-
-	if (ifap == NULL) {
-		log_str("ERROR: no network interface found");
-		return -1;
-	}
-
-	current = ifap;
-	while (current != NULL) {
-		if ((current->ifa_flags & (IFF_UP|IFF_BROADCAST)) &&
-		    !(current->ifa_flags & IFF_LOOPBACK) &&
-		    (current->ifa_broadaddr != NULL)) {
-			if (current->ifa_broadaddr->sa_family == AF_INET) {
-				if (func != NULL) {
-					if (func(user_data, current) < 0) {
-						ret = -1;
-						goto DONE;
-					}
-				}
-			}
-		}
-		current = current->ifa_next;
-	}
-
-DONE:
-	freeifaddrs(ifap);
-	ifap = NULL;
-
-	return ret;
-}
-
+/*
+ * UDP send to host
+ */
 
 int udp_send(int fd, char *addr, int port, char *buf, int size)
 {
@@ -72,6 +34,10 @@ int udp_send(int fd, char *addr, int port, char *buf, int size)
 }
 
 
+/*
+ * UDP send to broadcast
+ */
+
 typedef struct {
 	int fd;
 	int port;
@@ -80,9 +46,8 @@ typedef struct {
 } udp_send_bcast_ctx_t;
 
 
-static int udp_send_bcast_addr(void *pctx, struct ifaddrs* current)
+static int udp_send_bcast_addr(udp_send_bcast_ctx_t *ctx, struct ifaddrs* current)
 {
-	udp_send_bcast_ctx_t *ctx = pctx;
 	struct sockaddr_in iremote;
 	int ret;
 
@@ -118,7 +83,7 @@ int udp_send_bcast(int fd, int port, char *buf, int size)
 	ctx.port = port;
 	ctx.buf = buf;
 	ctx.size = size;
-	ret = foreach_interface(&ctx, udp_send_bcast_addr);
+	ret = netif_foreach_interface(&ctx, (netif_func_t) udp_send_bcast_addr);
 
 	/* Disable broadcast on this socket */
 	enable = 0;
@@ -131,41 +96,9 @@ int udp_send_bcast(int fd, int port, char *buf, int size)
 }
 
 
-static int udp_check_interfaces_addr(void *pcount, struct ifaddrs* current)
-{
-	int *count = pcount;
-	struct sockaddr_in *addr = (struct sockaddr_in *) current->ifa_addr;
-	unsigned long addr_ = ntohl(addr->sin_addr.s_addr);
-	struct sockaddr_in *bcast = (struct sockaddr_in *) current->ifa_broadaddr;
-	unsigned long bcast_ = ntohl(bcast->sin_addr.s_addr);
-
-	if (*count == 0) {
-		log_str("Available interfaces:");
-	}
-
-	log_str("  %s: %lu.%lu.%lu.%lu (%lu.%lu.%lu.%lu)", current->ifa_name,
-		(addr_ >> 24) & 0xFF, (addr_ >> 16) & 0xFF, (addr_ >> 8) & 0xFF, addr_ & 0xFF,
-		(bcast_ >> 24) & 0xFF, (bcast_ >> 16) & 0xFF, (bcast_ >> 8) & 0xFF, bcast_ & 0xFF);
-
-	(*count)++;
-
-	return 0;
-}
-
-
-int udp_check_interfaces(void)
-{
-	int count = 0;
-
-	foreach_interface(&count, udp_check_interfaces_addr);
-
-	if (count == 0) {
-		log_str("No broadcast interface found");
-	}
-
-	return count;
-}
-
+/*
+ * UDP server
+ */
 
 static int udp_srv_local_addr(void *piremote, struct ifaddrs* current)
 {
@@ -195,7 +128,7 @@ static int udp_srv_event(udp_srv_t *srv, int fd)
 	}
 
 	/* Reject datagrams from myself */
-	if (foreach_interface(&srv->iremote, udp_srv_local_addr)) {
+	if (netif_foreach_interface(&srv->iremote, udp_srv_local_addr)) {
 		log_debug(2, "udp_srv_event: filtered packet from %s", ip_addr(NULL, &srv->iremote));
 		return 1;
 	}

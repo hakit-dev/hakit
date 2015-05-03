@@ -8,7 +8,7 @@ ARCH_LIBS = $(ARCH_LIB)
 BINS = hakit-test-proc hakit-test-comm hakit-adm
 ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
-OS_SRCS = logio.c sys.c io.c iputils.c udpio.c tcpio.c uevent.c sysfs.c \
+OS_SRCS = logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c
 CORE_SRCS = options.c log.c buf.c tab.c command.c comm.c mod.c prop.c \
 	http.c http_server.c eventq.c
