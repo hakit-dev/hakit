@@ -1079,10 +1079,10 @@ static int comm_check_interfaces(comm_t *comm)
 	if (ninterfaces != comm->ninterfaces) {
 		comm->ninterfaces = ninterfaces;
 
+		log_str("Network interface change detected");
 		netif_show_interfaces();
 
 		if (ninterfaces > 0) {
-			log_str("Network interface change detected: retriggering advertisement");
 			comm_advertise(comm);
 		}
 	}
