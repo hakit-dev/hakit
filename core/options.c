@@ -7,6 +7,7 @@
 
 int opt_debug = 0;
 int opt_daemon = 0;
+char *opt_hosts = NULL;
 
 static char *options_command = NULL;
 static char *options_parameter_string = NULL;

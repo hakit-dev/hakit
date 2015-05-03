@@ -52,11 +52,14 @@ typedef struct {
  * Sources
  */
 
+#define SOURCE_FLAG_EVENT   0x01
+#define SOURCE_FLAG_MONITOR 0x02
+
 typedef struct {
 	int id;
 	char *name;
 	buf_t value;
-	int event;
+	unsigned int flag;
 	hk_tab_t nodes;       // Table of (comm_node_t *)
 } comm_source_t;
 
@@ -69,6 +72,7 @@ struct comm_s {
 	int ninterfaces;
 	udp_srv_t udp_srv;
 	tcp_srv_t tcp_srv;
+	hk_tab_t hosts;       // Table of (char *)
 	hk_tab_t nodes;       // Table of (comm_node_t *)
 	hk_tab_t sinks;       // Table of (comm_sink_t)
 	hk_tab_t sources;     // Table of (comm_source_t)

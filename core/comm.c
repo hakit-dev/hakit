@@ -482,11 +482,30 @@ static int comm_source_register_(comm_t *comm, char *name, int event)
 	log_debug(2, "comm_source_register name='%s' (%d elements)", name, comm->sources.nmemb);
 
 	buf_set_str(&source->value, "");
-	source->event = event;
+
+	if (event) {
+		source->flag |= SOURCE_FLAG_EVENT;
+	}
 
 	comm_advertise(comm);
 
 	return source->id;
+}
+
+
+static comm_source_t *comm_source_monitor(comm_t *comm, char *name)
+{
+	comm_source_t *source;
+
+	source = comm_source_alloc(comm);
+	source->name = strdup(name);
+
+	log_debug(2, "comm_source_monitor name='%s' (%d elements)", name, comm->sources.nmemb);
+
+	buf_set_str(&source->value, "");
+	source->flag |= SOURCE_FLAG_MONITOR;
+
+	return source;
 }
 
 
@@ -550,10 +569,10 @@ static void comm_source_attach_node(comm_source_t *source, comm_node_t *node)
 
 static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *node)
 {
-	log_debug(3, "comm_source_send_initial_value source='%s' event=%d node=#%d='%s'", source->name, source->event, node->id, node->name);
+	log_debug(3, "comm_source_send_initial_value source='%s' flag=%02X node=#%d='%s'", source->name, source->flag, node->id, node->name);
 
-	/* Do not send initial value if source is declared as an event */
-	if (source->event) {
+	/* Do not send initial value if source is declared as an event or as a monitored source */
+	if (source->flag) {
 		return;
 	}
 
@@ -634,11 +653,20 @@ static void comm_source_update_int_(comm_t *comm, int id, int value)
 
 static void comm_udp_send(comm_t *comm, buf_t *buf, int reply)
 {
+	int i;
+
 	if (reply) {
 		udp_srv_send_reply(&comm->udp_srv, (char *) buf->base, buf->len);
 	}
 	else {
+		/* Send UDP packet as broadcast */
 		udp_srv_send_bcast(&comm->udp_srv, (char *) buf->base, buf->len);
+
+		/* Also send UDP packet to hosts provides with command option --hosts */
+		for (i = 0; i < comm->hosts.nmemb; i++) {
+			char *host = HK_TAB_VALUE(comm->hosts, char *, i);
+			udp_srv_send_to(&comm->udp_srv, (char *) buf->base, buf->len, host);
+		}
 	}
 
 	buf->len = 0;
@@ -653,12 +681,21 @@ static void comm_udp_event_sink(comm_t *comm, int argc, char **argv)
 
 	/* Check for local sources matching advertised sinks */
 	for (i = 0; i < argc; i++) {
-		char *args = argv[i];
-		comm_source_t *source = comm_source_retrieve(comm, args);
+		char *sink_name = argv[i];
+		comm_source_t *source = comm_source_retrieve(comm, sink_name);
+
+		/* Special processing for monitor mode:
+		   If no source is registered matching the advertised sink,
+		   we automatically register this source as an event, so that it will be possible to update the sink */
+		if (comm->monitor_func != NULL) {
+			if (source == NULL) {
+				source = comm_source_monitor(comm, sink_name);
+			}
+		}
 
 		/* If matching source is found, check for requesting node connection */
 		if (source != NULL) {
-			log_debug(2, "  sink='%s', source='%s'", args, source->name);
+			log_debug(2, "  sink='%s', source='%s'", sink_name, source->name);
 
 			struct sockaddr_in *addr = udp_srv_remote(&comm->udp_srv);
 			unsigned long addr_v = ntohl(addr->sin_addr.s_addr);
@@ -676,7 +713,7 @@ static void comm_udp_event_sink(comm_t *comm, int argc, char **argv)
 			comm_source_attach_node(source, node);
 		}
 		else {
-			log_debug(2, "  sink='%s', no source", args);
+			log_debug(2, "  sink='%s', no source", sink_name);
 		}
 	}
 }
@@ -835,6 +872,18 @@ static int comm_command_output(tcp_sock_t *tcp_sock, buf_t *out_buf)
 }
 
 
+static void comm_source_append_name(comm_source_t *source, buf_t *out_buf)
+{
+	if (source->flag & SOURCE_FLAG_MONITOR) {
+		buf_append_str(out_buf, "(");
+	}
+	buf_append_str(out_buf, source->name);
+	if (source->flag & SOURCE_FLAG_MONITOR) {
+		buf_append_str(out_buf, ")");
+	}
+}
+
+
 static void comm_command_status(comm_t *comm, buf_t *out_buf)
 {
 	int i;
@@ -858,7 +907,7 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 						comm_node_t *node2 = HK_TAB_VALUE(source->nodes, comm_node_t *, k);
 						if (node2 == node) {
 							buf_append_str(out_buf, " ");
-							buf_append_str(out_buf, source->name);
+							comm_source_append_name(source, out_buf);
 						}
 					}
 				}
@@ -875,7 +924,7 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 
 		if (source->name != NULL) {
 			buf_append_str(out_buf, "  ");
-			buf_append_str(out_buf, source->name);
+			comm_source_append_name(source, out_buf);
 
 			for (j = 0; j < source->nodes.nmemb; j++) {
 				comm_node_t *node = HK_TAB_VALUE(source->nodes, comm_node_t *, j);
@@ -1051,11 +1100,30 @@ static void comm_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
  * Management engine
  */
 
+static void comm_monitor_advertise(comm_t *comm)
+{
+	buf_t buf;
+
+	log_debug(2, "Advertising monitor mode");
+
+	buf_init(&buf);
+	buf_append_byte(&buf, UDP_SIGN);
+	buf_append_byte(&buf, UDP_TYPE_MONITOR);
+	comm_udp_send(comm, &buf, 0);
+	buf_cleanup(&buf);
+}
+
+
 static int comm_advertise_now(comm_t *comm)
 {
 	comm->advertise_tag = 0;
 	comm_sink_advertise(comm, 0);
 	comm_source_advertise(comm, 0);
+
+	if (comm->monitor_func != NULL) {
+		comm_monitor_advertise(comm);
+	}
+
 	return 0;
 }
 
@@ -1067,7 +1135,7 @@ static void comm_advertise(comm_t *comm)
 		comm->advertise_tag = 0;
 	}
 
-	log_debug(2, "Will send sink/source advertisement in %lu ms", ADVERTISE_DELAY);
+	log_debug(2, "Will send advertisement request in %lu ms", ADVERTISE_DELAY);
 	comm->advertise_tag = sys_timeout(ADVERTISE_DELAY, (sys_func_t) comm_advertise_now, comm);
 }
 
@@ -1091,6 +1159,27 @@ static int comm_check_interfaces(comm_t *comm)
 }
 
 
+static void comm_init_hosts(comm_t *comm)
+{
+	char *s1 = opt_hosts;
+
+	while ((s1 != NULL) && (*s1 != '\0')) {
+		char *s2 = s1;
+		while ((*s2 != '\0') && (*s2 != ',')) {
+			s2++;
+		}
+		if (*s2 != '\0') {
+			*(s2++) = '\0';
+		}
+
+		char **s = hk_tab_push(&comm->hosts);
+		*s = s1;
+
+		s1 = s2;
+	}
+}
+
+
 static int comm_init_(comm_t *comm, int port)
 {
 	int ret = -1;
@@ -1098,6 +1187,7 @@ static int comm_init_(comm_t *comm, int port)
 	memset(comm, 0, sizeof(comm_t));
 	udp_srv_clear(&comm->udp_srv);
 	tcp_srv_clear(&comm->tcp_srv);
+	hk_tab_init(&comm->hosts, sizeof(char *));
 	hk_tab_init(&comm->nodes, sizeof(comm_node_t *));
 	hk_tab_init(&comm->sinks, sizeof(comm_sink_t));
 	hk_tab_init(&comm->sources, sizeof(comm_source_t));
@@ -1114,6 +1204,9 @@ static int comm_init_(comm_t *comm, int port)
 		command_t *cmd = command_new((command_handler_t) comm_command_stdin, comm);
 		io_channel_setup(&comm->chan_stdin, STDIN_FILENO, (io_func_t) command_recv, cmd);
 	}
+
+	/* Feed list of explicit host addresses */
+	comm_init_hosts(comm);
 
 	/* Init network interface check */
 	comm->ninterfaces = netif_show_interfaces();
@@ -1138,18 +1231,12 @@ DONE:
 
 static void comm_monitor_(comm_t *comm, comm_sink_func_t func, void *user_data)
 {
-	buf_t buf;
-
 	/* Raise monitor mode flag */
 	comm->monitor_func = func;
 	comm->monitor_user_data = user_data;
 
 	/* Broadcast monitoring request */
-	buf_init(&buf);
-	buf_append_byte(&buf, UDP_SIGN);
-	buf_append_byte(&buf, UDP_TYPE_MONITOR);
-	comm_udp_send(comm, &buf, 0);
-	buf_cleanup(&buf);
+	comm_advertise(comm);
 }
 
 
