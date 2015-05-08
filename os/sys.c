@@ -119,6 +119,11 @@ static unsigned long long sys_now(void)
 sys_tag_t sys_io_watch(int fd, sys_io_func_t func, void *arg)
 {
 	sys_source_t *src = sys_source_add((sys_func_t) func, arg);
+
+	if (src == NULL) {
+		return 0;
+	}
+
 	src->type = SYS_TYPE_IO;
 	src->d.io.fd = fd;
 	log_debug(3, "sys_io_watch(%d) => tag=%u", fd, src->tag);
@@ -129,6 +134,11 @@ sys_tag_t sys_io_watch(int fd, sys_io_func_t func, void *arg)
 sys_tag_t sys_timeout(unsigned long delay, sys_func_t func, void *arg)
 {
 	sys_source_t *src = sys_source_add(func, arg);
+
+	if (src == NULL) {
+		return 0;
+	}
+
 	src->type = SYS_TYPE_TIMEOUT;
 	src->d.timeout.delay = delay;
 	src->d.timeout.t = delay + sys_now();
@@ -140,6 +150,11 @@ sys_tag_t sys_timeout(unsigned long delay, sys_func_t func, void *arg)
 sys_tag_t sys_child_watch(pid_t pid, sys_child_func_t func, void *arg)
 {
 	sys_source_t *src = sys_source_add((sys_func_t) func, arg);
+
+	if (src == NULL) {
+		return 0;
+	}
+
 	src->type = SYS_TYPE_CHILD;
 	src->d.child.pid = pid;
 	log_debug(3, "sys_child_watch(%d) => tag=%u", pid, src->tag);
@@ -150,6 +165,11 @@ sys_tag_t sys_child_watch(pid_t pid, sys_child_func_t func, void *arg)
 sys_tag_t sys_quit_handler(sys_func_t func, void *arg)
 {
 	sys_source_t *src = sys_source_add(func, arg);
+
+	if (src == NULL) {
+		return 0;
+	}
+
 	src->type = SYS_TYPE_QUIT;
 	log_debug(3, "sys_quit_handler() => tag=%u", src->tag);
 	return src->tag;
