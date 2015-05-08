@@ -2,6 +2,7 @@
 #include <syslog.h>
 
 #include "buf.h"
+#include "options.h"
 #include "log.h"
 
 
@@ -21,7 +22,9 @@ static void log_open(void)
 	if (log_f == NULL) {
 		log_f = stderr;
 		buf_init(&log_buf);
-		openlog(log_prefix, LOG_PID, LOG_LOCAL0);
+		if (opt_daemon) {
+			openlog(log_prefix, LOG_PID, LOG_LOCAL0);
+		}
 	}
 }
 
@@ -33,10 +36,11 @@ static void log_flush(void)
 			fwrite(log_buf.base, 1, log_buf.len, log_f);
 			fflush(log_f);
 
-			log_buf.len--;
-			log_buf.base[log_buf.len] = '\0';
-
-			syslog(LOG_DEBUG, "%s", (char *) log_buf.base);
+			if (opt_daemon) {
+				log_buf.len--;
+				log_buf.base[log_buf.len] = '\0';
+				syslog(LOG_DEBUG, "%s", (char *) log_buf.base);
+			}
 
 			log_buf.len = 0;
 		}
