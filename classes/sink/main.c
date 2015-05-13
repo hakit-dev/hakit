@@ -48,7 +48,7 @@ static hk_obj_t *_new(hk_obj_t *obj)
 }
 
 
-hk_class_t hk_class_and = {
+hk_class_t _class = {
 	.name = CLASS_NAME,
 	.new = _new,
 };

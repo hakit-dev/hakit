@@ -30,7 +30,7 @@ $(OUTDIR)/%.o: %.c
 
 $(OUTDIR)/%.so:
 	@[ -f $(OUTDIR) ] || mkdir -p $(OUTDIR)
-	$(CC) -o $@ $^ $(LDFLAGS) -shared -nostartfiles -rdynamic
+	$(CC) -o $@ $^ $(LDFLAGS) -shared -nostartfiles
 
 $(ARCH_LIBS):
 	@[ -f $(OUTDIR) ] || mkdir -p $(OUTDIR)

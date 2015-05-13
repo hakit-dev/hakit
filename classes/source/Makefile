@@ -1,7 +1,7 @@
 HAKIT := ../..
 
 ARCH ?= $(shell arch)
-OUTDIR := out/$(ARCH)
+OUTDIR := device/$(ARCH)
 
 all: $(OUTDIR)/source.so
 

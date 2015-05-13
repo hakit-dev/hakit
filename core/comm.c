@@ -406,7 +406,7 @@ static void comm_source_advertise(comm_t *comm, int reply)
 
 	for (i = 0; i < nsources; i++) {
 		comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
-		if (source->name != NULL) {
+		if ((source->name != NULL) && ((source->flag & SOURCE_FLAG_MONITOR) == 0)) {
 			if (buf.len == 0) {
 				buf_append_byte(&buf, UDP_SIGN);
 				buf_append_byte(&buf, UDP_TYPE_SOURCE);

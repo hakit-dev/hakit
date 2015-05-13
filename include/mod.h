@@ -14,24 +14,22 @@
 #include "prop.h"
 
 
-typedef struct hk_class_s hk_class_t;
-typedef struct hk_pad_s hk_pad_t;
-typedef struct hk_net_s hk_net_t;
-typedef struct hk_obj_s hk_obj_t;
-
-
 /**
  * HAKit module class definition
  */
 
+typedef struct hk_pad_s hk_pad_t;
+typedef struct hk_net_s hk_net_t;
+typedef struct hk_obj_s hk_obj_t;
+
 typedef hk_obj_t * (*hk_class_new_func)(hk_obj_t *obj);
 typedef void (*hk_class_input_func)(hk_pad_t *pad, char *value);
 
-struct hk_class_s {
+typedef struct {
 	char *name;                   /**< Class name */
 	hk_class_new_func new;        /**< Class constructor */
 	hk_class_input_func input;    /**< Signal input method */
-};
+} hk_class_t;
 
 extern void hk_class_register(hk_class_t *class);
 extern hk_class_t *hk_class_find(char *name);
@@ -73,6 +71,7 @@ struct hk_net_s {
 };
 
 extern hk_net_t *hk_net_create(char *name);
+extern hk_net_t *hk_net_find(char *name);
 extern hk_net_t *hk_net_find(char *name);
 extern int hk_net_connect(hk_net_t *net, hk_pad_t *pad);
 
