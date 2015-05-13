@@ -72,7 +72,6 @@ struct hk_net_s {
 
 extern hk_net_t *hk_net_create(char *name);
 extern hk_net_t *hk_net_find(char *name);
-extern hk_net_t *hk_net_find(char *name);
 extern int hk_net_connect(hk_net_t *net, hk_pad_t *pad);
 
 
