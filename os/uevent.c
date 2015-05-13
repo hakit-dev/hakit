@@ -149,8 +149,13 @@ int uevent_init(void)
 {
 #ifdef HAKIT_UEVENT_ENABLED
 	int sock;
-	int buffersize = 16 * 1024 * 1024;
+	int buffersize;
 	struct sockaddr_nl snl;
+
+	/* Do nothing if uevent listening is already initialised */
+	if (uevent_tag > 0) {
+		return 0;
+	}
 
 	sock = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_KOBJECT_UEVENT); 
 	if (sock == -1) {
@@ -159,6 +164,7 @@ int uevent_init(void)
 	}
 	
 	/* We're trying to override buffer size. If we fail, we attempt to set a big buffer and pray */
+	buffersize = 16 * 1024 * 1024;
 	if (setsockopt(sock, SOL_SOCKET, SO_RCVBUFFORCE, &buffersize, sizeof(buffersize))) {
 		/* Somewhat safe default. */
 		buffersize = 106496;
