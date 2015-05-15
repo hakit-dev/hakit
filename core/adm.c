@@ -17,7 +17,7 @@ const char *options_summary = "HAKit comm test";
 
 const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0, OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
-	{ "hosts",  'h', 0, OPTIONS_TYPE_STRING, &opt_hosts, "Comma-separated list of explicit host addresses", "HOST" },
+	{ "hosts",  'H', 0, OPTIONS_TYPE_STRING, &opt_hosts, "Comma-separated list of explicit host names", "HOST" },
 	{ NULL }
 };
 

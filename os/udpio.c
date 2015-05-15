@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <netdb.h>
 
 #include "log.h"
 #include "iputils.h"
@@ -15,19 +16,26 @@
  * UDP send to host
  */
 
-int udp_send(int fd, char *addr, int port, char *buf, int size)
+int udp_send(int fd, char *host, int port, char *buf, int size)
 {
+	struct hostent *hp;
 	struct sockaddr_in iremote;
 	int ssize;
 
+	/* Retrieve host address */
+	if ((hp = gethostbyname(host)) == NULL ) {
+		log_str("ERROR: Unknown host name: %s", host);
+		return -1;
+	}
+
 	memset(&iremote, 0, sizeof(iremote));
 	iremote.sin_family = AF_INET;
-	iremote.sin_addr.s_addr = inet_addr(addr);
+	memcpy(&iremote.sin_addr.s_addr, hp->h_addr, hp->h_length);
 	iremote.sin_port = htons(port);
 
 	ssize = sendto(fd, buf, size, 0, (struct sockaddr *) &iremote, sizeof(iremote));
 	if (ssize < 0) {
-		log_str("ERROR: sendto(%s:%d): %s", addr, port, strerror(errno));
+		log_str("ERROR: sendto(%s:%d): %s", host, port, strerror(errno));
 	}
 
 	return ssize;
