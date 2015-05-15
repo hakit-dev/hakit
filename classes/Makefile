@@ -1,11 +1,11 @@
 CLASSES := sink source and
 
-all:
+all::
 	for dir in $(CLASSES); do \
 	  make -C $$dir all ;\
 	done
 
-clean:
+clean::
 	for dir in $(CLASSES); do \
 	  make -C $$dir clean ;\
 	done

@@ -3,8 +3,8 @@ HAKIT := ../..
 ARCH ?= $(shell arch)
 OUTDIR := device/$(ARCH)
 
-all: $(OUTDIR)/source.so
-
 include $(HAKIT)/defs.mk
+
+all:: $(OUTDIR)/source.so
 
 $(OUTDIR)/source.so: $(OUTDIR)/main.o

@@ -1,5 +1,14 @@
+#
+# HAKit - The Home Automation KIT
+# Copyright (C) 2014 Sylvain Giroudon
+#
+# This file is subject to the terms and conditions of the GNU Lesser
+# General Public License v2.1. See the file LICENSE in the top level
+# directory for more details.
+#
+
 ARCH ?= $(shell arch)
-OUTDIR = out/$(ARCH)
+OUTDIR := out/$(ARCH)
 
 ifneq ($(ARCH),mips)
 ENABLE_LWS = 1
@@ -11,6 +20,8 @@ ARCH_LIBS = $(ARCH_LIB)
 BINS = hakit-test-proc hakit-test-comm hakit
 ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
+include defs.mk
+
 OS_SRCS = logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c mod_init.c
 CORE_SRCS = options.c log.c buf.c tab.c command.c comm.c mod.c prop.c \
@@ -18,7 +29,7 @@ CORE_SRCS = options.c log.c buf.c tab.c command.c comm.c mod.c prop.c \
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
+all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
 include defs.mk
 
@@ -40,11 +51,6 @@ endif
 .PHONY: classes
 classes:
 	make -C classes
-
-
-VERSION := $(shell git describe --long --always --dirty 2>/dev/null || cat $(ROOT_DIR)VERSION 2>/dev/null)
-SHORT_VERSION := $(shell echo $(VERSION) | sed -e 's/-dirty$$//' -e 's/-[a-zA-Z0-9]\+$$//')
-CFLAGS += -DHAKIT_VERSION="$(VERSION)" -DARCH="$(ARCH)"
 
 LDFLAGS += -rdynamic -ldl
 

@@ -20,13 +20,14 @@
 #include "comm.h"
 #include "mod.h"
 #include "mod_init.h"
+#include "hakit_version.h"
 
 
 //===================================================
 // Command line arguments
 //===================================================
 
-const char *options_summary = "HAKit " xstr(HAKIT_VERSION) " (" xstr(ARCH) ")";
+const char *options_summary = "HAKit " HAKIT_VERSION " (" xstr(ARCH) ")";
 static int opt_monitor = 0;
 
 const options_entry_t options_entries[] = {
