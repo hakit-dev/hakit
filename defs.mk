@@ -53,6 +53,11 @@ $(OUTDIR):
 .PHONY: version-h
 
 VERSION := $(shell git describe --long --always --dirty 2>/dev/null)
+
+ifeq ($(VERSION),)
+VERSION := $(strip $(shell svnversion -c . 2>/dev/null | sed 's/^[0-9]*://'))
+endif
+
 SHORT_VERSION := $(shell echo $(VERSION) | sed -e 's/-dirty$$//' -e 's/-[a-zA-Z0-9]\+$$//')
 
 OUT_INC := $(dir $(OUTDIR))include
