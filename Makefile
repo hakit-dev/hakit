@@ -5,7 +5,7 @@ LIB=libhakit.a
 ARCH_LIB = $(OUTDIR)/$(LIB)
 ARCH_LIBS = $(ARCH_LIB)
 
-BINS = hakit-test-proc hakit-test-comm hakit-adm hakit
+BINS = hakit-test-proc hakit-test-comm hakit
 ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 OS_SRCS = logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \

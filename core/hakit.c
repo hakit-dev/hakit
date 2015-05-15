@@ -27,13 +27,30 @@
 //===================================================
 
 const char *options_summary = "HAKit " xstr(HAKIT_VERSION) " (" xstr(ARCH) ")";
+static int opt_monitor = 0;
 
 const options_entry_t options_entries[] = {
-	{ "debug",  'd', 0, OPTIONS_TYPE_INT,  &opt_debug,  "Set debug level", "N" },
-	{ "daemon", 'D', 0, OPTIONS_TYPE_NONE, &opt_daemon, "Run in background as a daemon" },
+	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
+	{ "daemon",  'D', 0, OPTIONS_TYPE_NONE,   &opt_daemon,  "Run in background as a daemon" },
+	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit host names", "HOST" },
+	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable monitor mode" },
 	{ NULL }
 };
 
+
+//===================================================
+// Monitor mode management
+//===================================================
+
+static void monitor_sink_event(void *user_data, char *name, char *value)
+{
+	log_str("-- %s='%s'", name, value);
+}
+
+
+//===================================================
+// Program body
+//===================================================
 
 static void run_as_daemon(void)
 {
@@ -79,6 +96,10 @@ int main(int argc, char *argv[])
 	/* Init communication engine */
 	if (comm_init()) {
 		return 2;
+	}
+
+	if (opt_monitor) {
+		comm_monitor((comm_sink_func_t) monitor_sink_event, NULL);
 	}
 
 	/* Init module management */

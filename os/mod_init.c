@@ -33,7 +33,7 @@ static int hk_mod_init_dir(char *dir)
 
 	d = opendir(dir);
 	if (d == NULL) {
-		log_str("... Not found");
+		log_debug(2, "Directory '%s' not found", dir);
 		return 0;
 	}
 
