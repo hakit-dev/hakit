@@ -60,11 +60,12 @@ static int hk_mod_init_dir(char *dir)
 				if (class != NULL) {
 					hk_class_register(class);
 					log_str("Class '%s' registered (%s)", class->name, path);
+					// Keep library open
 				}
 				else {
 					log_str("Class '%s': %s", name, dlerror());
+					dlclose(dl);
 				}
-//				dlclose(dl);
 			}
 			else {
 				log_str("Class '%s': %s", name, dlerror());
