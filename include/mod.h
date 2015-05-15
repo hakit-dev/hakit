@@ -27,6 +27,7 @@ typedef void (*hk_class_input_func)(hk_pad_t *pad, char *value);
 
 typedef struct {
 	char *name;                   /**< Class name */
+	char *version;                /**< Class version string */
 	hk_class_new_func new;        /**< Class constructor */
 	hk_class_input_func input;    /**< Signal input method */
 } hk_class_t;

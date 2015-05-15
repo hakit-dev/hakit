@@ -15,6 +15,8 @@
 #include "mod.h"
 #include "comm.h"
 
+#include "version.h"
+
 
 #define CLASS_NAME "sink"
 
@@ -50,5 +52,6 @@ static hk_obj_t *_new(hk_obj_t *obj)
 
 hk_class_t _class = {
 	.name = CLASS_NAME,
+	.version = VERSION,
 	.new = _new,
 };
