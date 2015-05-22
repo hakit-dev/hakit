@@ -1,7 +1,10 @@
 #ifndef __HAKIT_TYPES_H__
 #define __HAKIT_TYPES_H__
 
+#ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof(x[0]))
+#endif
+
 #define CEIL_DIV(x, y) (((x)+(y)-1) / (y))
 
 #ifndef MIN
