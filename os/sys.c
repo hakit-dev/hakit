@@ -1,8 +1,10 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
 #include <malloc.h>
-#include <sys/select.h>
+#include <sys/poll.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -32,6 +34,7 @@ typedef struct {
 	union {
 		struct {
 			int fd;
+			struct pollfd *pollfd;
 		} io;
 		struct {
 			unsigned long delay;
@@ -240,11 +243,9 @@ void sys_run(void)
 
 	while (quit_requested == 0) {
 		unsigned long long now;
-		fd_set rfds;
-		struct timeval tv;
-		struct timeval *ptv = NULL;
-		unsigned long long delay = 0;
-		int fdmax = 0;
+		struct pollfd fds[NSOURCES];
+		int nfds = 0;
+		long long timeout = -1;
 
 		now = sys_now();
 		if (now == 0) {
@@ -267,8 +268,6 @@ void sys_run(void)
 			}
 		}
 
-		FD_ZERO(&rfds);
-
 		/* Construct poll settings */
 		for (i = 0; i < NSOURCES; i++) {
 			sys_source_t *src = &sources[i];
@@ -277,18 +276,18 @@ void sys_run(void)
 				log_debug(4, "sys_run/1: TIMEOUT tag=%u %llu %llu", src->tag, src->d.timeout.t, now);
 				if (src->d.timeout.t > now) {
 					unsigned long long dt = src->d.timeout.t - now;
-					if ((delay == 0) || (dt < delay)) {
-						delay = dt;
+					if ((timeout < 0) || (dt < timeout)) {
+						timeout = dt;
 					}
 				}
 			}
 
 			else if (src->type == SYS_TYPE_IO) {
 				log_debug(4, "sys_run/1: IO tag=%u", src->tag);
-				FD_SET(src->d.io.fd, &rfds);
-				if (src->d.io.fd > fdmax) {
-					fdmax = src->d.io.fd;
-				}
+				src->d.io.pollfd = &fds[nfds++];
+				src->d.io.pollfd->fd = src->d.io.fd;
+				src->d.io.pollfd->events = POLLIN | POLLPRI | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
+				src->d.io.pollfd->revents = 0;
 			}
 
 			else if (src->type == SYS_TYPE_REMOVED) {
@@ -297,16 +296,10 @@ void sys_run(void)
 			}
 		}
 
-		if (delay > 0) {
-			ptv = &tv;
-			tv.tv_sec = delay / 1000;
-			tv.tv_usec = (delay % 1000) * 1000;
-		}
-
 		/* Wait for something to happen */
-		log_debug(4, "sys_run/2: select(delay=%d)", delay);
-		int status = select(fdmax+1, &rfds, NULL, NULL, ptv);
-		log_debug(4, "sys_run/3: select => status=%d", status);
+		log_debug(4, "sys_run/2: poll(timeout=%ld)", timeout);
+		int status = poll(fds, nfds, timeout);
+		log_debug(4, "sys_run/3: poll => status=%d", status);
 
 		if (status < 0) {
 			if ((errno != EAGAIN) && (errno != EINTR)) {
@@ -320,7 +313,8 @@ void sys_run(void)
 				sys_source_t *src = &sources[i];
 
 				if (src->type == SYS_TYPE_IO) {
-					if (FD_ISSET(src->d.io.fd, &rfds)) {
+					log_debug(4, "sys_run/4: poll => revents=%02X", src->d.io.pollfd->revents);
+					if (src->d.io.pollfd->revents) {
 						sys_callback(src);
 					}
 				}
