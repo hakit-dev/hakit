@@ -7,11 +7,6 @@
 # directory for more details.
 #
 
-CC = $(CROSS_COMPILE)gcc
-AR = $(CROSS_COMPILE)ar
-RANLIB = $(CROSS_COMPILE)ranlib
-RM = rm -rf
-
 CFLAGS  = -Wall -O2 -fPIC
 LDFLAGS =
 

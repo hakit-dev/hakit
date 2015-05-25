@@ -31,8 +31,6 @@ OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
 all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
-include defs.mk
-
 ifdef ENABLE_LWS
 LWS_LIB_DIR = lws/out/$(ARCH)/lib
 LWS_SRC_DIR = lws/libwebsockets/lib
