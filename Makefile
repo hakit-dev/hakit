@@ -10,10 +10,6 @@
 ARCH ?= $(shell arch)
 OUTDIR := out/$(ARCH)
 
-ifneq ($(ARCH),mips)
-ENABLE_LWS = 1
-endif
-
 ARCH_LIB = $(OUTDIR)/libhakit.a
 ARCH_LIBS = $(ARCH_LIB)
 
@@ -31,7 +27,9 @@ OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
 all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
-ifdef ENABLE_LWS
+#
+# WebSockets
+#
 LWS_LIB_DIR = lws/out/$(ARCH)/lib
 LWS_SRC_DIR = lws/libwebsockets/lib
 
@@ -41,17 +39,19 @@ LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 .PHONY: lws
 lws:
 	make -C lws
-else
-lws:
-	echo "WARNING: WebSockets not supported on arch '$(ARCH)'" 
-endif
 
+#
+# HAKit standard classes
+#
 .PHONY: classes
 classes:
 	make -C classes
 
 LDFLAGS += -rdynamic -ldl
 
+#
+# HAKit libs and bins
+#
 $(ARCH_LIB): $(OBJS)
 
 $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o
