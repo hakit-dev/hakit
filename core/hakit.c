@@ -45,7 +45,12 @@ const options_entry_t options_entries[] = {
 
 static void monitor_sink_event(void *user_data, char *name, char *value)
 {
-	log_str("-- %s='%s'", name, value);
+	if (value == NULL) {
+		log_str("-- New sink: %s", name);
+	}
+	else {
+		log_str("-- %s='%s'", name, value);
+	}
 }
 
 

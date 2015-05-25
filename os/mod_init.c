@@ -59,7 +59,7 @@ static int hk_mod_init_dir(char *dir)
 				hk_class_t *class = dlsym(dl, "_class");
 				if (class != NULL) {
 					hk_class_register(class);
-					log_str("Class '%s' registered (%s)", class->name, path);
+					log_str("%s: Class '%s' registered (%s)", path, class->name, class->version ? class->version:"");
 					// Keep library open
 				}
 				else {
