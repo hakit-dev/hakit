@@ -1,3 +1,12 @@
+/*
+ * HAKit - The Home Automation KIT - www.hakit.net
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -33,8 +42,8 @@ typedef struct {
 	sys_type_t type;
 	union {
 		struct {
-			int fd;
-			struct pollfd *pollfd;
+			struct pollfd pollfd;
+			int poll;
 		} io;
 		struct {
 			unsigned long delay;
@@ -93,7 +102,7 @@ void sys_remove(sys_tag_t tag)
 {
 	int i;
 
-	log_debug(3, "sys_remove(%d)", tag);
+	log_debug(3, "sys_remove(%u)", tag);
 
 	for (i = 0; i < NSOURCES; i++) {
 		sys_source_t *src = &sources[i];
@@ -105,6 +114,34 @@ void sys_remove(sys_tag_t tag)
 		}
 	}
 }
+
+
+static sys_source_t *sys_retrieve_fd(int fd)
+{
+	int i;
+
+	for (i = 0; i < NSOURCES; i++) {
+		sys_source_t *src = &sources[i];
+		if ((src->type == SYS_TYPE_IO) && (src->d.io.pollfd.fd == fd)) {
+			return src;
+		}
+	}
+
+	return NULL;
+}
+
+
+void sys_remove_fd(int fd)
+{
+	sys_source_t *src = sys_retrieve_fd(fd);
+
+	if (src != NULL) {
+		src->type = SYS_TYPE_REMOVED;
+		src->func = NULL;
+		src->arg = NULL;
+	}
+}
+
 
 static unsigned long long sys_now(void)
 {
@@ -119,17 +156,53 @@ static unsigned long long sys_now(void)
 }
 
 
+static sys_source_t *sys_io_source_add(int fd, sys_func_t func, void *arg)
+{
+	sys_source_t *src = sys_retrieve_fd(fd);
+
+	if (src == NULL) {
+		src = sys_source_add((sys_func_t) func, arg);
+	}
+
+	return src;
+}
+
+
 sys_tag_t sys_io_watch(int fd, sys_io_func_t func, void *arg)
 {
-	sys_source_t *src = sys_source_add((sys_func_t) func, arg);
+	sys_source_t *src = sys_io_source_add(fd, (sys_func_t) func, arg);
 
 	if (src == NULL) {
 		return 0;
 	}
 
 	src->type = SYS_TYPE_IO;
-	src->d.io.fd = fd;
+	src->d.io.pollfd.fd = fd;
+	src->d.io.pollfd.events = POLLIN | POLLPRI | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
+	src->d.io.pollfd.revents = 0;
+	src->d.io.poll = 0;
+
 	log_debug(3, "sys_io_watch(%d) => tag=%u", fd, src->tag);
+	return src->tag;
+}
+
+
+sys_tag_t sys_io_poll(int fd, unsigned int events, sys_poll_func_t func, void *arg)
+{
+	sys_source_t *src = sys_io_source_add(fd, (sys_func_t) func, arg);
+
+	if (src == NULL) {
+		return 0;
+	}
+
+	src->type = SYS_TYPE_IO;
+	src->d.io.pollfd.fd = fd;
+	src->d.io.pollfd.events = events;
+	src->d.io.pollfd.revents = 0;
+	src->d.io.poll = 1;
+
+	log_debug(3, "sys_io_poll(%d,%02X) => tag=%u", fd, events, src->tag);
+
 	return src->tag;
 }
 
@@ -186,7 +259,12 @@ static int sys_callback(sys_source_t *src)
 	if (src->func != NULL) {
 		switch (src->type) {
 		case SYS_TYPE_IO:
-			ret = ((sys_io_func_t) src->func)(src->arg, src->d.io.fd);
+			if (src->d.io.poll) {
+				ret = ((sys_poll_func_t) src->func)(src->arg, &src->d.io.pollfd);
+			}
+			else {
+				ret = ((sys_io_func_t) src->func)(src->arg, src->d.io.pollfd.fd);
+			}
 			break;
 		case SYS_TYPE_CHILD:
 			ret = ((sys_child_func_t) src->func)(src->arg, src->d.child.pid, src->d.child.status);
@@ -244,6 +322,7 @@ void sys_run(void)
 	while (quit_requested == 0) {
 		unsigned long long now;
 		struct pollfd fds[NSOURCES];
+		int fds_lookup[NSOURCES];
 		int nfds = 0;
 		long long timeout = -1;
 
@@ -284,10 +363,10 @@ void sys_run(void)
 
 			else if (src->type == SYS_TYPE_IO) {
 				log_debug(4, "sys_run/1: IO tag=%u", src->tag);
-				src->d.io.pollfd = &fds[nfds++];
-				src->d.io.pollfd->fd = src->d.io.fd;
-				src->d.io.pollfd->events = POLLIN | POLLPRI | POLLRDHUP | POLLERR | POLLHUP | POLLNVAL;
-				src->d.io.pollfd->revents = 0;
+				src->d.io.pollfd.revents = 0;
+				fds_lookup[i] = nfds;
+				fds[nfds] = src->d.io.pollfd;
+				nfds++;
 			}
 
 			else if (src->type == SYS_TYPE_REMOVED) {
@@ -313,8 +392,9 @@ void sys_run(void)
 				sys_source_t *src = &sources[i];
 
 				if (src->type == SYS_TYPE_IO) {
-					log_debug(4, "sys_run/4: poll => revents=%02X", src->d.io.pollfd->revents);
-					if (src->d.io.pollfd->revents) {
+					src->d.io.pollfd.revents = fds[fds_lookup[i]].revents;
+					log_debug(4, "sys_run/4: poll => %d %02X", src->d.io.pollfd.fd, src->d.io.pollfd.revents);
+					if (src->d.io.pollfd.revents) {
 						sys_callback(src);
 					}
 				}

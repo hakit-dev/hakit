@@ -10,7 +10,7 @@
 #ifndef __HAKIT_WS_H__
 #define __HAKIT_WS_H__
 
-extern int ws_init(int port, int use_ssl);
+extern int ws_init(int port);
 extern void ws_done(void);
 
 #endif /* __HAKIT_WS_H__ */

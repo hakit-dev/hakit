@@ -20,6 +20,7 @@
 #include "comm.h"
 #include "mod.h"
 #include "mod_init.h"
+#include "ws.h"
 #include "hakit_version.h"
 
 
@@ -106,6 +107,11 @@ int main(int argc, char *argv[])
 
 	if (opt_monitor) {
 		comm_monitor((comm_sink_func_t) monitor_sink_event, NULL);
+	}
+
+	/* Init WebSockets */
+	if (ws_init(7777)) {
+		return 2;
 	}
 
 	/* Init module management */
