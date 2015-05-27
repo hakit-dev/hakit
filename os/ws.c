@@ -41,10 +41,13 @@ struct per_session_data__http {
 
 static int ws_callback_poll(struct libwebsocket_context *context, struct pollfd *pollfd)
 {
+	int ret;
+
 	log_debug(3, "ws_callback_poll: %d %02X", pollfd->fd, pollfd->revents);
 
-	if (libwebsocket_service_fd(context, pollfd) < 0) {
-		return 0;
+	ret = libwebsocket_service_fd(context, pollfd);
+	if (ret < 0) {
+		log_debug(3, "  => %d", ret);
 	}
 
 	return 1;
@@ -464,29 +467,29 @@ static int ws_callback_http(struct libwebsocket_context *context,
 		/* if we returned non-zero from here, we kill the connection */
 		break;
 	case LWS_CALLBACK_LOCK_POLL:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_LOCK_POLL");
+		log_debug(3, "ws_callback_http LWS_CALLBACK_LOCK_POLL %d", pa->fd);
 		/*
 		 * lock mutex to protect pollfd state
 		 * called before any other POLL related callback
 		 */
 		break;
 	case LWS_CALLBACK_UNLOCK_POLL:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_UNLOCK_POLL");
+		log_debug(3, "ws_callback_http LWS_CALLBACK_UNLOCK_POLL %d", pa->fd);
 		/*
 		 * unlock mutex to protect pollfd state when
 		 * called after any other POLL related callback
 		 */
 		break;
 	case LWS_CALLBACK_ADD_POLL_FD:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_ADD_POLL_FD");
+		log_debug(3, "ws_callback_http LWS_CALLBACK_ADD_POLL_FD %d %02X", pa->fd, pa->events);
 		sys_io_poll(pa->fd, pa->events, (sys_poll_func_t) ws_callback_poll, context);
 		break;
 	case LWS_CALLBACK_DEL_POLL_FD:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_DEL_POLL_FD");
+		log_debug(3, "ws_callback_http LWS_CALLBACK_DEL_POLL_FD %d", pa->fd);
 		sys_remove_fd(pa->fd);
 		break;
 	case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_CHANGE_MODE_POLL_FD");
+		log_debug(3, "ws_callback_http LWS_CALLBACK_CHANGE_MODE_POLL_FD %d %02X", pa->fd, pa->events);
 		sys_io_poll(pa->fd, pa->events, (sys_poll_func_t) ws_callback_poll, context);
 		break;
 	default:
@@ -576,7 +579,7 @@ static struct libwebsocket_protocols ws_protocols[] = {
 		.rx_buffer_size = 0,
 	},
 	{
-		.name = "hakit-events",
+		.name = "dumb-increment-protocol",
 		.callback = ws_callback_events,
 		.per_session_data_size = sizeof(struct per_session_data__events),
 		.rx_buffer_size = 10,
@@ -591,7 +594,7 @@ int ws_init(int port)
 
 	lwsl_notice("HAKit " xstr(HAKIT_VERSION));
 
-	memset(&info, 0, sizeof info);
+	memset(&info, 0, sizeof(info));
 	info.port = port;
 	info.protocols = ws_protocols;
 	//info.extensions = libwebsocket_get_internal_extensions();

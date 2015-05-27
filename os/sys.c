@@ -135,6 +135,8 @@ void sys_remove_fd(int fd)
 {
 	sys_source_t *src = sys_retrieve_fd(fd);
 
+	log_debug(3, "sys_remove_fd(%d)", fd);
+
 	if (src != NULL) {
 		src->type = SYS_TYPE_REMOVED;
 		src->func = NULL;
@@ -351,6 +353,9 @@ void sys_run(void)
 		for (i = 0; i < NSOURCES; i++) {
 			sys_source_t *src = &sources[i];
 
+
+			fds_lookup[i] = -1;
+
 			if (src->type == SYS_TYPE_TIMEOUT) {
 				log_debug(4, "sys_run/1: TIMEOUT tag=%u %llu %llu", src->tag, src->d.timeout.t, now);
 				if (src->d.timeout.t > now) {
@@ -376,7 +381,7 @@ void sys_run(void)
 		}
 
 		/* Wait for something to happen */
-		log_debug(4, "sys_run/2: poll(timeout=%ld)", timeout);
+		log_debug(4, "sys_run/2: poll (timeout=%ld)", timeout);
 		int status = poll(fds, nfds, timeout);
 		log_debug(4, "sys_run/3: poll => status=%d", status);
 
@@ -390,11 +395,13 @@ void sys_run(void)
 			/* Check io events */
 			for (i = 0; i < NSOURCES; i++) {
 				sys_source_t *src = &sources[i];
+				int fdsi = fds_lookup[i];
 
-				if (src->type == SYS_TYPE_IO) {
-					src->d.io.pollfd.revents = fds[fds_lookup[i]].revents;
-					log_debug(4, "sys_run/4: poll => %d %02X", src->d.io.pollfd.fd, src->d.io.pollfd.revents);
-					if (src->d.io.pollfd.revents) {
+				if ((src->type == SYS_TYPE_IO) && (fdsi >= 0)) {
+					unsigned int revents = fds[fdsi].revents;
+					log_debug(4, "sys_run/4: IO tag=%d fd=%d revents=%02X", src->tag, src->d.io.pollfd.fd, revents);
+					if (revents != 0) {
+						src->d.io.pollfd.revents = revents;
 						sys_callback(src);
 					}
 				}
