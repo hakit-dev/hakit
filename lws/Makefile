@@ -43,6 +43,7 @@ $(INC):
 $(LIB): $(INC)
 	(cd $(OUTDIR) && cmake ../../$(SRC_DIR) $(CMAKE_FLAGS))
 	make -C $(OUTDIR)
+	$(RM) $(LIB_DIR)/*.so
 
 clean::
 	rm -rf $(OUTDIR) *~

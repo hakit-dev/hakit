@@ -21,6 +21,7 @@
 #include "mod.h"
 #include "mod_init.h"
 #include "ws.h"
+#include "lws_config.h"
 #include "hakit_version.h"
 
 
@@ -96,6 +97,7 @@ int main(int argc, char *argv[])
 	/* Init log management */
 	log_init("hakit");
 	log_str(options_summary);
+	log_str("Using libwebsockets " LWS_LIBRARY_VERSION "-" LWS_BUILD_HASH);
 
 	/* Init system runtime */
 	sys_init();

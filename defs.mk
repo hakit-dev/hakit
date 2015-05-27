@@ -56,7 +56,7 @@ endif
 SHORT_VERSION := $(shell echo $(VERSION) | sed -e 's/-dirty$$//' -e 's/-[a-zA-Z0-9]\+$$//')
 
 VERSION_FILE := $(OUTDIR)/.version
-PREV_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null)
+PREV_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null || echo 'X')
 ifneq ($(VERSION),$(PREV_VERSION))
 all:: version-h
 endif
@@ -66,8 +66,10 @@ CFLAGS  += -I$(HAKIT)/out/include
 endif
 CFLAGS  += -I$(OUTDIR)
 
-version-h: out-dir
+$(VERSION_FILE): out-dir
 	echo $(VERSION) >$(VERSION_FILE)
+
+version-h: $(VERSION_FILE)
 ifeq ($(HAKIT),)
 	echo '#define HAKIT_VERSION "$(VERSION)"' >$(OUTDIR)/hakit_version.h
 	echo '#define ARCH "$(ARCH)"' >>$(OUTDIR)/hakit_version.h
