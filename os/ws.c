@@ -237,7 +237,7 @@ static int ws_http_request(struct libwebsocket_context *context,
 		/* refuse to serve files we don't understand */
 		mimetype = get_mimetype(buf);
 		if (mimetype == NULL) {
-			log_str("HTTP ERROR: Unknown mimetype for %s\n", buf);
+			log_str("HTTP ERROR: Unknown mimetype for %s", buf);
 			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
 			return -1;
 		}
@@ -538,7 +538,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 			n = sprintf((char *)p, "%d", pss->number);
 			m = libwebsocket_write(wsi, p, n, LWS_WRITE_TEXT);
 			if (m < n) {
-				log_str("HTTP ERROR: %d writing to di socket\n", n);
+				log_str("HTTP ERROR: %d writing to di socket", n);
 				return -1;
 			}
 			pss->update = 0;
