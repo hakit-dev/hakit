@@ -21,7 +21,7 @@ include defs.mk
 OS_SRCS = logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c mod_init.c
 CORE_SRCS = options.c log.c buf.c tab.c command.c comm.c mod.c prop.c \
-	http.c http_server.c eventq.c ws.c
+	http.c eventq.c ws.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
@@ -30,10 +30,11 @@ all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 #
 # WebSockets
 #
-LWS_LIB_DIR = lws/out/$(ARCH)/lib
+LWS_OUT_DIR = lws/out/$(ARCH)
+LWS_LIB_DIR = $(LWS_OUT_DIR)/lib
 LWS_SRC_DIR = lws/libwebsockets/lib
 
-CFLAGS += -I$(LWS_SRC_DIR)
+CFLAGS += -I$(LWS_SRC_DIR) -I$(LWS_OUT_DIR)
 LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 
 .PHONY: lws
@@ -56,7 +57,6 @@ $(ARCH_LIB): $(OBJS)
 
 $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o
 $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o
-$(OUTDIR)/hakit-adm: $(OUTDIR)/adm.o
 $(OUTDIR)/hakit: $(OUTDIR)/hakit.o
 
 clean::

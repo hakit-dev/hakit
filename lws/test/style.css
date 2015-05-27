@@ -1,0 +1,59 @@
+div.title {
+    font-size:18pt;
+    font: Arial;
+    font-weight:normal;
+    text-align:center;
+    color:#000000;
+}
+.browser {
+    font-size:18pt;
+    font: Arial;
+    font-weight:normal;
+    text-align:center;
+    color:#ffff00;
+    vertical-align:middle;
+    text-align:center;
+    background:#d0b070;
+    padding:12px;
+    -webkit-border-radius:10px;
+    -moz-border-radius:10px;
+    border-radius:10px;
+}
+.group2 {
+    width:600px;
+    vertical-align:middle;
+    text-align:center;
+    background:#f0f0e0;
+    padding:12px;
+    -webkit-border-radius:10px;
+    -moz-border-radius:10px;
+    border-radius:10px;
+}
+.explain {
+    vertical-align:middle;
+    text-align:center;
+    background:#f0f0c0;
+    padding:12px;
+    -webkit-border-radius:10px;
+    -moz-border-radius:10px;
+    border-radius:10px;
+    color:#404000;
+}
+.content {
+    vertical-align:top;
+    text-align:center;
+    background:#fffff0;
+    padding:12px;
+    -webkit-border-radius:10px;
+    -moz-border-radius:10px;
+    border-radius:10px;
+}
+.canvas {
+    vertical-align:top;
+    text-align:center;
+    background:#efefd0;
+    padding:12px;
+    -webkit-border-radius:10px;
+    -moz-border-radius:10px;
+    border-radius:10px;
+}
