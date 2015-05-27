@@ -33,7 +33,7 @@ all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 LWS_LIB_DIR = lws/out/$(ARCH)/lib
 LWS_SRC_DIR = lws/libwebsockets/lib
 
-CFLAGS += -I$(LWS_SRC_DIR) -DENABLE_LWS
+CFLAGS += -I$(LWS_SRC_DIR)
 LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 
 .PHONY: lws

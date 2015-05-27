@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation KIT - www.hakit.net
- * Copyright (C) 2014 Sylvain Giroudon
+ * Copyright (C) 2014-2015 Sylvain Giroudon
  *
  * This file is subject to the terms and conditions of the GNU Lesser
  * General Public License v2.1. See the file LICENSE in the top level
@@ -15,9 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#ifdef ENABLE_LWS
 #include <libwebsockets.h>
-#endif
 
 #include "types.h"
 #include "log.h"
@@ -26,7 +24,7 @@
 
 
 static struct libwebsocket_context *ws_context = NULL;
-static char *resource_path = "/home/giroudon/Domo/hakit/lws/test";
+static char *resource_path = "lws/test";
 
 
 /*
@@ -106,10 +104,10 @@ static const char *get_mimetype(const char *file)
 }
 
 
-static int ws_callback_http_request(struct libwebsocket_context *context,
-				    struct libwebsocket *wsi,
-				    struct per_session_data__http *pss,
-				    void *in, size_t len)
+static int ws_http_request(struct libwebsocket_context *context,
+			   struct libwebsocket *wsi,
+			   struct per_session_data__http *pss,
+			   void *in, size_t len)
 {
 	char buf[256];
 	char leaf_path[1024];
@@ -122,7 +120,7 @@ static int ws_callback_http_request(struct libwebsocket_context *context,
 	const char *mimetype;
 	unsigned char *end;
 
-	log_debug(2, "ws_callback_http_request: %d bytes", (int) len);
+	log_debug(2, "ws_http_request: %d bytes", (int) len);
 	log_debug_data((unsigned char *) in, len);
 
 	dump_handshake_info(wsi);
@@ -292,21 +290,21 @@ try_to_reuse:
 }
 
 
-static int ws_callback_http_body(struct libwebsocket_context *context,
-				 struct libwebsocket *wsi,
-				 void *in, size_t len)
+static int ws_http_body(struct libwebsocket_context *context,
+			struct libwebsocket *wsi,
+			void *in, size_t len)
 {
-	log_debug(2, "ws_callback_http_body: %d bytes", (int) len);
+	log_debug(2, "ws_http_body: %d bytes", (int) len);
 	log_debug_data((unsigned char *) in, len);
 
 	return 0;
 }
 
 
-static int ws_callback_http_body_completion(struct libwebsocket_context *context,
+static int ws_http_body_completion(struct libwebsocket_context *context,
 					    struct libwebsocket *wsi)
 {
-	log_debug(2, "ws_callback_http_body_completion");
+	log_debug(2, "ws_http_body_completion");
 
 	libwebsockets_return_http_status(context, wsi, HTTP_STATUS_OK, NULL);
 	if (lws_http_transaction_completed(wsi)) {
@@ -316,10 +314,10 @@ static int ws_callback_http_body_completion(struct libwebsocket_context *context
 }
 
 
-static int ws_callback_http_file_completion(struct libwebsocket_context *context,
+static int ws_http_file_completion(struct libwebsocket_context *context,
 					    struct libwebsocket *wsi)
 {
-	log_debug(2, "ws_callback_http_file_completion");
+	log_debug(2, "ws_http_file_completion");
 
 	if (lws_http_transaction_completed(wsi)) {
 		return -1;
@@ -328,13 +326,13 @@ static int ws_callback_http_file_completion(struct libwebsocket_context *context
 }
 
 
-static int ws_callback_http_writeable(struct libwebsocket_context *context,
+static int ws_http_writeable(struct libwebsocket_context *context,
 				      struct libwebsocket *wsi,
 				      struct per_session_data__http *pss)
 {
 	int n, m;
 
-	log_debug(2, "ws_callback_http_writeable");
+	log_debug(2, "ws_http_writeable");
 
 	/* We can send more of whatever it is we were sending */
 	do {
@@ -428,7 +426,7 @@ bail:
 }
 
 
-static int ws_callback_http(struct libwebsocket_context *context,
+static int ws_http_callback(struct libwebsocket_context *context,
 			    struct libwebsocket *wsi,
 			    enum libwebsocket_callback_reasons reason, void *user,
 			    void *in, size_t len)
@@ -439,61 +437,61 @@ static int ws_callback_http(struct libwebsocket_context *context,
 
 	switch (reason) {
 	case LWS_CALLBACK_HTTP:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_HTTP");
-		ret = ws_callback_http_request(context, wsi, pss, in, len);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP");
+		ret = ws_http_request(context, wsi, pss, in, len);
 		break;
 	case LWS_CALLBACK_HTTP_BODY:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_HTTP_BODY");
-		ret = ws_callback_http_body(context, wsi, in, len);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_BODY");
+		ret = ws_http_body(context, wsi, in, len);
 		break;
 	case LWS_CALLBACK_HTTP_BODY_COMPLETION:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_HTTP_BODY_COMPLETION");
-		ret = ws_callback_http_body_completion(context, wsi);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_BODY_COMPLETION");
+		ret = ws_http_body_completion(context, wsi);
 		break;
 	case LWS_CALLBACK_HTTP_FILE_COMPLETION:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_HTTP_FILE_COMPLETION");
-		ret = ws_callback_http_file_completion(context, wsi);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_FILE_COMPLETION");
+		ret = ws_http_file_completion(context, wsi);
 		break;
 	case LWS_CALLBACK_HTTP_WRITEABLE:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_HTTP_WRITEABLE");
-		ret = ws_callback_http_writeable(context, wsi, pss);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_WRITEABLE");
+		ret = ws_http_writeable(context, wsi, pss);
 		break;
 	case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_FILTER_NETWORK_CONNECTION");
+		log_debug(3, "ws_http_callback LWS_CALLBACK_FILTER_NETWORK_CONNECTION");
 		/* if we returned non-zero from here, we kill the connection */
 		break;
 	case LWS_CALLBACK_FILTER_HTTP_CONNECTION:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_FILTER_HTTP_CONNECTION");
+		log_debug(3, "ws_http_callback LWS_CALLBACK_FILTER_HTTP_CONNECTION");
 		/* if we returned non-zero from here, we kill the connection */
 		break;
 	case LWS_CALLBACK_LOCK_POLL:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_LOCK_POLL %d", pa->fd);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_LOCK_POLL %d", pa->fd);
 		/*
 		 * lock mutex to protect pollfd state
 		 * called before any other POLL related callback
 		 */
 		break;
 	case LWS_CALLBACK_UNLOCK_POLL:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_UNLOCK_POLL %d", pa->fd);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_UNLOCK_POLL %d", pa->fd);
 		/*
 		 * unlock mutex to protect pollfd state when
 		 * called after any other POLL related callback
 		 */
 		break;
 	case LWS_CALLBACK_ADD_POLL_FD:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_ADD_POLL_FD %d %02X", pa->fd, pa->events);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_ADD_POLL_FD %d %02X", pa->fd, pa->events);
 		sys_io_poll(pa->fd, pa->events, (sys_poll_func_t) ws_callback_poll, context);
 		break;
 	case LWS_CALLBACK_DEL_POLL_FD:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_DEL_POLL_FD %d", pa->fd);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_DEL_POLL_FD %d", pa->fd);
 		sys_remove_fd(pa->fd);
 		break;
 	case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
-		log_debug(3, "ws_callback_http LWS_CALLBACK_CHANGE_MODE_POLL_FD %d %02X", pa->fd, pa->events);
+		log_debug(3, "ws_http_callback LWS_CALLBACK_CHANGE_MODE_POLL_FD %d %02X", pa->fd, pa->events);
 		sys_io_poll(pa->fd, pa->events, (sys_poll_func_t) ws_callback_poll, context);
 		break;
 	default:
-		log_debug(3, "ws_callback_http reason=%d", reason);
+		log_debug(3, "ws_http_callback reason=%d", reason);
 		break;
 	}
 
@@ -507,43 +505,61 @@ static int ws_callback_http(struct libwebsocket_context *context,
 
 struct per_session_data__events {
 	int number;
+	int update;
+	sys_tag_t tag;
 };
 
 
-static int ws_callback_events(struct libwebsocket_context *context,
-			    struct libwebsocket *wsi,
-			    enum libwebsocket_callback_reasons reason, void *user,
-			    void *in, size_t len)
+static int ws_events_writeable(struct per_session_data__events *pss);
+
+
+static int ws_events_callback(struct libwebsocket_context *context,
+			      struct libwebsocket *wsi,
+			      enum libwebsocket_callback_reasons reason, void *user,
+			      void *in, size_t len)
 {
 	int n, m;
 	unsigned char buf[LWS_SEND_BUFFER_PRE_PADDING + 512 + LWS_SEND_BUFFER_POST_PADDING];
 	unsigned char *p = &buf[LWS_SEND_BUFFER_PRE_PADDING];
 	struct per_session_data__events *pss = (struct per_session_data__events *) user;
 
-	log_debug(2, "ws_callback_events: reason=%d", reason);
 
 	switch (reason) {
 	case LWS_CALLBACK_ESTABLISHED:
+		log_debug(2, "ws_events_callback LWS_CALLBACK_ESTABLISHED %p", pss);
 		pss->number = 0;
+		pss->update = 0;
+		pss->tag = sys_timeout(1000, (sys_func_t) ws_events_writeable, pss);
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
-		n = sprintf((char *)p, "%d", pss->number++);
-		m = libwebsocket_write(wsi, p, n, LWS_WRITE_TEXT);
-		if (m < n) {
-			log_str("HTTP ERROR: %d writing to di socket\n", n);
-			return -1;
+		if (pss->update) {
+			log_debug(2, "ws_events_callback LWS_CALLBACK_SERVER_WRITEABLE %p", pss);
+			n = sprintf((char *)p, "%d", pss->number);
+			m = libwebsocket_write(wsi, p, n, LWS_WRITE_TEXT);
+			if (m < n) {
+				log_str("HTTP ERROR: %d writing to di socket\n", n);
+				return -1;
+			}
+			pss->update = 0;
 		}
 		break;
 
 	case LWS_CALLBACK_RECEIVE:
-//		fprintf(stderr, "rx %d\n", (int)len);
-		if (len < 6) {
-			break;
+		log_debug(2, "ws_events_callback LWS_CALLBACK_RECEIVE %p", pss);
+		log_debug_data(in, len);
+
+		if (len >= 6) {
+			if (strcmp((const char *)in, "reset\n") == 0) {
+				pss->number = 0;
+			}
 		}
-		if (strcmp((const char *)in, "reset\n") == 0) {
-			pss->number = 0;
-		}
+		break;
+
+	case LWS_CALLBACK_CLOSED:
+		log_debug(2, "ws_events_callback LWS_CALLBACK_CLOSED %p", pss);
+		sys_remove(pss->tag);
+		pss->tag = 0;
 		break;
 
 	/*
@@ -552,11 +568,13 @@ static int ws_callback_events(struct libwebsocket_context *context,
 	 * to handle this callback
 	 */
 	case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
+		log_debug(2, "ws_events_callback LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION");
 		dump_handshake_info(wsi);
 		/* you could return non-zero here and kill the connection */
 		break;
 
 	default:
+		log_debug(2, "ws_events_callback: reason=%d", reason);
 		break;
 	}
 
@@ -574,19 +592,35 @@ static struct libwebsocket_protocols ws_protocols[] = {
 
 	{
 		.name = "http-only",
-		.callback = ws_callback_http,
+		.callback = ws_http_callback,
 		.per_session_data_size = sizeof(struct per_session_data__http),
 		.rx_buffer_size = 0,
 	},
 	{
 		.name = "dumb-increment-protocol",
-		.callback = ws_callback_events,
+		.callback = ws_events_callback,
 		.per_session_data_size = sizeof(struct per_session_data__events),
 		.rx_buffer_size = 10,
 	},
 	{ NULL, NULL, 0, 0 } /* terminator */
 };
 
+
+static int ws_events_writeable(struct per_session_data__events *pss)
+{
+	log_debug(2, "--- ws_events_writeable number=%d", pss->number);
+
+	pss->number++;
+	pss->update = 1;
+	libwebsocket_callback_on_writable_all_protocol(&ws_protocols[1]);
+
+	return 1;
+}
+
+
+/*
+ * HTTP/WS init
+ */
 
 int ws_init(int port)
 {
