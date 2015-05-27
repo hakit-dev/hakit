@@ -19,9 +19,8 @@
 #include "types.h"
 #include "log.h"
 #include "mod.h"
+#include "hakit_version.h"
 
-
-static char *arch = xstr(ARCH);
 
 static int hk_mod_init_dir(char *dir)
 {
@@ -51,7 +50,7 @@ static int hk_mod_init_dir(char *dir)
 			closedir(d);
 
 			/* Compute device library file name */
-			snprintf(path, sizeof(path), "%s/%s/device/%s/%s.so", dir, name, arch, name);
+			snprintf(path, sizeof(path), "%s/%s/device/" ARCH "/%s.so", dir, name, name);
 
 			/* Open device library */
 			void *dl = dlopen(path, RTLD_LAZY);

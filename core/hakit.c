@@ -28,7 +28,7 @@
 // Command line arguments
 //===================================================
 
-const char *options_summary = "HAKit " HAKIT_VERSION " (" xstr(ARCH) ")";
+const char *options_summary = "HAKit " HAKIT_VERSION " (" ARCH ")";
 static int opt_monitor = 0;
 
 const options_entry_t options_entries[] = {
