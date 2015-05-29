@@ -21,10 +21,49 @@
 #include "log.h"
 #include "sys.h"
 #include "ws.h"
+#include "hakit_version.h"
 
 
 static struct libwebsocket_context *ws_context = NULL;
 static char *resource_path = "lws/test";
+
+
+/*
+ * Mime types
+ */
+
+typedef struct {
+	const char *suffix;
+	const char *type;
+} ws_mime_t;
+
+static const ws_mime_t ws_mimes[] = {
+	{"ico",  "image/x-icon"},
+	{"png",  "image/png"},
+	{"html", "text/html"},
+	{"js",   "text/javascript"},
+	{"css",  "text/css"},
+	{NULL, NULL}
+};
+
+
+static const char *get_mimetype(const char *file)
+{
+	char *suffix = strrchr(file, '.');
+	const ws_mime_t *mime = ws_mimes;
+
+	if (suffix != NULL) {
+		suffix++;
+		while (mime->suffix != NULL) {
+			if (strcmp(suffix, mime->suffix) == 0) {
+				return mime->type;
+			}
+			mime++;
+		}
+	}
+
+	return NULL;
+}
 
 
 /*
@@ -47,7 +86,6 @@ static int ws_callback_poll(struct libwebsocket_context *context, struct pollfd 
 	if (ret < 0) {
 		log_debug(3, "  => %d", ret);
 	}
-
 	return 1;
 }
 
@@ -72,35 +110,9 @@ static void dump_handshake_info(struct libwebsocket *wsi)
 
 		lws_hdr_copy(wsi, buf, sizeof buf, n);
 
-		fprintf(stderr, "    %s = %s\n", (char *)c, buf);  //REVISIT
+//		fprintf(stderr, "    %s = %s\n", (char *)c, buf);  //REVISIT
 		n++;
 	} while (c);
-}
-
-
-static const char *get_mimetype(const char *file)
-{
-	int n = strlen(file);
-
-	if (n < 5)
-		return NULL;
-
-	if (!strcmp(&file[n - 4], ".ico"))
-		return "image/x-icon";
-
-	if (!strcmp(&file[n - 4], ".png"))
-		return "image/png";
-
-	if (!strcmp(&file[n - 5], ".html"))
-		return "text/html";
-
-	if (!strcmp(&file[n - 3], ".js"))
-		return "text/javascript";
-
-	if (!strcmp(&file[n - 4], ".css"))
-		return "text/css";
-
-	return NULL;
 }
 
 
@@ -626,7 +638,7 @@ int ws_init(int port)
 {
 	struct lws_context_creation_info info;
 
-	lwsl_notice("HAKit " xstr(HAKIT_VERSION));
+	lwsl_notice("HAKit " HAKIT_VERSION);
 
 	memset(&info, 0, sizeof(info));
 	info.port = port;
