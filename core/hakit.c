@@ -97,7 +97,7 @@ int main(int argc, char *argv[])
 	/* Init log management */
 	log_init("hakit");
 	log_str(options_summary);
-	log_str("Using libwebsockets " LWS_LIBRARY_VERSION "-" LWS_BUILD_HASH);
+	log_str("Using libwebsockets version " LWS_LIBRARY_VERSION " build " LWS_BUILD_HASH);
 
 	/* Init system runtime */
 	sys_init();
@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Init WebSockets */
-	if (ws_init(7777)) {
+	if (ws_init(7777, "lws/test")) {
 		return 2;
 	}
 

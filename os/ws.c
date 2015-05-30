@@ -9,11 +9,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <malloc.h>
 #include <errno.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 
 #include <libwebsockets.h>
 
@@ -23,9 +20,11 @@
 #include "ws.h"
 #include "hakit_version.h"
 
+#define SERVER_NAME "HAKit"
 
 static struct libwebsocket_context *ws_context = NULL;
-static char *resource_path = "lws/test";
+static char *document_root = NULL;
+static int document_root_len = 0;
 
 
 /*
@@ -40,6 +39,7 @@ typedef struct {
 static const ws_mime_t ws_mimes[] = {
 	{"ico",  "image/x-icon"},
 	{"png",  "image/png"},
+	{"jpg",  "image/jpeg"},
 	{"html", "text/html"},
 	{"js",   "text/javascript"},
 	{"css",  "text/css"},
@@ -71,7 +71,7 @@ static const char *get_mimetype(const char *file)
  */
 
 struct per_session_data__http {
-	int fd;
+	FILE *f;
 	unsigned char buffer[4096];
 };
 
@@ -119,21 +119,19 @@ static void dump_handshake_info(struct libwebsocket *wsi)
 static int ws_http_request(struct libwebsocket_context *context,
 			   struct libwebsocket *wsi,
 			   struct per_session_data__http *pss,
-			   void *in, size_t len)
+			   char *uri, size_t len)
 {
-	char buf[256];
-	char leaf_path[1024];
-	char b64[64];
-	struct timeval tv;
-	int n;
-	unsigned char *p;
-	char *other_headers;
-	struct stat stat_buf;
+	char *file_path = NULL;
+	int file_path_size;
+	int file_path_len;
+	int file_size;
 	const char *mimetype;
+	unsigned char *p;
 	unsigned char *end;
+	int ret = 1;
 
 	log_debug(2, "ws_http_request: %d bytes", (int) len);
-	log_debug_data((unsigned char *) in, len);
+	log_debug_data((unsigned char *) uri, len);
 
 	dump_handshake_info(wsi);
 
@@ -143,7 +141,7 @@ static int ws_http_request(struct libwebsocket_context *context,
 	}
 
 	/* This server has no concept of directory listing */
-	if (strchr((const char *)in + 1, '/')) {
+	if (strchr(uri+1, '/') != NULL) {
 		libwebsockets_return_http_status(context, wsi, HTTP_STATUS_FORBIDDEN, NULL);
 		goto try_to_reuse;
 	}
@@ -153,145 +151,93 @@ static int ws_http_request(struct libwebsocket_context *context,
 		return 0;
 	}
 
-	/* check for the "send a big file by hand" example case */
-	if (strcmp((const char *)in, "/leaf.jpg") == 0) {
-		if (strlen(resource_path) > (sizeof(leaf_path) - 10)) {
-			return -1;
-		}
-		snprintf(leaf_path, sizeof(leaf_path), "%s/leaf.jpg", resource_path);
+	//TODO: try to match URL aliases here
 
-		/* well, let's demonstrate how to send the hard way */
-		p = pss->buffer + LWS_SEND_BUFFER_PRE_PADDING;
-		end = p + sizeof(pss->buffer) - LWS_SEND_BUFFER_PRE_PADDING;
+	/* Construct full file name */
+	file_path_size = document_root_len + len + 20;
+	file_path = malloc(file_path_size);
+	file_path_len = snprintf(file_path, file_path_size, "%s/%s", document_root, uri);
 
-		pss->fd = open(leaf_path, O_RDONLY);
-		if (pss->fd < 0) {
-			log_str("HTTP ERROR: Cannot open file '%s': %s", leaf_path, strerror(errno));
-			return -1;
-		}
-
-		if (fstat(pss->fd, &stat_buf) < 0) {
-			log_str("HTTP ERROR: Cannot stat file '%s': %s", leaf_path, strerror(errno));
-			return -1;
-		}
-
-		/*
-		 * we will send a big jpeg file, but it could be
-		 * anything.  Set the Content-Type: appropriately
-		 * so the browser knows what to do with it.
-		 * 
-		 * Notice we use the APIs to build the header, which
-		 * will do the right thing for HTTP 1/1.1 and HTTP2
-		 * depending on what connection it happens to be working
-		 * on
-		 */
-		if (lws_add_http_header_status(context, wsi, 200, &p, end)) {
-			return 1;
-		}
-		if (lws_add_http_header_by_token(context, wsi,
-						 WSI_TOKEN_HTTP_SERVER,
-						 (unsigned char *)"libwebsockets",
-						 13, &p, end)) {
-			return 1;
-		}
-		if (lws_add_http_header_by_token(context, wsi,
-						 WSI_TOKEN_HTTP_CONTENT_TYPE,
-						 (unsigned char *)"image/jpeg",
-						 10, &p, end)) {
-			return 1;
-		}
-		if (lws_add_http_header_content_length(context, wsi,
-						       stat_buf.st_size, &p, end)) {
-			return 1;
-		}
-		if (lws_finalize_http_header(context, wsi, &p, end)) {
-			return 1;
-		}
-
-		/*
-		 * send the http headers...
-		 * this won't block since it's the first payload sent
-		 * on the connection since it was established
-		 * (too small for partial)
-		 * 
-		 * Notice they are sent using LWS_WRITE_HTTP_HEADERS
-		 * which also means you can't send body too in one step,
-		 * this is mandated by changes in HTTP2
-		 */
-
-		n = libwebsocket_write(wsi,
-				       pss->buffer + LWS_SEND_BUFFER_PRE_PADDING,
-				       p - (pss->buffer + LWS_SEND_BUFFER_PRE_PADDING),
-				       LWS_WRITE_HTTP_HEADERS);
-
-		if (n < 0) {
-			close(pss->fd);
-			return -1;
-		}
-		/*
-		 * book us a LWS_CALLBACK_HTTP_WRITEABLE callback
-		 */
-		libwebsocket_callback_on_writable(context, wsi);
-	}
-	else {
-		/* if not, send a file the easy way */
-		strcpy(buf, resource_path);
-		if (strcmp(in, "/")) {
-			if (*((const char *)in) != '/') {
-				strcat(buf, "/");
-			}
-			strncat(buf, in, sizeof(buf) - strlen(resource_path));
-		} else { /* default file to serve */
-			strcat(buf, "/test.html");
-		}
-		buf[sizeof(buf) - 1] = '\0';
-
-		/* refuse to serve files we don't understand */
-		mimetype = get_mimetype(buf);
-		if (mimetype == NULL) {
-			log_str("HTTP ERROR: Unknown mimetype for %s", buf);
-			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
-			return -1;
-		}
-
-		/* demostrates how to set a cookie on / */
-		other_headers = NULL;
-		n = 0;
-		if (!strcmp((const char *)in, "/") &&
-		    !lws_hdr_total_length(wsi, WSI_TOKEN_HTTP_COOKIE)) {
-			/* this isn't very unguessable but it'll do for us */
-			gettimeofday(&tv, NULL);
-			n = sprintf(b64, "test=LWS_%u_%u_COOKIE;Max-Age=360000",
-				    (unsigned int)tv.tv_sec,
-				    (unsigned int)tv.tv_usec);
-
-			p = (unsigned char *)leaf_path;
-
-			if (lws_add_http_header_by_name(context, wsi, 
-							(unsigned char *)"set-cookie:", 
-							(unsigned char *)b64, n, &p,
-							(unsigned char *)leaf_path + sizeof(leaf_path)))
-				return 1;
-			n = (char *)p - leaf_path;
-			other_headers = leaf_path;
-		}
-
-		n = libwebsockets_serve_http_file(context, wsi, buf, mimetype, other_headers, n);
-		if (n < 0) {
-			return -1;
-		}
-		if (n > 0) {
-			goto try_to_reuse;
-		}
-
-		/*
-		 * notice that the sending of the file completes asynchronously,
-		 * we'll get a LWS_CALLBACK_HTTP_FILE_COMPLETION callback when
-		 * it's done
-		 */
+	if (file_path[file_path_len-1] == '/') {
+		strcpy(file_path+file_path_len, "index.html");
 	}
 
-	return 0;
+	/* Open file */
+	pss->f = fopen(file_path, "r");
+	if (pss->f == NULL) {
+		log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
+		goto failed;
+	}
+
+	/* Get and check mime type */
+	mimetype = get_mimetype(file_path);
+	if (mimetype == NULL) {
+		log_str("HTTP ERROR: Unknown mimetype for '%s'", file_path);
+		libwebsockets_return_http_status(context, wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
+		goto failed;
+	}
+
+	/* Get file size */
+	fseek(pss->f, 0, SEEK_END);
+	file_size = ftell(pss->f);
+	fseek(pss->f, 0, SEEK_SET);
+
+	/*
+	 * Construct HTTP header.
+	 * Notice we use the APIs to build the header, which
+	 * will do the right thing for HTTP 1/1.1 and HTTP2
+	 * depending on what connection it happens to be working
+	 * on
+	 */
+	p = pss->buffer + LWS_SEND_BUFFER_PRE_PADDING;
+	end = p + sizeof(pss->buffer) - LWS_SEND_BUFFER_PRE_PADDING;
+
+	if (lws_add_http_header_status(context, wsi, 200, &p, end)) {
+		goto done;
+	}
+	if (lws_add_http_header_by_token(context, wsi,
+					 WSI_TOKEN_HTTP_SERVER,
+					 (unsigned char *) SERVER_NAME, strlen(SERVER_NAME),
+					 &p, end)) {
+		goto done;
+	}
+	if (lws_add_http_header_by_token(context, wsi,
+					 WSI_TOKEN_HTTP_CONTENT_TYPE,
+					 (unsigned char *) mimetype, strlen(mimetype),
+					 &p, end)) {
+		goto done;
+	}
+	if (lws_add_http_header_content_length(context, wsi, file_size, &p, end)) {
+		goto done;
+	}
+	if (lws_finalize_http_header(context, wsi, &p, end)) {
+		goto done;
+	}
+
+	/*
+	 * send the http headers...
+	 * this won't block since it's the first payload sent
+	 * on the connection since it was established
+	 * (too small for partial)
+	 * 
+	 * Notice they are sent using LWS_WRITE_HTTP_HEADERS
+	 * which also means you can't send body too in one step,
+	 * this is mandated by changes in HTTP2
+	 */
+	if (libwebsocket_write(wsi,
+			       pss->buffer + LWS_SEND_BUFFER_PRE_PADDING,
+			       p - (pss->buffer + LWS_SEND_BUFFER_PRE_PADDING),
+			       LWS_WRITE_HTTP_HEADERS) < 0) {
+		goto failed;
+	}
+
+	/*
+	 * book us a LWS_CALLBACK_HTTP_WRITEABLE callback
+	 */
+	libwebsocket_callback_on_writable(context, wsi);
+
+	ret = 0;
+	goto done;
 
 try_to_reuse:
 	if (lws_http_transaction_completed(wsi)) {
@@ -299,6 +245,22 @@ try_to_reuse:
 	}
 
 	return 0;
+
+failed:
+	ret = -1;
+
+	if (pss->f != NULL) {
+		fclose(pss->f);
+		pss->f = NULL;
+	}
+
+done:
+	if (file_path != NULL) {
+		free(file_path);
+		file_path = NULL;
+	}
+
+	return ret;
 }
 
 
@@ -365,7 +327,7 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 			n = m;
 		}
 
-		n = read(pss->fd, pss->buffer + LWS_SEND_BUFFER_PRE_PADDING, n);
+		n = fread(pss->buffer + LWS_SEND_BUFFER_PRE_PADDING, 1, n, pss->f);
 
 		/* problem reading, close conn */
 		if (n < 0) {
@@ -397,7 +359,7 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 		 */
 		if (m != n) {
 			/* partial write, adjust */
-			if (lseek(pss->fd, m - n, SEEK_CUR) < 0) {
+			if (fseek(pss->f, m - n, SEEK_CUR) < 0) {
 				goto bail;
 			}
 		}
@@ -425,7 +387,8 @@ flush_bail:
 		return 0;
 	}
 
-	close(pss->fd);
+	fclose(pss->f);
+	pss->f = NULL;
 
 	if (lws_http_transaction_completed(wsi)) {
 		return -1;
@@ -433,7 +396,9 @@ flush_bail:
 	return 0;
 
 bail:
-	close(pss->fd);
+	fclose(pss->f);
+	pss->f = NULL;
+
 	return -1;
 }
 
@@ -634,11 +599,11 @@ static int ws_events_writeable(struct per_session_data__events *pss)
  * HTTP/WS init
  */
 
-int ws_init(int port)
+int ws_init(int port, char *dir)
 {
 	struct lws_context_creation_info info;
 
-	lwsl_notice("HAKit " HAKIT_VERSION);
+	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
 
 	memset(&info, 0, sizeof(info));
 	info.port = port;
@@ -661,12 +626,23 @@ int ws_init(int port)
 		return -1;
 	}
 
+	/* Set document root directory name */
+	document_root = strdup(dir);
+	document_root_len = strlen(document_root);
+
 	return 0;
 }
 
 
 void ws_done(void)
 {
+	/* Free document root directory name */
+	if (document_root != NULL) {
+		free(document_root);
+		document_root = NULL;
+	}
+	document_root_len = 0;
+
 	/* Destroy libwebsockets context */
 	if (ws_context != NULL) {
 		libwebsocket_context_destroy(ws_context);
