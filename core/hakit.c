@@ -86,6 +86,8 @@ static void run_as_daemon(void)
 
 int main(int argc, char *argv[])
 {
+	ws_t *ws;
+
 	if (options_parse(&argc, argv, NULL) != 0) {
 		exit(1);
 	}
@@ -112,7 +114,8 @@ int main(int argc, char *argv[])
 	}
 
 	/* Init WebSockets */
-	if (ws_init(7777, "lws/test")) {
+	ws = ws_new(7777, "lws/test");
+	if (ws == NULL) {
 		return 2;
 	}
 

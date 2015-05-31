@@ -17,14 +17,11 @@
 #include "types.h"
 #include "log.h"
 #include "sys.h"
+#include "tab.h"
 #include "ws.h"
 #include "hakit_version.h"
 
 #define SERVER_NAME "HAKit"
-
-static struct libwebsocket_context *ws_context = NULL;
-static char *document_root = NULL;
-static int document_root_len = 0;
 
 
 /*
@@ -72,7 +69,9 @@ static const char *get_mimetype(const char *file)
 
 struct per_session_data__http {
 	FILE *f;
-	unsigned char buffer[4096];
+	buf_t buf;
+	int offset;
+	unsigned char tx_buffer[4096];
 };
 
 
@@ -121,14 +120,14 @@ static int ws_http_request(struct libwebsocket_context *context,
 			   struct per_session_data__http *pss,
 			   char *uri, size_t len)
 {
+	ws_t *ws = libwebsocket_context_user(context);
 	char *file_path = NULL;
-	int file_path_size;
-	int file_path_len;
-	int file_size;
-	const char *mimetype;
+	int content_length = 0;
+	const char *mimetype = NULL;
+	int ret = 1;
 	unsigned char *p;
 	unsigned char *end;
-	int ret = 1;
+	int i;
 
 	log_debug(2, "ws_http_request: %d bytes", (int) len);
 	log_debug_data((unsigned char *) uri, len);
@@ -151,36 +150,60 @@ static int ws_http_request(struct libwebsocket_context *context,
 		return 0;
 	}
 
-	//TODO: try to match URL aliases here
+	/* Clear data source settings */
+	pss->f = NULL;
+	buf_init(&pss->buf);
+	pss->offset = 0;
 
-	/* Construct full file name */
-	file_path_size = document_root_len + len + 20;
-	file_path = malloc(file_path_size);
-	file_path_len = snprintf(file_path, file_path_size, "%s/%s", document_root, uri);
-
-	if (file_path[file_path_len-1] == '/') {
-		strcpy(file_path+file_path_len, "index.html");
+	/* Try to match URL aliases */
+	for (i = 0; i < ws->aliases.nmemb; i++) {
+		ws_alias_t *alias = HK_TAB_PTR(ws->aliases, ws_alias_t, i);
+		if (strncmp(alias->location, uri, alias->len) == 0) {
+			if (alias->handler != NULL) {
+				alias->handler(ws, uri, &pss->buf);
+				break;
+			}
+		}
 	}
 
-	/* Open file */
-	pss->f = fopen(file_path, "r");
-	if (pss->f == NULL) {
-		log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
-		goto failed;
+	/* if no alias matched, read file */
+	if (pss->buf.len > 0) {
+		content_length = pss->buf.len;
 	}
+	else {
+		int file_path_size;
+		int file_path_len;
 
-	/* Get and check mime type */
-	mimetype = get_mimetype(file_path);
-	if (mimetype == NULL) {
-		log_str("HTTP ERROR: Unknown mimetype for '%s'", file_path);
-		libwebsockets_return_http_status(context, wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
-		goto failed;
+		/* Construct full file name */
+		file_path_size = ws->document_root_len + len + 20;
+		file_path = malloc(file_path_size);
+		file_path_len = snprintf(file_path, file_path_size, "%s/%s", ws->document_root, uri);
+
+		if (file_path[file_path_len-1] == '/') {
+			strcpy(file_path+file_path_len, "index.html");
+		}
+
+		/* Open file */
+		pss->f = fopen(file_path, "r");
+		if (pss->f == NULL) {
+			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
+			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
+			goto failed;
+		}
+
+		/* Get and check mime type */
+		mimetype = get_mimetype(file_path);
+		if (mimetype == NULL) {
+			log_str("HTTP ERROR: Unknown mimetype for '%s'", file_path);
+			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
+			goto failed;
+		}
+
+		/* Get file size */
+		fseek(pss->f, 0, SEEK_END);
+		content_length = ftell(pss->f);
+		fseek(pss->f, 0, SEEK_SET);
 	}
-
-	/* Get file size */
-	fseek(pss->f, 0, SEEK_END);
-	file_size = ftell(pss->f);
-	fseek(pss->f, 0, SEEK_SET);
 
 	/*
 	 * Construct HTTP header.
@@ -189,10 +212,10 @@ static int ws_http_request(struct libwebsocket_context *context,
 	 * depending on what connection it happens to be working
 	 * on
 	 */
-	p = pss->buffer + LWS_SEND_BUFFER_PRE_PADDING;
-	end = p + sizeof(pss->buffer) - LWS_SEND_BUFFER_PRE_PADDING;
+	p = pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING;
+	end = p + sizeof(pss->tx_buffer) - LWS_SEND_BUFFER_PRE_PADDING;
 
-	if (lws_add_http_header_status(context, wsi, 200, &p, end)) {
+	if (lws_add_http_header_status(context, wsi, HTTP_STATUS_OK, &p, end)) {
 		goto done;
 	}
 	if (lws_add_http_header_by_token(context, wsi,
@@ -201,14 +224,18 @@ static int ws_http_request(struct libwebsocket_context *context,
 					 &p, end)) {
 		goto done;
 	}
-	if (lws_add_http_header_by_token(context, wsi,
-					 WSI_TOKEN_HTTP_CONTENT_TYPE,
-					 (unsigned char *) mimetype, strlen(mimetype),
-					 &p, end)) {
-		goto done;
+	if (mimetype != NULL) {
+		if (lws_add_http_header_by_token(context, wsi,
+						 WSI_TOKEN_HTTP_CONTENT_TYPE,
+						 (unsigned char *) mimetype, strlen(mimetype),
+						 &p, end)) {
+			goto done;
+		}
 	}
-	if (lws_add_http_header_content_length(context, wsi, file_size, &p, end)) {
-		goto done;
+	if (content_length > 0) {
+		if (lws_add_http_header_content_length(context, wsi, content_length, &p, end)) {
+			goto done;
+		}
 	}
 	if (lws_finalize_http_header(context, wsi, &p, end)) {
 		goto done;
@@ -225,8 +252,8 @@ static int ws_http_request(struct libwebsocket_context *context,
 	 * this is mandated by changes in HTTP2
 	 */
 	if (libwebsocket_write(wsi,
-			       pss->buffer + LWS_SEND_BUFFER_PRE_PADDING,
-			       p - (pss->buffer + LWS_SEND_BUFFER_PRE_PADDING),
+			       pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING,
+			       p - (pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING),
 			       LWS_WRITE_HTTP_HEADERS) < 0) {
 		goto failed;
 	}
@@ -311,7 +338,7 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 	/* We can send more of whatever it is we were sending */
 	do {
 		/* we'd like the send this much */
-		n = sizeof(pss->buffer) - LWS_SEND_BUFFER_PRE_PADDING;
+		n = sizeof(pss->tx_buffer) - LWS_SEND_BUFFER_PRE_PADDING;
 			
 		/* but if the peer told us he wants less, we can adapt */
 		m = lws_get_peer_write_allowance(wsi);
@@ -327,13 +354,25 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 			n = m;
 		}
 
-		n = fread(pss->buffer + LWS_SEND_BUFFER_PRE_PADDING, 1, n, pss->f);
-
-		/* problem reading, close conn */
-		if (n < 0) {
-			log_str("HTTP ERROR: Cannot read file: %s", strerror(errno));
-			goto bail;
+		if (pss->f != NULL) {
+			n = fread(pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING, 1, n, pss->f);
+			if (n < 0) {
+				log_str("HTTP ERROR: Cannot read file: %s", strerror(errno));
+				goto bail;
+			}
 		}
+		else {
+			int len = pss->buf.len - pss->offset;
+			if (n > len) {
+				n = len;
+			}
+
+			if (n > 0) {
+				memcpy(pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING, pss->buf.base, n);
+				pss->offset += n;
+			}
+		}
+
 		/* sent it all, close conn */
 		if (n == 0) {
 			goto flush_bail;
@@ -347,7 +386,7 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 		 * content-length header
 		 */
 		m = libwebsocket_write(wsi,
-				       pss->buffer + LWS_SEND_BUFFER_PRE_PADDING,
+				       pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING,
 				       n, LWS_WRITE_HTTP);
 		if (m < 0) {
 			/* write failed, close conn */
@@ -387,8 +426,12 @@ flush_bail:
 		return 0;
 	}
 
-	fclose(pss->f);
-	pss->f = NULL;
+	if (pss->f != NULL) {
+		fclose(pss->f);
+		pss->f = NULL;
+	}
+
+	buf_cleanup(&pss->buf);
 
 	if (lws_http_transaction_completed(wsi)) {
 		return -1;
@@ -396,8 +439,12 @@ flush_bail:
 	return 0;
 
 bail:
-	fclose(pss->f);
-	pss->f = NULL;
+	if (pss->f != NULL) {
+		fclose(pss->f);
+		pss->f = NULL;
+	}
+
+	buf_cleanup(&pss->buf);
 
 	return -1;
 }
@@ -495,10 +542,10 @@ static int ws_events_callback(struct libwebsocket_context *context,
 			      enum libwebsocket_callback_reasons reason, void *user,
 			      void *in, size_t len)
 {
+	struct per_session_data__events *pss = (struct per_session_data__events *) user;
 	int n, m;
 	unsigned char buf[LWS_SEND_BUFFER_PRE_PADDING + 512 + LWS_SEND_BUFFER_POST_PADDING];
 	unsigned char *p = &buf[LWS_SEND_BUFFER_PRE_PADDING];
-	struct per_session_data__events *pss = (struct per_session_data__events *) user;
 
 
 	switch (reason) {
@@ -596,12 +643,16 @@ static int ws_events_writeable(struct per_session_data__events *pss)
 
 
 /*
- * HTTP/WS init
+ * HTTP/WebSocket server init
  */
 
-int ws_init(int port, char *dir)
+ws_t *ws_new(int port, char *document_root)
 {
+	ws_t *ws = NULL;
 	struct lws_context_creation_info info;
+
+	ws = malloc(sizeof(ws_t));
+	memset(ws, 0, sizeof(ws_t));
 
 	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
 
@@ -618,34 +669,50 @@ int ws_init(int port, char *dir)
 
 	info.gid = -1;
 	info.uid = -1;
+	info.user = ws;
 
 	/* Create libwebsockets context */
-	ws_context = libwebsocket_create_context(&info);
-	if (ws_context == NULL) {
+	ws->context = libwebsocket_create_context(&info);
+	if (ws->context == NULL) {
 		log_str("ERROR: libwebsocket init failed");
-		return -1;
+		free(ws);
+		return NULL;
 	}
 
 	/* Set document root directory name */
-	document_root = strdup(dir);
-	document_root_len = strlen(document_root);
+	ws->document_root = strdup(document_root);
+	ws->document_root_len = strlen(ws->document_root);
 
-	return 0;
+	/* Init table of aliases */
+	hk_tab_init(&ws->aliases, sizeof(ws_alias_t));
+
+	return ws;
 }
 
 
-void ws_done(void)
+void ws_destroy(ws_t *ws)
 {
 	/* Free document root directory name */
-	if (document_root != NULL) {
-		free(document_root);
-		document_root = NULL;
+	if (ws->document_root != NULL) {
+		free(ws->document_root);
 	}
-	document_root_len = 0;
 
 	/* Destroy libwebsockets context */
-	if (ws_context != NULL) {
-		libwebsocket_context_destroy(ws_context);
-		ws_context = NULL;
+	if (ws->context != NULL) {
+		libwebsocket_context_destroy((struct libwebsocket_context *) ws->context);
 	}
+
+	memset(ws, 0, sizeof(ws_t));
+	free(ws);
+}
+
+
+void ws_alias(ws_t *ws, char *location, ws_handler_t handler)
+{
+	ws_alias_t *alias = hk_tab_push(&ws->aliases);
+	alias->location = strdup(location);
+	alias->len = strlen(location);
+	alias->handler = handler;
+
+	log_debug(2, "ws_alias '%s'", location);
 }
