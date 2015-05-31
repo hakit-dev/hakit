@@ -69,7 +69,7 @@ static const char *get_mimetype(const char *file)
 
 struct per_session_data__http {
 	FILE *f;
-	buf_t buf;
+	buf_t rsp;
 	int offset;
 	unsigned char tx_buffer[4096];
 };
@@ -152,23 +152,23 @@ static int ws_http_request(struct libwebsocket_context *context,
 
 	/* Clear data source settings */
 	pss->f = NULL;
-	buf_init(&pss->buf);
+	buf_init(&pss->rsp);
 	pss->offset = 0;
 
 	/* Try to match URL aliases */
 	for (i = 0; i < ws->aliases.nmemb; i++) {
 		ws_alias_t *alias = HK_TAB_PTR(ws->aliases, ws_alias_t, i);
-		if (strncmp(alias->location, uri, alias->len) == 0) {
-			if (alias->handler != NULL) {
-				alias->handler(ws, uri, &pss->buf);
+		if ((alias->location != NULL) && (alias->handler != NULL)) {
+			if (strncmp(alias->location, uri, alias->len) == 0) {
+				alias->handler(alias->user_data, uri, &pss->rsp);
 				break;
 			}
 		}
 	}
 
 	/* if no alias matched, read file */
-	if (pss->buf.len > 0) {
-		content_length = pss->buf.len;
+	if (pss->rsp.len > 0) {
+		content_length = pss->rsp.len;
 	}
 	else {
 		int file_path_size;
@@ -362,13 +362,13 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 			}
 		}
 		else {
-			int len = pss->buf.len - pss->offset;
+			int len = pss->rsp.len - pss->offset;
 			if (n > len) {
 				n = len;
 			}
 
 			if (n > 0) {
-				memcpy(pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING, pss->buf.base, n);
+				memcpy(pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING, pss->rsp.base, n);
 				pss->offset += n;
 			}
 		}
@@ -431,7 +431,7 @@ flush_bail:
 		pss->f = NULL;
 	}
 
-	buf_cleanup(&pss->buf);
+	buf_cleanup(&pss->rsp);
 
 	if (lws_http_transaction_completed(wsi)) {
 		return -1;
@@ -444,7 +444,7 @@ bail:
 		pss->f = NULL;
 	}
 
-	buf_cleanup(&pss->buf);
+	buf_cleanup(&pss->rsp);
 
 	return -1;
 }
@@ -542,6 +542,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 			      enum libwebsocket_callback_reasons reason, void *user,
 			      void *in, size_t len)
 {
+	//ws_t *ws = libwebsocket_context_user(context);
 	struct per_session_data__events *pss = (struct per_session_data__events *) user;
 	int n, m;
 	unsigned char buf[LWS_SEND_BUFFER_PRE_PADDING + 512 + LWS_SEND_BUFFER_POST_PADDING];
@@ -550,7 +551,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 
 	switch (reason) {
 	case LWS_CALLBACK_ESTABLISHED:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_ESTABLISHED %p", pss);
+		log_debug(3, "ws_events_callback LWS_CALLBACK_ESTABLISHED %p", pss);
 		pss->number = 0;
 		pss->update = 0;
 		pss->tag = sys_timeout(1000, (sys_func_t) ws_events_writeable, pss);
@@ -570,7 +571,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_RECEIVE:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_RECEIVE %p", pss);
+		log_debug(3, "ws_events_callback LWS_CALLBACK_RECEIVE %p", pss);
 		log_debug_data(in, len);
 
 		if (len >= 6) {
@@ -581,7 +582,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_CLOSED:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_CLOSED %p", pss);
+		log_debug(3, "ws_events_callback LWS_CALLBACK_CLOSED %p", pss);
 		sys_remove(pss->tag);
 		pss->tag = 0;
 		break;
@@ -592,13 +593,13 @@ static int ws_events_callback(struct libwebsocket_context *context,
 	 * to handle this callback
 	 */
 	case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION");
+		log_debug(3, "ws_events_callback LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION");
 		dump_handshake_info(wsi);
 		/* you could return non-zero here and kill the connection */
 		break;
 
 	default:
-		log_debug(2, "ws_events_callback: reason=%d", reason);
+		log_debug(3, "ws_events_callback: reason=%d", reason);
 		break;
 	}
 
@@ -707,12 +708,17 @@ void ws_destroy(ws_t *ws)
 }
 
 
-void ws_alias(ws_t *ws, char *location, ws_handler_t handler)
+void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_data)
 {
 	ws_alias_t *alias = hk_tab_push(&ws->aliases);
-	alias->location = strdup(location);
-	alias->len = strlen(location);
+
+	if (location != NULL) {
+		alias->location = strdup(location);
+		alias->len = strlen(location);
+	}
+
 	alias->handler = handler;
+	alias->user_data = user_data;
 
 	log_debug(2, "ws_alias '%s'", location);
 }

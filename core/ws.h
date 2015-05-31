@@ -14,12 +14,13 @@
 #include "tab.h"
 
 typedef struct ws_s ws_t;
-typedef void (*ws_handler_t)(ws_t *ws, char *uri, buf_t *buf);
+typedef void (*ws_alias_handler_t)(void *user_data, char *uri, buf_t *rsp);
 
 typedef struct {
 	char *location;
 	int len;
-	ws_handler_t handler;
+	ws_alias_handler_t handler;
+	void *user_data;
 } ws_alias_t;
 
 struct ws_s {
@@ -33,6 +34,6 @@ struct ws_s {
 extern ws_t *ws_new(int port, char *document_root);
 extern void ws_destroy(ws_t *ws);
 
-extern void ws_alias(ws_t *ws, char *location, ws_handler_t handler);
+extern void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_data);
 
 #endif /* __HAKIT_WS_H__ */
