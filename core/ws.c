@@ -12,14 +12,14 @@
 #include <malloc.h>
 #include <errno.h>
 
-#include <libwebsockets.h>
-
-#include "types.h"
+#include "hakit_version.h"
 #include "log.h"
 #include "sys.h"
 #include "tab.h"
 #include "ws.h"
-#include "hakit_version.h"
+#include "ws_utils.h"
+#include "ws_demo.h"
+#include "types.h"
 
 #define SERVER_NAME "HAKit"
 
@@ -89,32 +89,6 @@ static int ws_callback_poll(struct libwebsocket_context *context, struct pollfd 
 }
 
 
-static void dump_handshake_info(struct libwebsocket *wsi)
-{
-	int n = 0;
-	char buf[256];
-	const unsigned char *c;
-
-	do {
-		c = lws_token_to_string(n);
-		if (!c) {
-			n++;
-			continue;
-		}
-
-		if (!lws_hdr_total_length(wsi, n)) {
-			n++;
-			continue;
-		}
-
-		lws_hdr_copy(wsi, buf, sizeof buf, n);
-
-//		fprintf(stderr, "    %s = %s\n", (char *)c, buf);  //REVISIT
-		n++;
-	} while (c);
-}
-
-
 static int ws_http_request(struct libwebsocket_context *context,
 			   struct libwebsocket *wsi,
 			   struct per_session_data__http *pss,
@@ -132,7 +106,7 @@ static int ws_http_request(struct libwebsocket_context *context,
 	log_debug(2, "ws_http_request: %d bytes", (int) len);
 	log_debug_data((unsigned char *) uri, len);
 
-	dump_handshake_info(wsi);
+	ws_dump_handshake_info(wsi);
 
 	if (len < 1) {
 		libwebsockets_return_http_status(context, wsi, HTTP_STATUS_BAD_REQUEST, NULL);
@@ -524,91 +498,6 @@ static int ws_http_callback(struct libwebsocket_context *context,
 
 
 /*
- * Protocol handling: HAKit events
- */
-
-struct per_session_data__events {
-	int number;
-	int update;
-	sys_tag_t tag;
-};
-
-
-static int ws_events_writeable(struct per_session_data__events *pss);
-
-
-static int ws_events_callback(struct libwebsocket_context *context,
-			      struct libwebsocket *wsi,
-			      enum libwebsocket_callback_reasons reason, void *user,
-			      void *in, size_t len)
-{
-	//ws_t *ws = libwebsocket_context_user(context);
-	struct per_session_data__events *pss = (struct per_session_data__events *) user;
-	int n, m;
-	unsigned char buf[LWS_SEND_BUFFER_PRE_PADDING + 512 + LWS_SEND_BUFFER_POST_PADDING];
-	unsigned char *p = &buf[LWS_SEND_BUFFER_PRE_PADDING];
-
-
-	switch (reason) {
-	case LWS_CALLBACK_ESTABLISHED:
-		log_debug(3, "ws_events_callback LWS_CALLBACK_ESTABLISHED %p", pss);
-		pss->number = 0;
-		pss->update = 0;
-		pss->tag = sys_timeout(1000, (sys_func_t) ws_events_writeable, pss);
-		break;
-
-	case LWS_CALLBACK_SERVER_WRITEABLE:
-		if (pss->update) {
-			log_debug(2, "ws_events_callback LWS_CALLBACK_SERVER_WRITEABLE %p", pss);
-			n = sprintf((char *)p, "%d", pss->number);
-			m = libwebsocket_write(wsi, p, n, LWS_WRITE_TEXT);
-			if (m < n) {
-				log_str("HTTP ERROR: %d writing to di socket", n);
-				return -1;
-			}
-			pss->update = 0;
-		}
-		break;
-
-	case LWS_CALLBACK_RECEIVE:
-		log_debug(3, "ws_events_callback LWS_CALLBACK_RECEIVE %p", pss);
-		log_debug_data(in, len);
-
-		if (len >= 6) {
-			if (strcmp((const char *)in, "reset\n") == 0) {
-				pss->number = 0;
-			}
-		}
-		break;
-
-	case LWS_CALLBACK_CLOSED:
-		log_debug(3, "ws_events_callback LWS_CALLBACK_CLOSED %p", pss);
-		sys_remove(pss->tag);
-		pss->tag = 0;
-		break;
-
-	/*
-	 * this just demonstrates how to use the protocol filter. If you won't
-	 * study and reject connections based on header content, you don't need
-	 * to handle this callback
-	 */
-	case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
-		log_debug(3, "ws_events_callback LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION");
-		dump_handshake_info(wsi);
-		/* you could return non-zero here and kill the connection */
-		break;
-
-	default:
-		log_debug(3, "ws_events_callback: reason=%d", reason);
-		break;
-	}
-
-	return 0;
-}
-
-
-
-/*
  * Table of available protocols
  */
 
@@ -621,26 +510,9 @@ static struct libwebsocket_protocols ws_protocols[] = {
 		.per_session_data_size = sizeof(struct per_session_data__http),
 		.rx_buffer_size = 0,
 	},
-	{
-		.name = "dumb-increment-protocol",
-		.callback = ws_events_callback,
-		.per_session_data_size = sizeof(struct per_session_data__events),
-		.rx_buffer_size = 10,
-	},
+	{ }, /* Room for dumb-increment-protocol */
 	{ NULL, NULL, 0, 0 } /* terminator */
 };
-
-
-static int ws_events_writeable(struct per_session_data__events *pss)
-{
-	log_debug(2, "--- ws_events_writeable number=%d", pss->number);
-
-	pss->number++;
-	pss->update = 1;
-	libwebsocket_callback_on_writable_all_protocol(&ws_protocols[1]);
-
-	return 1;
-}
 
 
 /*
@@ -656,6 +528,8 @@ ws_t *ws_new(int port, char *document_root)
 	memset(ws, 0, sizeof(ws_t));
 
 	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
+
+	ws_demo_init(&ws_protocols[1]);
 
 	memset(&info, 0, sizeof(info));
 	info.port = port;

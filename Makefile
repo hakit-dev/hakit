@@ -21,7 +21,7 @@ include defs.mk
 OS_SRCS = logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c mod_init.c
 CORE_SRCS = options.c log.c buf.c tab.c command.c comm.c mod.c prop.c \
-	http.c eventq.c ws.c
+	http.c eventq.c ws.c ws_utils.c ws_demo.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
