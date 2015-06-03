@@ -28,14 +28,19 @@ struct per_session_data__demo {
 static struct libwebsocket_protocols *ws_demo_protocol = NULL;
 
 
-static int ws_demo_writeable(struct per_session_data__demo *pss)
+static void ws_demo_writeable(struct per_session_data__demo *pss)
 {
-	log_debug(2, "--- ws_demo_writeable number=%d", pss->number);
-
-	pss->number++;
 	pss->update = 1;
 	libwebsocket_callback_on_writable_all_protocol(ws_demo_protocol);
 
+}
+
+
+static int ws_demo_tick(struct per_session_data__demo *pss)
+{
+	log_debug(2, "ws_demo_tick number=%d", pss->number);
+	pss->number++;
+	ws_demo_writeable(pss);
 	return 1;
 }
 
@@ -54,10 +59,10 @@ static int ws_demo_callback(struct libwebsocket_context *context,
 
 	switch (reason) {
 	case LWS_CALLBACK_ESTABLISHED:
-		log_debug(3, "ws_demo_callback LWS_CALLBACK_ESTABLISHED %p", pss);
+		log_debug(2, "ws_demo_callback LWS_CALLBACK_ESTABLISHED %p", pss);
 		pss->number = 0;
 		pss->update = 0;
-		pss->tag = sys_timeout(1000, (sys_func_t) ws_demo_writeable, pss);
+		pss->tag = sys_timeout(1000, (sys_func_t) ws_demo_tick, pss);
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
@@ -74,18 +79,19 @@ static int ws_demo_callback(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_RECEIVE:
-		log_debug(3, "ws_demo_callback LWS_CALLBACK_RECEIVE %p", pss);
+		log_debug(2, "ws_demo_callback LWS_CALLBACK_RECEIVE %p", pss);
 		log_debug_data(in, len);
 
 		if (len >= 6) {
 			if (strcmp((const char *)in, "reset\n") == 0) {
 				pss->number = 0;
+				ws_demo_writeable(pss);
 			}
 		}
 		break;
 
 	case LWS_CALLBACK_CLOSED:
-		log_debug(3, "ws_demo_callback LWS_CALLBACK_CLOSED %p", pss);
+		log_debug(2, "ws_demo_callback LWS_CALLBACK_CLOSED %p", pss);
 		sys_remove(pss->tag);
 		pss->tag = 0;
 		break;
