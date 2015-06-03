@@ -13,7 +13,7 @@ LDFLAGS =
 ifeq ($(HAKIT),)
 VPATH = os:core:classes
 CFLAGS  += -I. -Iinclude -Ios
-LDFLAGS += -L$(OUTDIR) -lhakit
+#LDFLAGS += -L$(OUTDIR) -lhakit
 else
 CFLAGS  += -I$(HAKIT)/include
 LDFLAGS += -L$(HAKIT)/out/$(ARCH) -lhakit
