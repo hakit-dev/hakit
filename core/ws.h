@@ -28,12 +28,19 @@ struct ws_s {
 	char *document_root;
 	int document_root_len;
 	hk_tab_t aliases;       // Table of (ws_alias_t)
+	hk_tab_t wsis;          // Table of (struct libwebsocket *)
 };
 
 
-extern ws_t *ws_new(int port, char *document_root);
+extern ws_t *ws_new(int port);
 extern void ws_destroy(ws_t *ws);
 
+extern void ws_document_root(ws_t *ws, char *document_root);
 extern void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_data);
+
+/* WebSocket instance list management */
+extern void ws_instance_add(ws_t *ws, void *wsi);
+extern void ws_instance_remove(ws_t *ws, void *wsi);
+extern void ws_instance_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data);
 
 #endif /* __HAKIT_WS_H__ */

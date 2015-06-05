@@ -13,7 +13,6 @@
 #include <malloc.h>
 #include <unistd.h>
 
-#include "types.h"
 #include "log.h"
 #include "options.h"
 #include "buf.h"
@@ -22,11 +21,15 @@
 #include "tcpio.h"
 #include "udpio.h"
 #include "command.h"
+#include "ws.h"
+#include "ws_events.h"
 #include "comm.h"
 #include "comm_priv.h"
+#include "types.h"
 
 
 #define HAKIT_COMM_PORT 5678   // Default HAKit communication port
+#define HAKIT_HTTP_PORT 5680   // Default HAKit HTTP port
 
 #define INTERFACE_CHECK_DELAY 60000   // Check for available network interfaces once per minute
 
@@ -601,10 +604,12 @@ static void comm_source_send(comm_t *comm, int id)
 		int len;
 		int i;
 
+		/* Setup command to send */
 		len = snprintf(str, size-1, "set %s=%s", source->name, source->value.base);
 		log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->nodes.nmemb);
 		str[len++] = '\n';
 
+		/* Send to all nodes that subscribed this source */
 		for (i = 0; i < source->nodes.nmemb; i++) {
 			comm_node_t *node = HK_TAB_VALUE(source->nodes, comm_node_t *, i);
 			if (node != NULL) {
@@ -612,6 +617,9 @@ static void comm_source_send(comm_t *comm, int id)
 				tcp_sock_write(&node->tcp_sock, str, len);
 			}
 		}
+
+		/* Send WebSocket event */
+		ws_events_send(comm->ws, str+4);
 	}
 	else {
 		log_str("PANIC: Attempting to send data to unknown source #%d\n", id);
@@ -960,10 +968,17 @@ static void comm_command_process(comm_t *comm, int argc, char **argv, buf_t *out
 		for (i = 1; i < argc; i++) {
 			char *args = argv[i];
 			char *value = strchr(args, '=');
+
 			if (value != NULL) {
+				comm_sink_t *sink;
+
+				/* Send WebSocket event */
+				ws_events_send(comm->ws, args);
+
 				*(value++) = '\0';
-				comm_sink_t *sink = comm_sink_retrieve(comm, args);
+				sink = comm_sink_retrieve(comm, args);
 				if (sink != NULL) {
+					/* Invoke sink event callback */
 					if (sink->func != NULL) {
 						sink->func(sink->user_data, args, value);
 					}
@@ -977,6 +992,7 @@ static void comm_command_process(comm_t *comm, int argc, char **argv, buf_t *out
 					}
 				}
 
+				/* Invoke monitoring callback */
 				if (comm->monitor_func != NULL) {
 					comm->monitor_func(comm->monitor_user_data, args, value);
 				}
@@ -1212,10 +1228,21 @@ static int comm_init_(comm_t *comm, int port)
 	comm->ninterfaces = netif_show_interfaces();
 	sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) comm_check_interfaces, comm);
 
+	/* Init HTTP/WebSocket server */
+	comm->ws = ws_new(HAKIT_HTTP_PORT);
+	if (comm->ws == NULL) {
+		goto DONE;
+	}
+	ws_document_root(comm->ws, "lws/test");
+
 	ret = 0;
 
 DONE:
 	if (ret < 0) {
+		if (comm->ws != NULL) {
+			ws_destroy(comm->ws);
+		}
+
 		if (comm->udp_srv.chan.fd > 0) {
 			udp_srv_shutdown(&comm->udp_srv);
 		}
@@ -1223,6 +1250,8 @@ DONE:
 		if (comm->tcp_srv.csock.chan.fd > 0) {
 			tcp_srv_shutdown(&comm->tcp_srv);
 		}
+
+		memset(comm, 0, sizeof(comm_t));
 	}
 
 	return ret;

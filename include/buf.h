@@ -18,6 +18,7 @@ extern int buf_append_byte(buf_t *buf, unsigned char c);
 extern int buf_append_str(buf_t *buf, char *str);
 extern int buf_append_int(buf_t *buf, int i);
 extern int buf_append_fmt(buf_t *buf, char *fmt, ...);
+extern int buf_append_zero(buf_t *buf, int len);
 
 extern int buf_set(buf_t *buf, unsigned char *ptr, int len);
 extern int buf_set_str(buf_t *buf, char *str);

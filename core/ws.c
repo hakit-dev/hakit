@@ -19,7 +19,7 @@
 #include "ws.h"
 #include "ws_utils.h"
 #include "ws_demo.h"
-#include "types.h"
+#include "ws_events.h"
 
 #define SERVER_NAME "HAKit"
 
@@ -147,6 +147,13 @@ static int ws_http_request(struct libwebsocket_context *context,
 	else {
 		int file_path_size;
 		int file_path_len;
+
+		/* Check a document root is defined */
+		if (ws->document_root == NULL) {
+			log_str("HTTP ERROR: No document root directory defined");
+			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
+			goto failed;
+		}
 
 		/* Construct full file name */
 		file_path_size = ws->document_root_len + len + 20;
@@ -503,13 +510,13 @@ static int ws_http_callback(struct libwebsocket_context *context,
 
 static struct libwebsocket_protocols ws_protocols[] = {
 	/* first protocol must always be HTTP handler */
-
 	{
 		.name = "http-only",
 		.callback = ws_http_callback,
 		.per_session_data_size = sizeof(struct per_session_data__http),
 		.rx_buffer_size = 0,
 	},
+	{ }, /* Room for hakit-events-protocol */
 	{ }, /* Room for dumb-increment-protocol */
 	{ NULL, NULL, 0, 0 } /* terminator */
 };
@@ -519,7 +526,7 @@ static struct libwebsocket_protocols ws_protocols[] = {
  * HTTP/WebSocket server init
  */
 
-ws_t *ws_new(int port, char *document_root)
+ws_t *ws_new(int port)
 {
 	ws_t *ws = NULL;
 	struct lws_context_creation_info info;
@@ -529,7 +536,8 @@ ws_t *ws_new(int port, char *document_root)
 
 	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
 
-	ws_demo_init(&ws_protocols[1]);
+	ws_events_init(&ws_protocols[1]);
+	ws_demo_init(&ws_protocols[2]);
 
 	memset(&info, 0, sizeof(info));
 	info.port = port;
@@ -554,12 +562,11 @@ ws_t *ws_new(int port, char *document_root)
 		return NULL;
 	}
 
-	/* Set document root directory name */
-	ws->document_root = strdup(document_root);
-	ws->document_root_len = strlen(ws->document_root);
-
 	/* Init table of aliases */
 	hk_tab_init(&ws->aliases, sizeof(ws_alias_t));
+
+	/* Init table of websocket instances */
+	hk_tab_init(&ws->wsis, sizeof(struct libwebsocket *));
 
 	return ws;
 }
@@ -582,6 +589,17 @@ void ws_destroy(ws_t *ws)
 }
 
 
+void ws_document_root(ws_t *ws, char *document_root)
+{
+	if (ws->document_root != NULL) {
+		free(ws->document_root);
+	}
+
+	ws->document_root = strdup(document_root);
+	ws->document_root_len = strlen(ws->document_root);
+}
+
+
 void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_data)
 {
 	ws_alias_t *alias = hk_tab_push(&ws->aliases);
@@ -595,4 +613,42 @@ void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_d
 	alias->user_data = user_data;
 
 	log_debug(2, "ws_alias '%s'", location);
+}
+
+
+void ws_instance_add(ws_t *ws, void *wsi)
+{
+	struct libwebsocket **pwsi = NULL;
+	int i;
+
+	for (i = 0; i < ws->wsis.nmemb; i++) {
+		pwsi = HK_TAB_PTR(ws->wsis, struct libwebsocket *, i);
+		if (*pwsi == NULL) {
+			goto done;
+		}
+	}
+
+	pwsi = hk_tab_push(&ws->wsis);
+done:
+	*pwsi = wsi;
+}
+
+
+void ws_instance_remove(ws_t *ws, void *wsi)
+{
+	struct libwebsocket **pwsi = NULL;
+	int i;
+
+	for (i = 0; i < ws->wsis.nmemb; i++) {
+		pwsi = HK_TAB_PTR(ws->wsis, struct libwebsocket *, i);
+		if (*pwsi == wsi) {
+			*pwsi = NULL;
+		}
+	}
+}
+
+
+void ws_instance_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data)
+{
+	hk_tab_foreach(&ws->wsis, func, user_data);
 }

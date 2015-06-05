@@ -20,7 +20,6 @@
 #include "comm.h"
 #include "mod.h"
 #include "mod_init.h"
-#include "ws.h"
 #include "lws_config.h"
 #include "hakit_version.h"
 
@@ -86,8 +85,6 @@ static void run_as_daemon(void)
 
 int main(int argc, char *argv[])
 {
-	ws_t *ws;
-
 	if (options_parse(&argc, argv, NULL) != 0) {
 		exit(1);
 	}
@@ -111,12 +108,6 @@ int main(int argc, char *argv[])
 
 	if (opt_monitor) {
 		comm_monitor((comm_sink_func_t) monitor_sink_event, NULL);
-	}
-
-	/* Init WebSockets */
-	ws = ws_new(7777, "lws/test");
-	if (ws == NULL) {
-		return 2;
 	}
 
 	/* Init module management */

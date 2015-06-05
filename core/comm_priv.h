@@ -16,6 +16,8 @@
 #include "udpio.h"
 #include "tab.h"
 #include "command.h"
+#include "ws.h"
+#include "ws_events.h"
 #include "comm.h"
 
 typedef struct comm_s comm_t;
@@ -80,6 +82,7 @@ struct comm_s {
 	io_channel_t chan_stdin;
 	comm_sink_func_t monitor_func;
 	void *monitor_user_data;
+	ws_t *ws;
 };
 
 #endif /* __HAKIT_COMM_PRIV_H__ */

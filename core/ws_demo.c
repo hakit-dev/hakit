@@ -66,8 +66,8 @@ static int ws_demo_callback(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
+		log_debug(2, "ws_demo_callback LWS_CALLBACK_SERVER_WRITEABLE %p %d", pss, pss->update);
 		if (pss->update) {
-			log_debug(2, "ws_demo_callback LWS_CALLBACK_SERVER_WRITEABLE %p", pss);
 			n = sprintf((char *)p, "%d", pss->number);
 			m = libwebsocket_write(wsi, p, n, LWS_WRITE_TEXT);
 			if (m < n) {
