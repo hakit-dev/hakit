@@ -39,7 +39,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 	case LWS_CALLBACK_ESTABLISHED:
 		log_debug(2, "ws_events_callback LWS_CALLBACK_ESTABLISHED %p", pss);
 		buf_init(&pss->buf);
-		ws_instance_add(ws, pss);
+		ws_session_add(ws, pss);
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
@@ -69,7 +69,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 	case LWS_CALLBACK_CLOSED:
 		log_debug(2, "ws_events_callback LWS_CALLBACK_CLOSED %p", pss);
 		buf_cleanup(&pss->buf);
-		ws_instance_remove(ws, pss);
+		ws_session_remove(ws, pss);
 		break;
 
 	/*
@@ -103,7 +103,7 @@ void ws_events_init(struct libwebsocket_protocols *protocol)
 }
 
 
-static void ws_events_send_instance(char *str, struct per_session_data__events *pss)
+static void ws_events_send_session(char *str, struct per_session_data__events *pss)
 {
 	if (pss->buf.len == 0) {
 		buf_append_zero(&pss->buf, LWS_SEND_BUFFER_PRE_PADDING);
@@ -116,7 +116,7 @@ void ws_events_send(ws_t *ws, char *str)
 {
 	log_debug(2, "ws_events_send '%s'", str);
 
-	ws_instance_foreach(ws, (hk_tab_foreach_func) ws_events_send_instance, str);
+	ws_session_foreach(ws, (hk_tab_foreach_func) ws_events_send_session, str);
 
 	libwebsocket_callback_on_writable_all_protocol(ws_events_protocol);
 }

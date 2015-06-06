@@ -565,8 +565,8 @@ ws_t *ws_new(int port)
 	/* Init table of aliases */
 	hk_tab_init(&ws->aliases, sizeof(ws_alias_t));
 
-	/* Init table of websocket instances */
-	hk_tab_init(&ws->wsis, sizeof(struct libwebsocket *));
+	/* Init table of websocket sessions */
+	hk_tab_init(&ws->sessions, sizeof(void *));
 
 	return ws;
 }
@@ -616,39 +616,39 @@ void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_d
 }
 
 
-void ws_instance_add(ws_t *ws, void *wsi)
+void ws_session_add(ws_t *ws, void *pss)
 {
-	struct libwebsocket **pwsi = NULL;
+	void **ppss = NULL;
 	int i;
 
-	for (i = 0; i < ws->wsis.nmemb; i++) {
-		pwsi = HK_TAB_PTR(ws->wsis, struct libwebsocket *, i);
-		if (*pwsi == NULL) {
+	for (i = 0; i < ws->sessions.nmemb; i++) {
+		ppss = HK_TAB_PTR(ws->sessions, void *, i);
+		if (*ppss == NULL) {
 			goto done;
 		}
 	}
 
-	pwsi = hk_tab_push(&ws->wsis);
+	ppss = hk_tab_push(&ws->sessions);
 done:
-	*pwsi = wsi;
+	*ppss = pss;
 }
 
 
-void ws_instance_remove(ws_t *ws, void *wsi)
+void ws_session_remove(ws_t *ws, void *pss)
 {
-	struct libwebsocket **pwsi = NULL;
+	void **ppss = NULL;
 	int i;
 
-	for (i = 0; i < ws->wsis.nmemb; i++) {
-		pwsi = HK_TAB_PTR(ws->wsis, struct libwebsocket *, i);
-		if (*pwsi == wsi) {
-			*pwsi = NULL;
+	for (i = 0; i < ws->sessions.nmemb; i++) {
+		ppss = HK_TAB_PTR(ws->sessions, void *, i);
+		if (*ppss == pss) {
+			*ppss = NULL;
 		}
 	}
 }
 
 
-void ws_instance_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data)
+void ws_session_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data)
 {
-	hk_tab_foreach(&ws->wsis, func, user_data);
+	hk_tab_foreach(&ws->sessions, func, user_data);
 }
