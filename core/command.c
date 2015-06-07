@@ -4,6 +4,7 @@
 #include <malloc.h>
 #include <unistd.h>
 
+#include "options.h"
 #include "sys.h"
 #include "log.h"
 #include "io.h"
@@ -33,6 +34,16 @@ int command_parse(char *line, char ***_argv)
 				*(line++) = '\0';
 			}
 		}
+	}
+
+	if (opt_debug >= 2) {
+		int i;
+
+		log_printf("=>");
+		for (i = 0; i < argc; i++) {
+			log_printf(" [%d]=\"%s\"", i, argv[i]);
+		}
+		log_printf("\n");
 	}
 
 	*_argv = argv;

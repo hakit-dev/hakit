@@ -15,6 +15,7 @@
 
 typedef struct ws_s ws_t;
 typedef void (*ws_alias_handler_t)(void *user_data, char *uri, buf_t *rsp);
+typedef void (*ws_command_handler_t)(void *user_data, char *line, buf_t *buf);
 
 typedef struct {
 	char *location;
@@ -29,14 +30,21 @@ struct ws_s {
 	int document_root_len;
 	hk_tab_t aliases;       // Table of (ws_alias_t)
 	hk_tab_t sessions;      // Table of WebSocket sessions (void *)
+	ws_command_handler_t command_handler;
+	void *command_user_data;
 };
 
 
 extern ws_t *ws_new(int port);
 extern void ws_destroy(ws_t *ws);
 
-extern void ws_document_root(ws_t *ws, char *document_root);
+/* HTTP server configuration */
+extern void ws_set_document_root(ws_t *ws, char *document_root);
 extern void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_data);
+
+/* WebSocket command handling */
+extern void ws_set_command_handler(ws_t *ws, ws_command_handler_t handler, void *user_data);
+extern void ws_command(ws_t *ws, char *line, buf_t *buf);
 
 /* WebSocket session list management */
 extern void ws_session_add(ws_t *ws, void *pss);

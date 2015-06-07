@@ -14,16 +14,31 @@
 #include "log.h"
 #include "sys.h"
 #include "buf.h"
+#include "command.h"
 #include "ws_utils.h"
 #include "ws_events.h"
 
 
 struct per_session_data__events {
-	buf_t buf;
+	ws_t *ws;
+	command_t *cmd;
+	buf_t out_buf;
 };
 
 
 static struct libwebsocket_protocols *ws_events_protocol = NULL;
+
+
+static void ws_events_command(char *line, struct per_session_data__events *pss)
+{
+	char **argv = NULL;
+	int argc = 0;
+
+	if (line != NULL) {
+		log_debug(2, "ws_events_command '%s'", line);
+		ws_command(pss->ws, line, &pss->out_buf);
+	}
+}
 
 
 static int ws_events_callback(struct libwebsocket_context *context,
@@ -33,26 +48,28 @@ static int ws_events_callback(struct libwebsocket_context *context,
 {
 	ws_t *ws = libwebsocket_context_user(context);
 	struct per_session_data__events *pss = user;
-	int buflen;
+	int i;
 
 	switch (reason) {
 	case LWS_CALLBACK_ESTABLISHED:
 		log_debug(2, "ws_events_callback LWS_CALLBACK_ESTABLISHED %p", pss);
-		buf_init(&pss->buf);
+		pss->ws = ws;
+		pss->cmd = command_new((command_handler_t) ws_events_command, pss);
+		buf_init(&pss->out_buf);
 		ws_session_add(ws, pss);
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
 		log_debug(2, "ws_events_callback LWS_CALLBACK_SERVER_WRITEABLE %p", pss);
-		buflen = pss->buf.len - LWS_SEND_BUFFER_PRE_PADDING;
-		if (buflen > 0) {
-			buf_grow(&pss->buf, LWS_SEND_BUFFER_POST_PADDING);
+		i = pss->out_buf.len - LWS_SEND_BUFFER_PRE_PADDING;
+		if (i > 0) {
+			buf_grow(&pss->out_buf, LWS_SEND_BUFFER_POST_PADDING);
 
-			int ret = libwebsocket_write(wsi, pss->buf.base+LWS_SEND_BUFFER_PRE_PADDING, buflen, LWS_WRITE_TEXT);
+			int ret = libwebsocket_write(wsi, pss->out_buf.base+LWS_SEND_BUFFER_PRE_PADDING, i, LWS_WRITE_TEXT);
 
-			pss->buf.len = 0;
+			pss->out_buf.len = 0;
 
-			if (ret < buflen) {
+			if (ret < i) {
 				log_str("HTTP ERROR: %d writing to event websocket", ret);
 				return -1;
 			}
@@ -63,12 +80,32 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		log_debug(2, "ws_events_callback LWS_CALLBACK_RECEIVE %p", pss);
 		log_debug_data(in, len);
 
-		//TODO: handle command
+		/* Make sure send buffer has room for pre-padding */
+		if (pss->out_buf.len == 0) {
+			buf_append_zero(&pss->out_buf, LWS_SEND_BUFFER_PRE_PADDING);
+		}
+
+		/* Execute command */
+		command_recv(pss->cmd, in, len);
+
+		/* Trig response write */
+		if (pss->out_buf.len > LWS_SEND_BUFFER_PRE_PADDING) {
+			libwebsocket_callback_on_writable(context, wsi);
+		}
 		break;
 
 	case LWS_CALLBACK_CLOSED:
 		log_debug(2, "ws_events_callback LWS_CALLBACK_CLOSED %p", pss);
-		buf_cleanup(&pss->buf);
+
+		pss->ws = NULL;
+
+		if (pss->cmd != NULL) {
+			command_destroy(pss->cmd);
+			pss->cmd = NULL;
+		}
+
+		buf_cleanup(&pss->out_buf);
+
 		ws_session_remove(ws, pss);
 		break;
 
@@ -105,10 +142,12 @@ void ws_events_init(struct libwebsocket_protocols *protocol)
 
 static void ws_events_send_session(char *str, struct per_session_data__events *pss)
 {
-	if (pss->buf.len == 0) {
-		buf_append_zero(&pss->buf, LWS_SEND_BUFFER_PRE_PADDING);
+	/* Make sure send buffer has room for pre-padding */
+	if (pss->out_buf.len == 0) {
+		buf_append_zero(&pss->out_buf, LWS_SEND_BUFFER_PRE_PADDING);
 	}
-	buf_append_str(&pss->buf, str);
+
+	buf_append_str(&pss->out_buf, str);
 }
 
 

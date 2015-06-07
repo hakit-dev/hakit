@@ -531,10 +531,10 @@ ws_t *ws_new(int port)
 	ws_t *ws = NULL;
 	struct lws_context_creation_info info;
 
+	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
+
 	ws = malloc(sizeof(ws_t));
 	memset(ws, 0, sizeof(ws_t));
-
-	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
 
 	ws_events_init(&ws_protocols[1]);
 	ws_demo_init(&ws_protocols[2]);
@@ -589,7 +589,7 @@ void ws_destroy(ws_t *ws)
 }
 
 
-void ws_document_root(ws_t *ws, char *document_root)
+void ws_set_document_root(ws_t *ws, char *document_root)
 {
 	if (ws->document_root != NULL) {
 		free(ws->document_root);
@@ -613,6 +613,13 @@ void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_d
 	alias->user_data = user_data;
 
 	log_debug(2, "ws_alias '%s'", location);
+}
+
+
+void ws_set_command_handler(ws_t *ws, ws_command_handler_t handler, void *user_data)
+{
+	ws->command_handler = handler;
+	ws->command_user_data = user_data;
 }
 
 
@@ -651,4 +658,12 @@ void ws_session_remove(ws_t *ws, void *pss)
 void ws_session_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data)
 {
 	hk_tab_foreach(&ws->sessions, func, user_data);
+}
+
+
+void ws_command(ws_t *ws, char *line, buf_t *buf)
+{
+	if (ws->command_handler != NULL) {
+		ws->command_handler(ws->command_user_data, line, buf);
+	}
 }

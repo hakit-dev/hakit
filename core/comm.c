@@ -867,19 +867,6 @@ static void comm_cmd_ctx_destroy(comm_cmd_ctx_t *ctx)
 }
 
 
-static int comm_command_output(tcp_sock_t *tcp_sock, buf_t *out_buf)
-{
-	if (tcp_sock != NULL) {
-		io_channel_write(&tcp_sock->chan, (char *) out_buf->base, out_buf->len);
-	}
-	else {
-		fwrite(out_buf->base, 1, out_buf->len, stdout);
-	}
-
-	return 1;
-}
-
-
 static void comm_source_append_name(comm_source_t *source, buf_t *out_buf)
 {
 	if (source->flag & SOURCE_FLAG_MONITOR) {
@@ -1024,6 +1011,21 @@ static void comm_command_process(comm_t *comm, int argc, char **argv, buf_t *out
 }
 
 
+static int comm_command_output(tcp_sock_t *tcp_sock, buf_t *out_buf)
+{
+	int ret = 0;
+
+	if (tcp_sock != NULL) {
+		ret = io_channel_write(&tcp_sock->chan, (char *) out_buf->base, out_buf->len);
+	}
+	else {
+		ret = fwrite(out_buf->base, 1, out_buf->len, stdout);
+	}
+
+	return ret;
+}
+
+
 static void comm_command(comm_t *comm, char *line, tcp_sock_t *tcp_sock)
 {
 	char **argv = NULL;
@@ -1036,14 +1038,6 @@ static void comm_command(comm_t *comm, char *line, tcp_sock_t *tcp_sock)
 	}
 
 	argc = command_parse(line, &argv);
-	if (opt_debug >= 2) {
-		int i;
-		log_printf("  =>");
-		for (i = 0; i < argc; i++) {
-			log_printf(" [%d]=\"%s\"", i, argv[i]);
-		}
-		log_printf("\n");
-	}
 
 	if (argc > 0) {
 		buf_t out_buf;
@@ -1056,6 +1050,27 @@ static void comm_command(comm_t *comm, char *line, tcp_sock_t *tcp_sock)
 
 	if (argv != NULL) {
 		free(argv);
+	}
+}
+
+
+static void comm_command_ws(comm_t *comm, char *line, buf_t *out_buf)
+{
+	char **argv = NULL;
+	int argc = 0;
+
+	if (line != NULL) {
+		log_debug(2, "comm_command_ws '%s'", line);
+
+		argc = command_parse(line, &argv);
+
+		if (argc > 0) {
+			comm_command_process(comm, argc, argv, out_buf);
+		}
+
+		if (argv != NULL) {
+			free(argv);
+		}
 	}
 }
 
@@ -1233,7 +1248,8 @@ static int comm_init_(comm_t *comm, int port)
 	if (comm->ws == NULL) {
 		goto DONE;
 	}
-	ws_document_root(comm->ws, "lws/test");
+	ws_set_document_root(comm->ws, "lws/test");
+	ws_set_command_handler(comm->ws, (ws_command_handler_t) comm_command_ws, comm);
 
 	ret = 0;
 
