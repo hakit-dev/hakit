@@ -24,6 +24,14 @@ typedef struct comm_s comm_t;
 
 
 /*
+ * Source/Sink flags
+ */
+
+#define COMM_FLAG_EVENT   0x01
+#define COMM_FLAG_MONITOR 0x02
+
+
+/*
  * Nodes
  */
 
@@ -45,6 +53,7 @@ typedef struct {
 typedef struct {
 	char *name;              /* Sink name */
 	buf_t value;
+	unsigned int flag;
 	comm_sink_func_t func;   /* Handler to call when sink is updated */
 	void *user_data;
 } comm_sink_t;
@@ -53,9 +62,6 @@ typedef struct {
 /*
  * Sources
  */
-
-#define SOURCE_FLAG_EVENT   0x01
-#define SOURCE_FLAG_MONITOR 0x02
 
 typedef struct {
 	int id;

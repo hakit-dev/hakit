@@ -289,7 +289,7 @@ static void comm_sink_advertise(comm_t *comm, int reply)
 
 	for (i = 0; i < nsinks; i++) {
 		comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
-		if (sink->name != NULL) {
+		if ((sink->name != NULL) && ((sink->flag & COMM_FLAG_MONITOR) == 0)) {
 			if (buf.len == 0) {
 				buf_append_byte(&buf, UDP_SIGN);
 				buf_append_byte(&buf, UDP_TYPE_SINK);
@@ -371,6 +371,22 @@ static void comm_sink_register_(comm_t *comm, char *name, comm_sink_func_t func,
 }
 
 
+static comm_sink_t *comm_sink_monitor(comm_t *comm, char *name)
+{
+	comm_sink_t *sink;
+
+	sink = comm_sink_alloc(comm);
+	sink->name = strdup(name);
+
+	log_debug(2, "comm_sink_monitor name='%s' (%d elements)", name, comm->sinks.nmemb);
+
+	buf_set_str(&sink->value, "");
+	sink->flag |= COMM_FLAG_MONITOR;
+
+	return sink;
+}
+
+
 #if 0
 static void comm_sink_unregister_(comm_t *comm, char *name)
 {
@@ -405,7 +421,7 @@ static void comm_source_advertise(comm_t *comm, int reply)
 
 	for (i = 0; i < nsources; i++) {
 		comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
-		if ((source->name != NULL) && ((source->flag & SOURCE_FLAG_MONITOR) == 0)) {
+		if ((source->name != NULL) && ((source->flag & COMM_FLAG_MONITOR) == 0)) {
 			if (buf.len == 0) {
 				buf_append_byte(&buf, UDP_SIGN);
 				buf_append_byte(&buf, UDP_TYPE_SOURCE);
@@ -483,7 +499,7 @@ static int comm_source_register_(comm_t *comm, char *name, int event)
 	buf_set_str(&source->value, "");
 
 	if (event) {
-		source->flag |= SOURCE_FLAG_EVENT;
+		source->flag |= COMM_FLAG_EVENT;
 	}
 
 	comm_advertise(comm);
@@ -502,7 +518,7 @@ static comm_source_t *comm_source_monitor(comm_t *comm, char *name)
 	log_debug(2, "comm_source_monitor name='%s' (%d elements)", name, comm->sources.nmemb);
 
 	buf_set_str(&source->value, "");
-	source->flag |= SOURCE_FLAG_MONITOR;
+	source->flag |= COMM_FLAG_MONITOR;
 
 	return source;
 }
@@ -690,7 +706,8 @@ static void comm_udp_event_sink(comm_t *comm, int argc, char **argv)
 
 		/* Special processing for monitor mode:
 		   If no source is registered matching the advertised sink,
-		   we automatically register this source as an event, so that it will be possible to update the sink */
+		   we automatically register this source as an event,
+		   so that it will be possible to update the remote sink */
 		if (comm->monitor_func != NULL) {
 			if (source == NULL) {
 				source = comm_source_monitor(comm, sink_name);
@@ -732,8 +749,8 @@ static void comm_udp_event_source(comm_t *comm, int argc, char **argv)
 
 	/* Check for local sinks matching advertised sources */
 	for (i = 0; i < argc; i++) {
-		char *name = argv[i];
-		comm_sink_t *sink = comm_sink_retrieve(comm, name);
+		char *source_name = argv[i];
+		comm_sink_t *sink = comm_sink_retrieve(comm, source_name);
 
 		/* Check for sinks matching sources in request list */
 		if (sink != NULL) {
@@ -804,7 +821,17 @@ static void comm_udp_event(comm_t *comm, unsigned char *buf, int size)
 		/* If monitor mode enabled, tell sender we need to receive all sources events from it */
 		if (comm->monitor_func != NULL) {
 			for (i = 0; i < argc; i++) {
-				comm->monitor_func(comm, argv[i], NULL);
+				char *source_name = argv[i];
+				comm_sink_t *sink = comm_sink_retrieve(comm, source_name);
+
+				/* If no sink is registered matching the advertised source,
+				   we automatically register this sink,
+				   so that it will be updated from remote sources */
+				if (sink == NULL) {
+					comm_sink_monitor(comm, source_name);
+				}
+
+				comm->monitor_func(comm, source_name, NULL);
 			}
 
 			buf[1] = UDP_TYPE_SINK;
@@ -868,12 +895,119 @@ static void comm_cmd_ctx_destroy(comm_cmd_ctx_t *ctx)
 
 static void comm_source_append_name(comm_source_t *source, buf_t *out_buf)
 {
-	if (source->flag & SOURCE_FLAG_MONITOR) {
+	if (source->flag & COMM_FLAG_MONITOR) {
 		buf_append_str(out_buf, "(");
 	}
 	buf_append_str(out_buf, source->name);
-	if (source->flag & SOURCE_FLAG_MONITOR) {
+	if (source->flag & COMM_FLAG_MONITOR) {
 		buf_append_str(out_buf, ")");
+	}
+}
+
+
+static void comm_sink_append_name(comm_sink_t *sink, buf_t *out_buf)
+{
+	if (sink->flag & COMM_FLAG_MONITOR) {
+		buf_append_str(out_buf, "(");
+	}
+	buf_append_str(out_buf, sink->name);
+	if (sink->flag & COMM_FLAG_MONITOR) {
+		buf_append_str(out_buf, ")");
+	}
+}
+
+
+static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+{
+	int i;
+
+	for (i = 1; i < argc; i++) {
+		char *args = argv[i];
+		char *value = strchr(args, '=');
+
+		if (value != NULL) {
+			comm_sink_t *sink;
+
+			/* Send WebSocket event */
+			ws_events_send(comm->ws, args);
+
+			*(value++) = '\0';
+			sink = comm_sink_retrieve(comm, args);
+			if (sink != NULL) {
+				/* Update sink value */
+				buf_set_str(&sink->value, value);
+
+				/* Invoke sink event callback */
+				if ((sink->func != NULL) && ((sink->flag & COMM_FLAG_MONITOR) == 0)) {
+					sink->func(sink->user_data, args, value);
+				}
+			}
+			else {
+				/* Send back error message if not in monitor mode */
+				if (comm->monitor_func == NULL) {
+					buf_append_str(out_buf, "ERROR: Unknown sink: ");
+					buf_append_str(out_buf, args);
+					buf_append_str(out_buf, "\n");
+				}
+			}
+
+			/* Invoke monitoring callback */
+			if (comm->monitor_func != NULL) {
+				comm->monitor_func(comm->monitor_user_data, args, value);
+			}
+		}
+		else {
+			buf_append_str(out_buf, "ERROR: Syntax error in command: ");
+			buf_append_str(out_buf, args);
+			buf_append_str(out_buf, "\n");
+		}
+	}
+}
+
+
+static void comm_command_get(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+{
+	int i;
+
+	if (argc > 1) {
+		for (i = 1; i < argc; i++) {
+			comm_source_t *source = comm_source_retrieve(comm, argv[i]);
+			if (source != NULL) {
+				buf_append_str(out_buf, source->name);
+				buf_append_byte(out_buf, '=');
+				buf_append(out_buf, source->value.base, source->value.len);
+				buf_append_byte(out_buf, '\n');
+			}
+		}
+		for (i = 1; i < argc; i++) {
+			comm_sink_t *sink = comm_sink_retrieve(comm, argv[i]);
+			if (sink != NULL) {
+				buf_append_str(out_buf, sink->name);
+				buf_append_byte(out_buf, '=');
+				buf_append(out_buf, sink->value.base, sink->value.len);
+				buf_append_byte(out_buf, '\n');
+			}
+		}
+	}
+	else {
+		for (i = 0; i < comm->sources.nmemb; i++) {
+			comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
+			if (source->name != NULL) {
+				buf_append_str(out_buf, source->name);
+				buf_append_byte(out_buf, '=');
+				buf_append(out_buf, source->value.base, source->value.len);
+				buf_append_byte(out_buf, '\n');
+			}
+		}
+		for (i = 0; i < comm->sinks.nmemb; i++) {
+			comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
+			if (sink->name != NULL) {
+				buf_append_str(out_buf, sink->name);
+				buf_append_byte(out_buf, '=');
+				buf_append(out_buf, sink->value.base, sink->value.len);
+				buf_append_byte(out_buf, '\n');
+			}
+		}
 	}
 }
 
@@ -920,6 +1054,10 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 			buf_append_str(out_buf, "  ");
 			comm_source_append_name(source, out_buf);
 
+			buf_append_str(out_buf, " \"");
+			buf_append(out_buf, source->value.base, source->value.len);
+			buf_append_str(out_buf, "\"");
+
 			for (j = 0; j < source->nodes.nmemb; j++) {
 				comm_node_t *node = HK_TAB_VALUE(source->nodes, comm_node_t *, j);
 				if (node != NULL) {
@@ -938,7 +1076,11 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 
 		if (sink->name != NULL) {
 			buf_append_str(out_buf, "  ");
-			buf_append_str(out_buf, sink->name);
+			comm_sink_append_name(sink, out_buf);
+
+			buf_append_str(out_buf, " \"");
+			buf_append(out_buf, sink->value.base, sink->value.len);
+			buf_append_str(out_buf, "\"");
 
 			buf_append_str(out_buf, "\n");
 		}
@@ -951,44 +1093,10 @@ static void comm_command_process(comm_t *comm, int argc, char **argv, buf_t *out
 	int i;
 
 	if (strcmp(argv[0], "set") == 0) {
-		for (i = 1; i < argc; i++) {
-			char *args = argv[i];
-			char *value = strchr(args, '=');
-
-			if (value != NULL) {
-				comm_sink_t *sink;
-
-				/* Send WebSocket event */
-				ws_events_send(comm->ws, args);
-
-				*(value++) = '\0';
-				sink = comm_sink_retrieve(comm, args);
-				if (sink != NULL) {
-					/* Invoke sink event callback */
-					if (sink->func != NULL) {
-						sink->func(sink->user_data, args, value);
-					}
-				}
-				else {
-					/* Send back error message if not in monitor mode */
-					if (comm->monitor_func == NULL) {
-						buf_append_str(out_buf, "ERROR: Unknown sink: ");
-						buf_append_str(out_buf, args);
-						buf_append_str(out_buf, "\n");
-					}
-				}
-
-				/* Invoke monitoring callback */
-				if (comm->monitor_func != NULL) {
-					comm->monitor_func(comm->monitor_user_data, args, value);
-				}
-			}
-			else {
-				buf_append_str(out_buf, "ERROR: Syntax error in command: ");
-				buf_append_str(out_buf, args);
-				buf_append_str(out_buf, "\n");
-			}
-		}
+		comm_command_set(comm, argc, argv, out_buf);
+	}
+	else if (strcmp(argv[0], "get") == 0) {
+		comm_command_get(comm, argc, argv, out_buf);
 	}
 	else if (strcmp(argv[0], "status") == 0) {
 		comm_command_status(comm, out_buf);
