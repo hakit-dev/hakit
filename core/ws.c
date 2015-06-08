@@ -589,6 +589,10 @@ void ws_destroy(ws_t *ws)
 }
 
 
+/*
+ * HTTP directory and aliased locations
+ */
+
 void ws_set_document_root(ws_t *ws, char *document_root)
 {
 	if (ws->document_root != NULL) {
@@ -616,14 +620,11 @@ void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_d
 }
 
 
-void ws_set_command_handler(ws_t *ws, ws_command_handler_t handler, void *user_data)
-{
-	ws->command_handler = handler;
-	ws->command_user_data = user_data;
-}
+/*
+ * WebSocket running sessions
+ */
 
-
-void ws_session_add(ws_t *ws, void *pss)
+int ws_session_add(ws_t *ws, void *pss)
 {
 	void **ppss = NULL;
 	int i;
@@ -638,6 +639,8 @@ void ws_session_add(ws_t *ws, void *pss)
 	ppss = hk_tab_push(&ws->sessions);
 done:
 	*ppss = pss;
+
+	return i;
 }
 
 
@@ -661,9 +664,20 @@ void ws_session_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data)
 }
 
 
-void ws_command(ws_t *ws, char *line, buf_t *buf)
+/*
+ * WebSocket command handler
+ */
+
+void ws_set_command_handler(ws_t *ws, ws_command_handler_t handler, void *user_data)
+{
+	ws->command_handler = handler;
+	ws->command_user_data = user_data;
+}
+
+
+void ws_call_command_handler(ws_t *ws, int argc, char **argv, buf_t *out_buf)
 {
 	if (ws->command_handler != NULL) {
-		ws->command_handler(ws->command_user_data, line, buf);
+		ws->command_handler(ws->command_user_data, argc, argv, out_buf);
 	}
 }

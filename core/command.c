@@ -11,7 +11,7 @@
 #include "command.h"
 
 
-int command_parse(char *line, char ***_argv)
+static int command_parse(char *line, char ***_argv)
 {
 	int argc = 0;
 	char **argv = malloc(sizeof(char *));
@@ -36,10 +36,10 @@ int command_parse(char *line, char ***_argv)
 		}
 	}
 
-	if (opt_debug >= 2) {
+	if (opt_debug >= 3) {
 		int i;
 
-		log_printf("=>");
+		log_printf("  =>");
 		for (i = 0; i < argc; i++) {
 			log_printf(" [%d]=\"%s\"", i, argv[i]);
 		}
@@ -58,7 +58,7 @@ int command_recv(command_t *cmd, char *buf, int len)
 
 	if (buf == NULL) {
 		if (cmd->handler != NULL) {
-			cmd->handler(NULL, cmd->arg);
+			cmd->handler(cmd->user_data, 0, NULL);
 		}
 		ret = 0;
 	}
@@ -75,8 +75,16 @@ int command_recv(command_t *cmd, char *buf, int len)
 			buf_append(&cmd->line, (unsigned char *) &buf[i0], i-i0);
 
 			if (i < len) {
+				log_debug(2, "command_recv: '%s'", cmd->line.base);
 				if (cmd->handler != NULL) {
-					cmd->handler((char *) cmd->line.base, cmd->arg);
+					char **argv = NULL;
+					int argc = command_parse((char *) cmd->line.base, &argv);
+
+					cmd->handler(cmd->user_data, argc, argv);
+
+					if (argv != NULL) {
+						free(argv);
+					}
 				}
 
 				cmd->line.len = 0;
@@ -89,14 +97,14 @@ int command_recv(command_t *cmd, char *buf, int len)
 }
 
 
-command_t *command_new(command_handler_t handler, void *arg)
+command_t *command_new(command_handler_t handler, void *user_data)
 {
 	command_t *cmd = malloc(sizeof(command_t));
 	memset(cmd, 0, sizeof(command_t));
 
 	buf_init(&cmd->line);
 	cmd->handler = handler;
-	cmd->arg = arg;
+	cmd->user_data = user_data;
 
 	return cmd;
 }

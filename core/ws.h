@@ -15,7 +15,7 @@
 
 typedef struct ws_s ws_t;
 typedef void (*ws_alias_handler_t)(void *user_data, char *uri, buf_t *rsp);
-typedef void (*ws_command_handler_t)(void *user_data, char *line, buf_t *buf);
+typedef void (*ws_command_handler_t)(void *user_data, int argc, char **argv, buf_t *out_buf);
 
 typedef struct {
 	char *location;
@@ -44,10 +44,10 @@ extern void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void 
 
 /* WebSocket command handling */
 extern void ws_set_command_handler(ws_t *ws, ws_command_handler_t handler, void *user_data);
-extern void ws_command(ws_t *ws, char *line, buf_t *buf);
+extern void ws_call_command_handler(ws_t *ws, int argc, char **argv, buf_t *out_buf);
 
 /* WebSocket session list management */
-extern void ws_session_add(ws_t *ws, void *pss);
+extern int ws_session_add(ws_t *ws, void *pss);
 extern void ws_session_remove(ws_t *ws, void *pss);
 extern void ws_session_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data);
 

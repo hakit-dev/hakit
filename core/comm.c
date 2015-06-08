@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
-#include <unistd.h>
+#include <errno.h>
 
 #include "log.h"
 #include "options.h"
@@ -45,7 +45,7 @@
 /* Local functions forward declarations */
 static void comm_udp_send(comm_t *comm, buf_t *buf, int reply);
 static void comm_advertise(comm_t *comm);
-static void comm_command(comm_t *comm, char *line, tcp_sock_t *tcp_sock);
+static void comm_command_tcp(comm_t *comm, int argc, char **argv, tcp_sock_t *tcp_sock);
 static int comm_node_connect(comm_node_t *node);
 static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *node);
 
@@ -72,13 +72,9 @@ static comm_node_t *comm_node_retrieve(comm_t *comm, char *name)
 }
 
 
-static void comm_node_command(char *line, comm_node_t *node)
+static void comm_node_command(comm_node_t *node, int argc, char **argv)
 {
-	log_debug(2, "comm_node_command '%s'", line);
-
-	if (line != NULL) {
-		comm_command(node->comm, line, &node->tcp_sock);
-	}
+	comm_command_tcp(node->comm, argc, argv, &node->tcp_sock);
 }
 
 
@@ -843,7 +839,10 @@ typedef struct {
 } comm_cmd_ctx_t;
 
 
-static void comm_command_ctx(char *line, comm_cmd_ctx_t *ctx);
+static void comm_command_ctx(comm_cmd_ctx_t *ctx, int argc, char **argv)
+{
+	comm_command_tcp(ctx->comm, argc, argv, ctx->tcp_sock);
+}
 
 
 static comm_cmd_ctx_t *comm_cmd_ctx_new(tcp_sock_t *tcp_sock)
@@ -1011,88 +1010,42 @@ static void comm_command_process(comm_t *comm, int argc, char **argv, buf_t *out
 }
 
 
-static int comm_command_output(tcp_sock_t *tcp_sock, buf_t *out_buf)
+static void comm_command_tcp(comm_t *comm, int argc, char **argv, tcp_sock_t *tcp_sock)
 {
-	int ret = 0;
-
-	if (tcp_sock != NULL) {
-		ret = io_channel_write(&tcp_sock->chan, (char *) out_buf->base, out_buf->len);
-	}
-	else {
-		ret = fwrite(out_buf->base, 1, out_buf->len, stdout);
-	}
-
-	return ret;
-}
-
-
-static void comm_command(comm_t *comm, char *line, tcp_sock_t *tcp_sock)
-{
-	char **argv = NULL;
-	int argc = 0;
-
-	log_debug(2, "comm_command '%s'", line);
-
-	if (strncmp(line, "ERROR:", 6) == 0) {
-		return;
-	}
-
-	argc = command_parse(line, &argv);
+	buf_t out_buf;
 
 	if (argc > 0) {
-		buf_t out_buf;
+		if (strcmp(argv[0], "ERROR:") == 0) {
+			return;
+		}
 
 		buf_init(&out_buf);
+
 		comm_command_process(comm, argc, argv, &out_buf);
-		comm_command_output(tcp_sock, &out_buf);
+		io_channel_write(&tcp_sock->chan, (char *) out_buf.base, out_buf.len);
+
 		buf_cleanup(&out_buf);
 	}
-
-	if (argv != NULL) {
-		free(argv);
-	}
 }
 
 
-static void comm_command_ws(comm_t *comm, char *line, buf_t *out_buf)
+static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 {
-	char **argv = NULL;
-	int argc = 0;
+	buf_t out_buf;
 
-	if (line != NULL) {
-		log_debug(2, "comm_command_ws '%s'", line);
+	if (argc > 0) {
+		buf_init(&out_buf);
 
-		argc = command_parse(line, &argv);
-
-		if (argc > 0) {
-			comm_command_process(comm, argc, argv, out_buf);
+		comm_command_process(comm, argc, argv, &out_buf);
+		if (fwrite(out_buf.base, 1, out_buf.len, stdout) < 0) {
+			log_str("PANIC: Failed to write stdout: %s", strerror(errno));
 		}
 
-		if (argv != NULL) {
-			free(argv);
-		}
-	}
-}
-
-
-static void comm_command_stdin(char *line, comm_t *comm)
-{
-	if (line != NULL) {
-		comm_command(comm, line, NULL);
+		buf_cleanup(&out_buf);
 	}
 	else {
 		/* Quit if hangup from stdin */
 		sys_quit();
-	}
-}
-
-
-static void comm_command_ctx(char *line, comm_cmd_ctx_t *ctx)
-{
-	log_debug(2, "comm_command_ctx '%s'", line);
-
-	if (line != NULL) {
-		comm_command(ctx->comm, line, ctx->tcp_sock);
 	}
 }
 
@@ -1249,7 +1202,7 @@ static int comm_init_(comm_t *comm, int port)
 		goto DONE;
 	}
 	ws_set_document_root(comm->ws, "lws/test");
-	ws_set_command_handler(comm->ws, (ws_command_handler_t) comm_command_ws, comm);
+	ws_set_command_handler(comm->ws, (ws_command_handler_t) comm_command_process, comm);
 
 	ret = 0;
 

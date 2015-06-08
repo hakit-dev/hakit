@@ -23,21 +23,18 @@ struct per_session_data__events {
 	ws_t *ws;
 	command_t *cmd;
 	buf_t out_buf;
+	int id;
 };
 
 
 static struct libwebsocket_protocols *ws_events_protocol = NULL;
 
 
-static void ws_events_command(char *line, struct per_session_data__events *pss)
+static void ws_events_command(struct per_session_data__events *pss, int argc, char **argv)
 {
-	char **argv = NULL;
-	int argc = 0;
-
-	if (line != NULL) {
-		log_debug(2, "ws_events_command '%s'", line);
-		ws_command(pss->ws, line, &pss->out_buf);
-	}
+	log_debug(2, "ws_events_command [%d]", pss->id);
+	ws_call_command_handler(pss->ws, argc, argv, &pss->out_buf);
+	log_debug_data(pss->out_buf.base, pss->out_buf.len);
 }
 
 
@@ -56,7 +53,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		pss->ws = ws;
 		pss->cmd = command_new((command_handler_t) ws_events_command, pss);
 		buf_init(&pss->out_buf);
-		ws_session_add(ws, pss);
+		pss->id = ws_session_add(ws, pss);
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
@@ -105,6 +102,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		}
 
 		buf_cleanup(&pss->out_buf);
+		pss->id = -1;
 
 		ws_session_remove(ws, pss);
 		break;
