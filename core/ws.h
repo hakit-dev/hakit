@@ -32,6 +32,7 @@ struct ws_s {
 	hk_tab_t sessions;      // Table of WebSocket sessions (void *)
 	ws_command_handler_t command_handler;
 	void *command_user_data;
+	int salt;
 };
 
 

@@ -32,7 +32,7 @@ static struct libwebsocket_protocols *ws_events_protocol = NULL;
 
 static void ws_events_command(struct per_session_data__events *pss, int argc, char **argv)
 {
-	log_debug(2, "ws_events_command [%d]", pss->id);
+	log_debug(2, "ws_events_command [%04X]", pss->id);
 	ws_call_command_handler(pss->ws, argc, argv, &pss->out_buf);
 	log_debug_data(pss->out_buf.base, pss->out_buf.len);
 }
@@ -49,17 +49,17 @@ static int ws_events_callback(struct libwebsocket_context *context,
 
 	switch (reason) {
 	case LWS_CALLBACK_ESTABLISHED:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_ESTABLISHED %p", pss);
 		pss->ws = ws;
 		pss->cmd = command_new((command_handler_t) ws_events_command, pss);
 		buf_init(&pss->out_buf);
 		pss->id = ws_session_add(ws, pss);
+		log_debug(2, "ws_events_callback LWS_CALLBACK_ESTABLISHED [%04X]", pss->id);
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_SERVER_WRITEABLE %p", pss);
 		i = pss->out_buf.len - LWS_SEND_BUFFER_PRE_PADDING;
 		if (i > 0) {
+			log_debug(2, "ws_events_callback LWS_CALLBACK_SERVER_WRITEABLE [%04X]: %d bytes", pss->id, i);
 			buf_grow(&pss->out_buf, LWS_SEND_BUFFER_POST_PADDING);
 
 			int ret = libwebsocket_write(wsi, pss->out_buf.base+LWS_SEND_BUFFER_PRE_PADDING, i, LWS_WRITE_TEXT);
@@ -71,10 +71,13 @@ static int ws_events_callback(struct libwebsocket_context *context,
 				return -1;
 			}
 		}
+		else {
+			log_debug(2, "ws_events_callback LWS_CALLBACK_SERVER_WRITEABLE [%04X]: READY", pss->id);
+		}
 		break;
 
 	case LWS_CALLBACK_RECEIVE:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_RECEIVE %p", pss);
+		log_debug(2, "ws_events_callback LWS_CALLBACK_RECEIVE [%04X]: %d bytes", pss->id, len);
 		log_debug_data(in, len);
 
 		/* Make sure send buffer has room for pre-padding */
@@ -92,7 +95,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		break;
 
 	case LWS_CALLBACK_CLOSED:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_CLOSED %p", pss);
+		log_debug(2, "ws_events_callback LWS_CALLBACK_CLOSED [%04X]", pss->id);
 
 		pss->ws = NULL;
 
@@ -113,7 +116,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 	 * to handle this callback
 	 */
 	case LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION:
-		log_debug(2, "ws_events_callback LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION");
+		log_debug(2, "ws_events_callback LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION [%04X]", pss->id);
 		ws_dump_handshake_info(wsi);
 		/* you could return non-zero here and kill the connection */
 		break;

@@ -57,6 +57,6 @@ try {
     alert('<p>ERROR: ' + exception + '</p>');  
 }
 
-function status() {
-    sock.send("status\n");
+function get_all() {
+    sock.send("get\n");
 }

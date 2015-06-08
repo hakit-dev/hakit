@@ -76,7 +76,7 @@ int command_recv(command_t *cmd, char *buf, int len)
 
 			if (i < len) {
 				log_debug(2, "command_recv: '%s'", cmd->line.base);
-				if (cmd->handler != NULL) {
+				if ((cmd->handler != NULL) && (cmd->line.len > 0)) {
 					char **argv = NULL;
 					int argc = command_parse((char *) cmd->line.base, &argv);
 
