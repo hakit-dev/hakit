@@ -7,7 +7,13 @@
   </head>
 
   <body>
-    <section class="browser">Detected Browser: <div id=brow>...</div></section>
+    <table>
+      <tr>
+	<td id="brow">...</td>
+	<td id="ws_status_td" align="center" class="explain"><div id="ws_status">Not initialized</div></td>
+      </tr>
+    </table>
+
     <input type="button" id="offset" value="Get" onclick="get_all();" >
     <form name="f">
       <textarea name="output" onfocus="document.forms.f.output.blur()"></textarea>

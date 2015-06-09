@@ -40,8 +40,8 @@ if (typeof MozWebSocket != "undefined") {
 
 try {
     sock.onopen = function() {
-//	document.getElementById("wsdi_statustd").style.backgroundColor = "#40ff40";
-//	document.getElementById("wsdi_status").textContent = " websocket connection opened ";
+	document.getElementById("ws_status_td").style.backgroundColor = "#40ff40";
+	document.getElementById("ws_status").textContent = "Connected";
     } 
 
     sock.onmessage = function got_packet(msg) {
@@ -50,8 +50,8 @@ try {
     } 
 
     sock.onclose = function(){
-//	document.getElementById("wsdi_statustd").style.backgroundColor = "#ff4040";
-//	document.getElementById("wsdi_status").textContent = " websocket connection CLOSED ";
+	document.getElementById("ws_status_td").style.backgroundColor = "#ff4040";
+	document.getElementById("ws_status").textContent = "Disconnected";
     }
 } catch(exception) {
     alert('<p>ERROR: ' + exception + '</p>');  
