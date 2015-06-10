@@ -508,6 +508,19 @@ static int comm_source_register_(comm_t *comm, char *name, int event)
 }
 
 
+static void comm_source_set_private_(comm_t *comm, int id)
+{
+	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
+
+	if (source->name != NULL) {
+		source->flag |= COMM_FLAG_PRIVATE;
+	}
+	else {
+		log_str("PANIC: Attempting to update flag on unknown source #%d\n", id);
+	}
+}
+
+
 static comm_source_t *comm_source_monitor(comm_t *comm, char *name)
 {
 	comm_source_t *source;
@@ -621,12 +634,14 @@ static void comm_source_send(comm_t *comm, int id)
 		log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->nodes.nmemb);
 		str[len++] = '\n';
 
-		/* Send to all nodes that subscribed this source */
-		for (i = 0; i < source->nodes.nmemb; i++) {
-			comm_node_t *node = HK_TAB_VALUE(source->nodes, comm_node_t *, i);
-			if (node != NULL) {
-				log_debug(2, "  node=#%d='%s'", node->id, node->name);
-				tcp_sock_write(&node->tcp_sock, str, len);
+		if ((source->flag & COMM_FLAG_PRIVATE) == 0) {
+			/* Send to all nodes that subscribed this source */
+			for (i = 0; i < source->nodes.nmemb; i++) {
+				comm_node_t *node = HK_TAB_VALUE(source->nodes, comm_node_t *, i);
+				if (node != NULL) {
+					log_debug(2, "  node=#%d='%s'", node->id, node->name);
+					tcp_sock_write(&node->tcp_sock, str, len);
+				}
 			}
 		}
 
@@ -715,7 +730,7 @@ static void comm_udp_event_sink(comm_t *comm, int argc, char **argv)
 		}
 
 		/* If matching source is found, check for requesting node connection */
-		if (source != NULL) {
+		if ((source != NULL) && ((source->flag & COMM_FLAG_PRIVATE) == 0)) {
 			log_debug(2, "  sink='%s', source='%s'", sink_name, source->name);
 
 			struct sockaddr_in *addr = udp_srv_remote(&comm->udp_srv);
@@ -1373,6 +1388,12 @@ void comm_sink_register(char *name, comm_sink_func_t func, void *user_data)
 int comm_source_register(char *name, int event)
 {
 	return comm_source_register_(&hk_comm, name, event);
+}
+
+
+void comm_source_set_private(int id)
+{
+	comm_source_set_private_(&hk_comm, id);
 }
 
 

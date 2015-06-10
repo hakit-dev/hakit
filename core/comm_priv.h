@@ -29,6 +29,7 @@ typedef struct comm_s comm_t;
 
 #define COMM_FLAG_EVENT   0x01
 #define COMM_FLAG_MONITOR 0x02
+#define COMM_FLAG_PRIVATE 0x03
 
 
 /*
