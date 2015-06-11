@@ -42,6 +42,10 @@ static hk_obj_t *_new(hk_obj_t *obj)
 
 	ctx->source = comm_source_register(obj->name, event);
 
+	if (hk_prop_get_int(&obj->props, "private")) {
+		comm_source_set_private(ctx->source);
+	}
+
 	return obj;
 }
 

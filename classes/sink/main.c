@@ -36,6 +36,7 @@ static void _event(ctx_t *ctx, char *name, char *value)
 static hk_obj_t *_new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
+	int id;
 
 	ctx = malloc(sizeof(ctx_t));
 	ctx->obj = obj;
@@ -44,7 +45,11 @@ static hk_obj_t *_new(hk_obj_t *obj)
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 	ctx->inv = hk_prop_get_int(&obj->props, "inv");
 
-	comm_sink_register(obj->name, (comm_sink_func_t) _event, ctx);
+	id = comm_sink_register(obj->name, (comm_sink_func_t) _event, ctx);
+
+	if (hk_prop_get_int(&obj->props, "private")) {
+		comm_sink_set_private(id);
+	}
 
 	return obj;
 }
