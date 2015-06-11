@@ -289,7 +289,7 @@ static void comm_sink_advertise(comm_t *comm, int reply)
 
 	for (i = 0; i < nsinks; i++) {
 		comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
-		if ((sink->name != NULL) && ((sink->flag & COMM_FLAG_MONITOR) == 0)) {
+		if ((sink->name != NULL) && ((sink->flag & (COMM_FLAG_MONITOR|COMM_FLAG_PRIVATE)) == 0)) {
 			if (buf.len == 0) {
 				buf_append_byte(&buf, UDP_SIGN);
 				buf_append_byte(&buf, UDP_TYPE_SINK);
@@ -342,13 +342,14 @@ static comm_sink_t *comm_sink_alloc(comm_t *comm)
 
 	sink = hk_tab_push(&comm->sinks);
 
+	sink->id = i;
 	buf_init(&sink->value);
 
 	return sink;
 }
 
 
-static void comm_sink_create(comm_t *comm, char *name, comm_sink_func_t func, void *user_data)
+static int comm_sink_register_(comm_t *comm, char *name, comm_sink_func_t func, void *user_data)
 {
 	comm_sink_t *sink = comm_sink_retrieve(comm, name);
 
@@ -357,17 +358,28 @@ static void comm_sink_create(comm_t *comm, char *name, comm_sink_func_t func, vo
 		sink->name = strdup(name);
 	}
 
+	log_debug(2, "comm_sink_register sink='%s' (%d elements)", name, comm->sinks.nmemb);
+
 	buf_set_str(&sink->value, "");
 	sink->func = func;
 	sink->user_data = user_data;
+
+	comm_advertise(comm);
+
+	return sink->id;
 }
 
 
-static void comm_sink_register_(comm_t *comm, char *name, comm_sink_func_t func, void *user_data)
+static void comm_sink_set_private_(comm_t *comm, int id)
 {
-	comm_sink_create(comm, name, func, user_data);
-	log_debug(2, "comm_sink_register sink='%s' (%d elements)", name, comm->sinks.nmemb);
-	comm_advertise(comm);
+	comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, id);
+
+	if (sink->name != NULL) {
+		sink->flag |= COMM_FLAG_PRIVATE;
+	}
+	else {
+		log_str("PANIC: Attempting to set PRIVATE flag on unknown sink #%d\n", id);
+	}
 }
 
 
@@ -393,9 +405,11 @@ static void comm_sink_unregister_(comm_t *comm, char *name)
 	comm_sink_t *sink = comm_sink_retrieve(comm, name);
 
 	if (sink != NULL) {
-		buf_cleanup(&sink->value);
 		free(sink->name);
-		memset(sink, 0, sizeof(comm_sink_t));
+		buf_cleanup(&sink->value);
+		sink->flag = 0;
+		sink->func = NULL;
+		sink->user_data = NULL;
 	}
 }
 #endif
@@ -516,7 +530,7 @@ static void comm_source_set_private_(comm_t *comm, int id)
 		source->flag |= COMM_FLAG_PRIVATE;
 	}
 	else {
-		log_str("PANIC: Attempting to update flag on unknown source #%d\n", id);
+		log_str("PANIC: Attempting to set PRIVATE flag on unknown source #%d\n", id);
 	}
 }
 
@@ -547,7 +561,8 @@ static void comm_source_unregister_(comm_t *comm, char *name)
 	if (source != NULL) {
 		free(source->name);
 		buf_cleanup(&source->value);
-		memset(source, 0, sizeof(comm_source_t));
+		source->flag = 0;
+		hk_tab_cleanup(&source->nodes);
 	}
 }
 #endif
@@ -600,7 +615,7 @@ static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *n
 	log_debug(3, "comm_source_send_initial_value source='%s' flag=%02X node=#%d='%s'", source->name, source->flag, node->id, node->name);
 
 	/* Do not send initial value if source is declared as an event or as a monitored source */
-	if (source->flag) {
+	if (source->flag & (COMM_FLAG_EVENT | COMM_FLAG_MONITOR)) {
 		return;
 	}
 
@@ -730,26 +745,28 @@ static void comm_udp_event_sink(comm_t *comm, int argc, char **argv)
 		}
 
 		/* If matching source is found, check for requesting node connection */
-		if ((source != NULL) && ((source->flag & COMM_FLAG_PRIVATE) == 0)) {
-			log_debug(2, "  sink='%s', source='%s'", sink_name, source->name);
+		if (source != NULL) {
+			log_debug(2, "  remote sink='%s', local source='%s'", sink_name, source->name);
 
-			struct sockaddr_in *addr = udp_srv_remote(&comm->udp_srv);
-			unsigned long addr_v = ntohl(addr->sin_addr.s_addr);
-			char name[32];
-			comm_node_t *node;
+			if ((source->flag & COMM_FLAG_PRIVATE) == 0) {
+				struct sockaddr_in *addr = udp_srv_remote(&comm->udp_srv);
+				unsigned long addr_v = ntohl(addr->sin_addr.s_addr);
+				char name[32];
+				comm_node_t *node;
 
-			/* Get remote IP address as node name */
-			snprintf(name, sizeof(name), "%lu.%lu.%lu.%lu",
-				 (addr_v >> 24) & 0xFF, (addr_v >> 16) & 0xFF, (addr_v >> 8) & 0xFF, addr_v & 0xFF);
+				/* Get remote IP address as node name */
+				snprintf(name, sizeof(name), "%lu.%lu.%lu.%lu",
+					 (addr_v >> 24) & 0xFF, (addr_v >> 16) & 0xFF, (addr_v >> 8) & 0xFF, addr_v & 0xFF);
 
-			/* Connect to node (if not already done) */
-			node = comm_node_add(comm, name);
+				/* Connect to node (if not already done) */
+				node = comm_node_add(comm, name);
 
-			/* Attach source to node (if not already done) */
-			comm_source_attach_node(source, node);
+				/* Attach source to node (if not already done) */
+				comm_source_attach_node(source, node);
+			}
 		}
 		else {
-			log_debug(2, "  sink='%s', no source", sink_name);
+			log_debug(2, "  remote sink='%s', no local source", sink_name);
 		}
 	}
 }
@@ -767,8 +784,8 @@ static void comm_udp_event_source(comm_t *comm, int argc, char **argv)
 		char *source_name = argv[i];
 		comm_sink_t *sink = comm_sink_retrieve(comm, source_name);
 
-		/* Check for sinks matching sources in request list */
-		if (sink != NULL) {
+		/* Check for non-private sinks matching sources in request list */
+		if ((sink != NULL) && ((sink->flag & COMM_FLAG_PRIVATE) == 0)) {
 			found = 1;
 			break;
 		}
@@ -1379,9 +1396,15 @@ void comm_monitor(comm_sink_func_t func, void *user_data)
 }
 
 
-void comm_sink_register(char *name, comm_sink_func_t func, void *user_data)
+int comm_sink_register(char *name, comm_sink_func_t func, void *user_data)
 {
-	comm_sink_register_(&hk_comm, name, func, user_data);
+	return comm_sink_register_(&hk_comm, name, func, user_data);
+}
+
+
+void comm_sink_set_private(int id)
+{
+	comm_sink_set_private_(&hk_comm, id);
 }
 
 

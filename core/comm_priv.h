@@ -52,6 +52,7 @@ typedef struct {
  */
 
 typedef struct {
+	int id;
 	char *name;              /* Sink name */
 	buf_t value;
 	unsigned int flag;
@@ -66,7 +67,7 @@ typedef struct {
 
 typedef struct {
 	int id;
-	char *name;
+	char *name;              /* Source name */
 	buf_t value;
 	unsigned int flag;
 	hk_tab_t nodes;       // Table of (comm_node_t *)

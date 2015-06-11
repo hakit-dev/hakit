@@ -23,7 +23,8 @@ typedef void (*comm_sink_func_t)(void *user_data, char *name, char *value);
 extern int comm_init(void);
 extern void comm_monitor(comm_sink_func_t func, void *user_data);
 
-extern void comm_sink_register(char *name, comm_sink_func_t func, void *user_data);
+extern int comm_sink_register(char *name, comm_sink_func_t func, void *user_data);
+extern void comm_sink_set_private(int id);
 
 extern int comm_source_register(char *name, int event);
 extern void comm_source_set_private(int id);

@@ -24,7 +24,7 @@ typedef struct {
 } hk_tab_t;
 
 extern void hk_tab_init(hk_tab_t *tab, int msize);
-extern void hk_tab_alloc(hk_tab_t *tab, int msize, int nmemb);
+extern void hk_tab_cleanup(hk_tab_t *tab);
 extern void *hk_tab_push(hk_tab_t *tab);
 extern void hk_tab_foreach(hk_tab_t *tab, hk_tab_foreach_func func, char *user_data);
 
