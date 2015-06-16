@@ -20,6 +20,8 @@
 #include "comm.h"
 #include "mod.h"
 #include "mod_init.h"
+#include "mod_load.h"
+
 #include "lws_config.h"
 #include "hakit_version.h"
 
@@ -113,6 +115,12 @@ int main(int argc, char *argv[])
 	/* Init module management */
 	if (hk_mod_init()) {
 		return 2;
+	}
+
+	if (argc > 1) {
+		if (hk_mod_load(argv[1])) {
+			return 3;
+		}
 	}
 
 	sys_run();
