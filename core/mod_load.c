@@ -13,6 +13,7 @@
 
 #include "log.h"
 #include "buf.h"
+#include "str_argv.h"
 #include "mod.h"
 #include "mod_load.h"
 
@@ -30,9 +31,23 @@ typedef struct {
 } load_ctx_t;
 
 
-static void hk_mod_load_line(load_ctx_t *ctx, char *line)
+static int hk_mod_load_object(load_ctx_t *ctx, char *name, char **argv)
 {
+	return 0;
+}
+
+
+static int hk_mod_load_net(load_ctx_t *ctx, char *name, char **argv)
+{
+	return 0;
+}
+
+
+static int hk_mod_load_line(load_ctx_t *ctx, char *line)
+{
+	int ret = 0;
 	char *name = NULL;
+	char **argv = NULL;
 	char *s;
 
 	log_debug(2, "hk_mod_load_line (%d) '%s'", ctx->lnum, line);
@@ -47,9 +62,10 @@ static void hk_mod_load_line(load_ctx_t *ctx, char *line)
 		}
 		else {
 			log_str("ERROR: %s:%s: unknown section definition '%s'", ctx->fname, ctx->lnum, line);
+			ret = -1;
 		}
 
-		return;
+		return ret;
 	}
 
 	/* Skip leadink blanks */
@@ -57,8 +73,9 @@ static void hk_mod_load_line(load_ctx_t *ctx, char *line)
 		line++;
 	}
 
+	/* Ignore empty lines */
 	if (*line == '\0') {
-		return;
+		return 0;
 	}
 
 	/* Try to extract element name */
@@ -73,14 +90,25 @@ static void hk_mod_load_line(load_ctx_t *ctx, char *line)
 		log_debug(2, "  name='%s'", name);
 	}
 
+	/* Extract element arguments */
+	str_argv(s, &argv);
+
 	switch (ctx->section) {
 	case SECTION_OBJECTS:
+		ret = hk_mod_load_object(ctx, name, argv);
 		break;
 	case SECTION_NETS:
+		ret = hk_mod_load_net(ctx, name, argv);
 		break;
 	default:
 		break;
 	}
+
+	if (argv != NULL) {
+		free(argv);
+	}
+
+	return ret;
 }
 
 

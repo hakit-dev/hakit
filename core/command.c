@@ -1,55 +1,19 @@
+/*
+ * HAKit - The Home Automation KIT
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
 #include <string.h>
-#include <errno.h>
 #include <malloc.h>
-#include <unistd.h>
 
-#include "options.h"
-#include "sys.h"
 #include "log.h"
-#include "io.h"
+#include "str_argv.h"
 #include "command.h"
-
-
-static int command_parse(char *line, char ***_argv)
-{
-	int argc = 0;
-	char **argv = malloc(sizeof(char *));
-
-	argv[argc] = NULL;
-
-	while (*line != '\0') {
-		while ((*line != '\0') && (*line <= ' ')) {
-			line++;
-		}
-		if (*line != '\0') {
-			argv = realloc(argv, (argc+2) * sizeof(char *));
-			argv[argc++] = line;
-			argv[argc] = NULL;
-
-			while (*line > ' ') {
-				line++;
-			}
-			if (*line != '\0') {
-				*(line++) = '\0';
-			}
-		}
-	}
-
-	if (opt_debug >= 3) {
-		int i;
-
-		log_printf("  =>");
-		for (i = 0; i < argc; i++) {
-			log_printf(" [%d]=\"%s\"", i, argv[i]);
-		}
-		log_printf("\n");
-	}
-
-	*_argv = argv;
-
-	return argc;
-}
 
 
 int command_recv(command_t *cmd, char *buf, int len)
@@ -78,7 +42,7 @@ int command_recv(command_t *cmd, char *buf, int len)
 				log_debug(2, "command_recv: '%s'", cmd->line.base);
 				if ((cmd->handler != NULL) && (cmd->line.len > 0)) {
 					char **argv = NULL;
-					int argc = command_parse((char *) cmd->line.base, &argv);
+					int argc = str_argv((char *) cmd->line.base, &argv);
 
 					cmd->handler(cmd->user_data, argc, argv);
 
