@@ -27,7 +27,7 @@ static hk_prop_entry_t *hk_prop_find(hk_prop_t *props, char *name)
 	int i;
 
 	for (i = 0; i < props->tab.nmemb; i++) {
-		hk_prop_entry_t *entry = ((hk_prop_entry_t *) &props->tab.buf) + i;
+		hk_prop_entry_t *entry = HK_TAB_PTR(props->tab, hk_prop_entry_t, i);
 		if (strcmp(entry->name, name) == 0) {
 			return entry;
 		}
@@ -48,6 +48,7 @@ void hk_prop_set(hk_prop_t *props, char *name, char *value)
 	else {
 		if (entry->value != NULL) {
 			free(entry->value);
+			entry->value = NULL;
 		}
 	}
 
@@ -78,12 +79,12 @@ int hk_prop_get_int(hk_prop_t *props, char *name)
 }
 
 
-void hk_prop_foreach(hk_prop_t *prop, hk_prop_foreach_func func, char *user_data)
+void hk_prop_foreach(hk_prop_t *props, hk_prop_foreach_func func, char *user_data)
 {
 	int i;
 
-	for (i = 0; i < prop->tab.nmemb; i++) {
-		hk_prop_entry_t *entry = ((hk_prop_entry_t *) &prop->tab.buf) + i;
+	for (i = 0; i < props->tab.nmemb; i++) {
+		hk_prop_entry_t *entry = HK_TAB_PTR(props->tab, hk_prop_entry_t, i);
 		if (!func(user_data, entry->name, entry->value)) {
 			return;
 		}

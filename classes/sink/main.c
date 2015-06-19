@@ -33,7 +33,7 @@ static void _event(ctx_t *ctx, char *name, char *value)
 }
 
 
-static hk_obj_t *_new(hk_obj_t *obj)
+static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
 	int id;
@@ -51,7 +51,7 @@ static hk_obj_t *_new(hk_obj_t *obj)
 		comm_sink_set_private(id);
 	}
 
-	return obj;
+	return 0;
 }
 
 

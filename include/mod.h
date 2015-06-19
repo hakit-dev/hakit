@@ -22,7 +22,7 @@ typedef struct hk_pad_s hk_pad_t;
 typedef struct hk_net_s hk_net_t;
 typedef struct hk_obj_s hk_obj_t;
 
-typedef hk_obj_t * (*hk_class_new_func)(hk_obj_t *obj);
+typedef int (*hk_class_new_func)(hk_obj_t *obj);
 typedef void (*hk_class_input_func)(hk_pad_t *pad, char *value);
 
 typedef struct {
@@ -68,7 +68,7 @@ extern void hk_pad_update_int(hk_pad_t *pad, int value);
 
 struct hk_net_s {
 	char *name;
-	hk_tab_t ppads;  /**< Table of (hk_pad_t *) */
+	hk_tab_t pads;  /**< Table of (hk_pad_t *) */
 };
 
 extern hk_net_t *hk_net_create(char *name);
@@ -84,11 +84,12 @@ struct hk_obj_s {
 	char *name;
 	hk_class_t *class;   /**< Class object is based on */
 	hk_prop_t props;     /**< Object properties */
-	hk_tab_t pads;       /**< Object pads : table of (hk_pad_t) */
+	hk_tab_t pads;       /**< Object pads : table of (hk_pad_t *) */
 	void *ctx;           /**< Class-specific context */
 };
 
-extern hk_obj_t *hk_obj_create(char *name, hk_class_t *class);
+extern hk_obj_t *hk_obj_create(hk_class_t *class, char *name, int argc, char **argv);
+extern hk_obj_t *hk_obj_find(char *name);
 
 extern void hk_obj_prop_set(hk_obj_t *obj, char *name, char *value);
 extern char *hk_obj_prop_get(hk_obj_t *obj, char *name);

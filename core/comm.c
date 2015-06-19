@@ -647,7 +647,7 @@ static void comm_source_send(comm_t *comm, int id)
 		/* Setup command to send */
 		len = snprintf(str, size-1, "set %s=%s", source->name, source->value.base);
 		log_debug(2, "comm_source_send cmd='%s' (%d nodes)", str, source->nodes.nmemb);
-		str[len++] = '\n';
+		str[len] = '\n';
 
 		if ((source->flag & COMM_FLAG_PRIVATE) == 0) {
 			/* Send to all nodes that subscribed this source */
@@ -661,6 +661,7 @@ static void comm_source_send(comm_t *comm, int id)
 		}
 
 		/* Send WebSocket event */
+		str[len] = '\0';
 		ws_events_send(comm->ws, str+4);
 	}
 	else {

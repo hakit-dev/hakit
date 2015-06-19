@@ -25,10 +25,11 @@ typedef struct {
 	hk_pad_t **inputs;
 	hk_pad_t *output;
 	int inv;
+	int refresh;
 } ctx_t;
 
 
-static hk_obj_t *_new(hk_obj_t *obj)
+static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
 	int ninputs;
@@ -37,7 +38,7 @@ static hk_obj_t *_new(hk_obj_t *obj)
 	ninputs = hk_prop_get_int(&obj->props, "ninputs");
 	if (ninputs < 2) {
 		log_str("ERROR: Class '" CLASS_NAME "': cannot instanciate object '%s' with less than 2 inputs", obj->name);
-		return NULL;
+		return -1;
 	}
 
 	ctx = malloc(sizeof(ctx_t));
@@ -53,7 +54,9 @@ static hk_obj_t *_new(hk_obj_t *obj)
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 	ctx->inv = hk_prop_get_int(&obj->props, "inv");
 
-	return obj;
+	ctx->refresh = 1;
+
+	return 0;
 }
 
 
@@ -72,7 +75,9 @@ static void _input(hk_pad_t *pad, char *value)
 		}
 	}
 
-	if (state != ctx->output->state) {
+	if ((state != ctx->output->state) || ctx->refresh) {
+		ctx->refresh = 0;
+
 		if (ctx->inv) {
 			state = 1 - state;
 		}

@@ -27,7 +27,7 @@ typedef struct {
 } ctx_t;
 
 
-static hk_obj_t *_new(hk_obj_t *obj)
+static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
 	int event;
@@ -46,7 +46,7 @@ static hk_obj_t *_new(hk_obj_t *obj)
 		comm_source_set_private(ctx->source);
 	}
 
-	return obj;
+	return 0;
 }
 
 

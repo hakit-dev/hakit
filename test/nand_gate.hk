@@ -1,5 +1,5 @@
 [objects]
-test_input_1: sink
+test_input_1: sink comment="Toto est \"rigolo\""
 test_input_2: sink
 nand_gate: and ninputs=2 inv
 test_output: source
