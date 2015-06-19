@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <malloc.h>
 
 #include "log.h"
@@ -32,6 +33,7 @@ typedef struct {
 static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
+	char *str;
 	int ninputs;
 	int i;
 
@@ -42,6 +44,7 @@ static int _new(hk_obj_t *obj)
 	}
 
 	ctx = malloc(sizeof(ctx_t));
+	memset(ctx, 0, sizeof(ctx_t));
 	ctx->obj = obj;
 	ctx->ninputs = ninputs;
 	ctx->inputs = calloc(ninputs, sizeof(hk_pad_t *));
@@ -52,7 +55,11 @@ static int _new(hk_obj_t *obj)
 	}
 
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
-	ctx->inv = hk_prop_get_int(&obj->props, "inv");
+
+	str = hk_prop_get_int(&obj->props, "inv");
+	if (str != NULL) {
+		ctx->inv = 1;
+	}
 
 	ctx->refresh = 1;
 

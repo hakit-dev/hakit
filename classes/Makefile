@@ -1,4 +1,4 @@
-CLASSES := sink source and
+CLASSES := sink source and pulse
 
 all::
 	for dir in $(CLASSES); do \
