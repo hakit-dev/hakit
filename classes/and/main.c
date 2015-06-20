@@ -56,7 +56,7 @@ static int _new(hk_obj_t *obj)
 
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 
-	str = hk_prop_get_int(&obj->props, "inv");
+	str = hk_prop_get(&obj->props, "inv");
 	if (str != NULL) {
 		ctx->inv = 1;
 	}
