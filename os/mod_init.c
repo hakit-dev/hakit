@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h>
 
 #include <sys/types.h>
 #include <dirent.h>
@@ -93,6 +94,12 @@ int hk_mod_init(void)
 		ret = hk_mod_init_dir(s1);
 
 		s1 = s2;
+	}
+
+	if (ret == 0) {
+		if (access("classes/Makefile", R_OK) == 0) {
+			ret = hk_mod_init_dir("classes");
+		}
 	}
 
 	if (ret == 0) {
