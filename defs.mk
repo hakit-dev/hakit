@@ -88,8 +88,6 @@ LWS_OUT_DIR = lws/out/$(ARCH)
 endif
 LWS_LIB_DIR = $(LWS_OUT_DIR)/lib
 
-LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
-
 
 #
 # Standard rules
