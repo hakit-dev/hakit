@@ -22,68 +22,6 @@ static int uevent_nhooks = 0;
 #endif
 
 
-int uevent_add(char *action, char *subsystem, uevent_func_t func, void *user_data)
-{
-#ifdef HAKIT_UEVENT_ENABLED
-	uevent_hook_t *hook;
-
-	log_debug(2, "uevent_add: action='%s' subsystem='%s'", action, subsystem);
-
-	/* Allocate new hook */
-	uevent_nhooks++;
-	uevent_hooks = realloc(uevent_hooks, uevent_nhooks * sizeof(uevent_hook_t));
-	hook = &uevent_hooks[uevent_nhooks-1];
-
-	hook->func = func;
-	hook->user_data = user_data;
-
-	if (action != NULL) {
-		hook->action = strdup(action);
-	}
-	else {
-		hook->action = NULL;
-	}
-
-	if (subsystem != NULL) {
-		hook->subsystem = strdup(subsystem);
-	}
-	else {
-		hook->subsystem = NULL;
-	}
-
-	return 0;
-#else
-	return -1;
-#endif /* HAKIT_UEVENT_ENABLED */
-}
-
-
-char *uevent_getenv(uevent_data_t *d, char *env)
-{
-#ifdef HAKIT_UEVENT_ENABLED
-	char env_str[strlen(env)+2];
-	int env_len;
-	int i;
-
-	env_len = snprintf(env_str, sizeof(env_str), "%s=", env);
-
-	i = 0;
-	while (i < d->size) {
-		char *str = d->buf + i;
-		int len = strlen(str);
-
-		if (strncmp(str, env_str, env_len) == 0) {
-			return str + env_len;
-		}
-
-		i += len + 1;
-	}
-#endif /* HAKIT_UEVENT_ENABLED */
-
-	return NULL;
-}
-
-
 #ifdef HAKIT_UEVENT_ENABLED
 
 static int uevent_event(void *arg, int fd)
@@ -145,7 +83,7 @@ static int uevent_event(void *arg, int fd)
 #endif /* HAKIT_UEVENT_ENABLED */
 
 
-int uevent_init(void)
+static int uevent_init(void)
 {
 #ifdef HAKIT_UEVENT_ENABLED
 	int sock;
@@ -194,4 +132,70 @@ int uevent_init(void)
 	log_str("ERROR: Netlink uevent not supported by this kernel");
 	return -1;
 #endif /* HAKIT_UEVENT_ENABLED */
+}
+
+
+int uevent_add(char *action, char *subsystem, uevent_func_t func, void *user_data)
+{
+#ifdef HAKIT_UEVENT_ENABLED
+	uevent_hook_t *hook;
+
+	/* Init uevent gears.
+	   This will have no effect if init was already done before */
+	uevent_init();
+
+	log_debug(2, "uevent_add: action='%s' subsystem='%s'", action, subsystem);
+
+	/* Allocate new hook */
+	uevent_nhooks++;
+	uevent_hooks = realloc(uevent_hooks, uevent_nhooks * sizeof(uevent_hook_t));
+	hook = &uevent_hooks[uevent_nhooks-1];
+
+	hook->func = func;
+	hook->user_data = user_data;
+
+	if (action != NULL) {
+		hook->action = strdup(action);
+	}
+	else {
+		hook->action = NULL;
+	}
+
+	if (subsystem != NULL) {
+		hook->subsystem = strdup(subsystem);
+	}
+	else {
+		hook->subsystem = NULL;
+	}
+
+	return 0;
+#else
+	return -1;
+#endif /* HAKIT_UEVENT_ENABLED */
+}
+
+
+char *uevent_getenv(uevent_data_t *d, char *env)
+{
+#ifdef HAKIT_UEVENT_ENABLED
+	char env_str[strlen(env)+2];
+	int env_len;
+	int i;
+
+	env_len = snprintf(env_str, sizeof(env_str), "%s=", env);
+
+	i = 0;
+	while (i < d->size) {
+		char *str = d->buf + i;
+		int len = strlen(str);
+
+		if (strncmp(str, env_str, env_len) == 0) {
+			return str + env_len;
+		}
+
+		i += len + 1;
+	}
+#endif /* HAKIT_UEVENT_ENABLED */
+
+	return NULL;
 }
