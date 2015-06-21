@@ -121,6 +121,7 @@ int main(int argc, char *argv[])
 		if (hk_mod_load(argv[1])) {
 			return 3;
 		}
+		hk_obj_start_all();
 	}
 
 	sys_run();

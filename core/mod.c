@@ -284,6 +284,19 @@ hk_obj_t *hk_obj_create(hk_class_t *class, char *name, int argc, char **argv)
 }
 
 
+void hk_obj_start_all(void)
+{
+	int i;
+
+	for (i = 0; i < objs.nmemb; i++) {
+		hk_obj_t *obj = HK_OBJ_ENTRY(i);
+		if (obj->class->start != NULL) {
+			obj->class->start(obj);
+		}
+	}
+}
+
+
 void hk_obj_prop_set(hk_obj_t *obj, char *name, char *value)
 {
 	log_debug(2, "Setting property for object '%s': %s='%s'", obj->name, name, value);
@@ -303,7 +316,7 @@ int hk_obj_prop_get_int(hk_obj_t *obj, char *name)
 }
 
 
-void hk_obj_prop_foreach(hk_obj_t *obj, hk_prop_foreach_func func, char *user_data)
+void hk_obj_prop_foreach(hk_obj_t *obj, hk_prop_foreach_func func, void *user_data)
 {
        hk_prop_foreach(&obj->props, func, user_data);
 }
