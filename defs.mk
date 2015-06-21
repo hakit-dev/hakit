@@ -78,6 +78,18 @@ else
 	echo '#define ARCH "$(ARCH)"' >>$(OUTDIR)/version.h
 endif
 
+#
+# WebSockets
+#
+ifneq ($(HAKIT),)
+LWS_OUT_DIR = $(HAKIT)/lws/out/$(ARCH)
+else
+LWS_OUT_DIR = lws/out/$(ARCH)
+endif
+LWS_LIB_DIR = $(LWS_OUT_DIR)/lib
+
+LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
+
 
 #
 # Standard rules

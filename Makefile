@@ -27,15 +27,13 @@ OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
 all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
+
 #
 # WebSockets
 #
-LWS_OUT_DIR = lws/out/$(ARCH)
-LWS_LIB_DIR = $(LWS_OUT_DIR)/lib
 LWS_SRC_DIR = lws/libwebsockets/lib
 
 CFLAGS += -I$(LWS_SRC_DIR) -I$(LWS_OUT_DIR)
-LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 
 .PHONY: lws
 lws:
