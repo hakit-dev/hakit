@@ -639,7 +639,7 @@ static void comm_source_send(comm_t *comm, int id)
 	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
 
 	if (source->name != NULL) {
-		int size = strlen(source->name) + source->value.len + 10;
+		int size = strlen(source->name) + source->value.len + 20;
 		char str[size];
 		int len;
 		int i;
@@ -661,7 +661,7 @@ static void comm_source_send(comm_t *comm, int id)
 		}
 
 		/* Send WebSocket event */
-		snprintf(str, size, "!source %s %s\n", source->name, source->value.base);
+		snprintf(str, size, "!source %d %s %s", source->flag, source->name, source->value.base);
 		ws_events_send(comm->ws, str);
 	}
 	else {
@@ -972,7 +972,7 @@ static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf
 					int size = strlen(sink->name) + sink->value.len + 10;
 					char str[size];
 
-					snprintf(str, size, "!sink %s %s\n", sink->name, sink->value.base);
+					snprintf(str, size, "!sink %d %s %s", sink->flag, sink->name, sink->value.base);
 					ws_events_send(comm->ws, str);
 				}
 
@@ -1004,6 +1004,30 @@ static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf
 }
 
 
+static void comm_command_dump_source(comm_source_t *source, buf_t *out_buf)
+{
+	buf_append_str(out_buf, "source ");
+	buf_append_int(out_buf, source->flag);
+	buf_append_byte(out_buf, ' ');
+	buf_append_str(out_buf, source->name);
+	buf_append_byte(out_buf, ' ');
+	buf_append(out_buf, source->value.base, source->value.len);
+	buf_append_byte(out_buf, '\n');
+}
+
+
+static void comm_command_dump_sink(comm_sink_t *sink, buf_t *out_buf)
+{
+	buf_append_str(out_buf, "sink ");
+	buf_append_int(out_buf, sink->flag);
+	buf_append_byte(out_buf, ' ');
+	buf_append_str(out_buf, sink->name);
+	buf_append_byte(out_buf, ' ');
+	buf_append(out_buf, sink->value.base, sink->value.len);
+	buf_append_byte(out_buf, '\n');
+}
+
+
 static void comm_command_get(comm_t *comm, int argc, char **argv, buf_t *out_buf)
 {
 	int i;
@@ -1012,21 +1036,13 @@ static void comm_command_get(comm_t *comm, int argc, char **argv, buf_t *out_buf
 		for (i = 1; i < argc; i++) {
 			comm_source_t *source = comm_source_retrieve(comm, argv[i]);
 			if (source != NULL) {
-				buf_append_str(out_buf, "source ");
-				buf_append_str(out_buf, source->name);
-				buf_append_byte(out_buf, ' ');
-				buf_append(out_buf, source->value.base, source->value.len);
-				buf_append_byte(out_buf, '\n');
+				comm_command_dump_source(source, out_buf);
 			}
 		}
 		for (i = 1; i < argc; i++) {
 			comm_sink_t *sink = comm_sink_retrieve(comm, argv[i]);
 			if (sink != NULL) {
-				buf_append_str(out_buf, "sink ");
-				buf_append_str(out_buf, sink->name);
-				buf_append_byte(out_buf, ' ');
-				buf_append(out_buf, sink->value.base, sink->value.len);
-				buf_append_byte(out_buf, '\n');
+				comm_command_dump_sink(sink, out_buf);
 			}
 		}
 	}
@@ -1034,21 +1050,13 @@ static void comm_command_get(comm_t *comm, int argc, char **argv, buf_t *out_buf
 		for (i = 0; i < comm->sources.nmemb; i++) {
 			comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
 			if (source->name != NULL) {
-				buf_append_str(out_buf, "source ");
-				buf_append_str(out_buf, source->name);
-				buf_append_byte(out_buf, ' ');
-				buf_append(out_buf, source->value.base, source->value.len);
-				buf_append_byte(out_buf, '\n');
+				comm_command_dump_source(source, out_buf);
 			}
 		}
 		for (i = 0; i < comm->sinks.nmemb; i++) {
 			comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
 			if (sink->name != NULL) {
-				buf_append_str(out_buf, "sink ");
-				buf_append_str(out_buf, sink->name);
-				buf_append_byte(out_buf, ' ');
-				buf_append(out_buf, sink->value.base, sink->value.len);
-				buf_append_byte(out_buf, '\n');
+				comm_command_dump_sink(sink, out_buf);
 			}
 		}
 	}

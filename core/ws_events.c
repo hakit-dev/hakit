@@ -153,6 +153,7 @@ static void ws_events_send_session(char *str, struct per_session_data__events *p
 	}
 
 	buf_append_str(&pss->out_buf, str);
+	buf_append_byte(&pss->out_buf, '\n');
 }
 
 

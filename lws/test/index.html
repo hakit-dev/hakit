@@ -3,7 +3,9 @@
   <head>
     <meta charset=utf-8 http-equiv="Content-Language" content="en"/>
     <title>HAKit Diagnostic</title>
-    <link rel="stylesheet" type="text/css" href="style.css">
+    <link rel="stylesheet" type="text/css" href="pure-min.css">
+    <link rel="stylesheet" type="text/css" href="tables.css">
+    <link rel="stylesheet" type="text/css" href="buttons.css">
   </head>
 
   <body>
@@ -19,17 +21,28 @@
 
     <!-- <input type="button" id="offset" value="Get" onclick="get_all();" > -->
 
-    <table id="signals">
+    <table class="pure-table">
       <thead>
 	<tr>
 	  <th>Direction</th>
+	  <th>Flag</th>
 	  <th>Signal</th>
 	  <th>Value</th>
 	</tr>
       </thead>
-      <tbody>
+      <tbody id="signals">
      </tbody>
     </table>
+
+<div class="three">
+  <div class="button-wrap">
+    <div class="button-bg">
+      <div class="button-out"></div>
+      <div class="button-in"></div>
+      <div class="button-switch"></div>
+    </div>
+  </div>
+</div>
 
     <script src="BrowserDetect.js"></script>
     <script src="hakit.js"></script>

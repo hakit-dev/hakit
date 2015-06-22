@@ -43,7 +43,12 @@ function add_signal(line)
 {
     console.log("add_signal('"+line+"')");
     var signals = document.getElementById("signals");
-    var row = signals.insertRow(signals.rows.length);
+    var len = signals.rows.length;
+    var row = signals.insertRow(len);
+    if (len % 2) {
+	row.className = "pure-table-odd";
+    }
+
     var fields = line.split(" ");
     for (var i = 0; i < fields.length; i++) {
 	row.insertCell(i).innerHTML = fields[i];
@@ -57,14 +62,19 @@ function update_signal(line)
     var rows = signals.rows;
     var fields = line.split(" ");
 
+    // Update row with new value
     for (var i = 0; i < rows.length; i++) {
-	var cells = rows[i].cells;
-	if (cells[1].innerHTML == fields[1]) {
-	    cells[0].innerHTML = fields[0];
-	    cells[2].innerHTML = fields[2];
-	    break;
+	var row = rows[i];
+	if (row.cells[2].innerHTML == fields[2]) {
+	    row.cells[0].innerHTML = fields[0];
+	    row.cells[1].innerHTML = fields[1];
+	    row.cells[3].innerHTML = fields[3];
+	    return;
 	}
     }
+
+    // If row not found, refresh the whole list
+    get_all();
 }
 
 
@@ -139,3 +149,8 @@ try {
 } catch(exception) {
     alert('<p>ERROR: ' + exception + '</p>');  
 }
+
+
+$('.button-wrap').on("click", function(){
+  $(this).toggleClass('button-active');
+});
