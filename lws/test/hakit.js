@@ -30,7 +30,84 @@ function get_appropriate_ws_url()
 }
 
 
+function clear_signals()
+{
+    var signals = document.getElementById("signals");
+    while (signals.rows.length > 1) {
+	signals.deleteRow(1);
+    }
+}
+
+
+function add_signal(line)
+{
+    console.log("add_signal('"+line+"')");
+    var signals = document.getElementById("signals");
+    var row = signals.insertRow(signals.rows.length);
+    var fields = line.split(" ");
+    for (var i = 0; i < fields.length; i++) {
+	row.insertCell(i).innerHTML = fields[i];
+    }
+}
+
+function update_signal(line)
+{
+    console.log("update_signal('"+line+"')");
+    var signals = document.getElementById("signals");
+    var rows = signals.rows;
+    var fields = line.split(" ");
+
+    for (var i = 0; i < rows.length; i++) {
+	var cells = rows[i].cells;
+	if (cells[1].innerHTML == fields[1]) {
+	    cells[0].innerHTML = fields[0];
+	    cells[2].innerHTML = fields[2];
+	    break;
+	}
+    }
+}
+
+
 var sock;
+
+const ST_READY = 0;
+const ST_GET_CMD = 1;
+const ST_GET_RSP = 2;
+var sock_state = ST_READY;
+
+
+function recv_line(line) {
+    if (line == ".") {
+	sock_state = ST_READY;
+    }
+    else if (line.substr(0,1) == "!") {
+	update_signal(line.substr(1));
+    }
+    else {
+	switch (sock_state) {
+	    case ST_READY:
+	        break;
+	    case ST_GET_CMD:
+	        sock_state = ST_GET_RSP;
+	        clear_signals();
+	    case ST_GET_RSP:
+	        add_signal(line);
+	        break;
+	}
+    }
+}
+
+
+function get_all() {
+    if (sock_state == ST_READY) {
+	sock.send("get\n");
+	sock_state = ST_GET_CMD;
+    }
+    else {
+	console.log("WARNING: Attempting to send command in sock state "+sock_state);
+    }
+}
+
 
 if (typeof MozWebSocket != "undefined") {
     sock = new MozWebSocket(get_appropriate_ws_url(), "hakit-events-protocol");
@@ -42,11 +119,17 @@ try {
     sock.onopen = function() {
 	document.getElementById("ws_status_td").style.backgroundColor = "#40ff40";
 	document.getElementById("ws_status").textContent = "Connected";
+	get_all();
     } 
 
     sock.onmessage = function got_packet(msg) {
-//	document.getElementById("number").textContent = msg.data + "\n";
-	document.forms.f.output.value = msg.data + "\n";
+	var lines = msg.data.split("\n");
+	for (var i = 0; i < lines.length; i++) {
+	    var line = lines[i];
+	    if (line != "") {
+		recv_line(line);
+	    }
+	}
     } 
 
     sock.onclose = function(){
@@ -55,8 +138,4 @@ try {
     }
 } catch(exception) {
     alert('<p>ERROR: ' + exception + '</p>');  
-}
-
-function get_all() {
-    sock.send("get\n");
 }

@@ -32,7 +32,7 @@ static struct libwebsocket_protocols *ws_events_protocol = NULL;
 
 static void ws_events_command(struct per_session_data__events *pss, int argc, char **argv)
 {
-	log_debug(2, "ws_events_command [%04X]", pss->id);
+	log_debug(2, "ws_events_command [%04X]: '%s'%s", pss->id, argv[0], (argc > 1) ? " ...":"");
 	ws_call_command_handler(pss->ws, argc, argv, &pss->out_buf);
 	log_debug_data(pss->out_buf.base, pss->out_buf.len);
 }
@@ -88,10 +88,11 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		/* Execute command */
 		command_recv(pss->cmd, in, len);
 
+		/* Append end of response mark */
+		buf_append_str(&pss->out_buf, ".\n");
+
 		/* Trig response write */
-		if (pss->out_buf.len > LWS_SEND_BUFFER_PRE_PADDING) {
-			libwebsocket_callback_on_writable(context, wsi);
-		}
+		libwebsocket_callback_on_writable(context, wsi);
 		break;
 
 	case LWS_CALLBACK_CLOSED:
@@ -119,6 +120,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		log_debug(2, "ws_events_callback LWS_CALLBACK_FILTER_PROTOCOL_CONNECTION [%04X]", pss->id);
 		ws_dump_handshake_info(wsi);
 		/* you could return non-zero here and kill the connection */
+//		return -1;
 		break;
 
 	default:
@@ -143,6 +145,8 @@ void ws_events_init(struct libwebsocket_protocols *protocol)
 
 static void ws_events_send_session(char *str, struct per_session_data__events *pss)
 {
+	log_debug(2, "ws_events_send_session  [%04X] '%s'", pss->id, str);
+
 	/* Make sure send buffer has room for pre-padding */
 	if (pss->out_buf.len == 0) {
 		buf_append_zero(&pss->out_buf, LWS_SEND_BUFFER_PRE_PADDING);

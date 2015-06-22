@@ -659,9 +659,18 @@ void ws_session_remove(ws_t *ws, void *pss)
 }
 
 
-void ws_session_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data)
+void ws_session_foreach(ws_t *ws, ws_session_foreach_func func, void *user_data)
 {
-	hk_tab_foreach(&ws->sessions, func, user_data);
+	int i;
+
+	for (i = 0; i < ws->sessions.nmemb; i++) {
+		void *pss = HK_TAB_VALUE(ws->sessions, void *, i);
+		if (pss != NULL) {
+			if (func != NULL) {
+				func(user_data, pss);
+			}
+		}
+	}
 }
 
 

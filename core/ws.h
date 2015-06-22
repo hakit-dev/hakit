@@ -48,8 +48,9 @@ extern void ws_set_command_handler(ws_t *ws, ws_command_handler_t handler, void 
 extern void ws_call_command_handler(ws_t *ws, int argc, char **argv, buf_t *out_buf);
 
 /* WebSocket session list management */
+typedef int (*ws_session_foreach_func)(void * user_data, void *pss);
 extern int ws_session_add(ws_t *ws, void *pss);
 extern void ws_session_remove(ws_t *ws, void *pss);
-extern void ws_session_foreach(ws_t *ws, hk_tab_foreach_func func, char *user_data);
+extern void ws_session_foreach(ws_t *ws, ws_session_foreach_func func, void *user_data);
 
 #endif /* __HAKIT_WS_H__ */

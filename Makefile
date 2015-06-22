@@ -48,6 +48,7 @@ classes:
 	make -C classes
 
 LDFLAGS += -rdynamic -ldl
+LDFLAGS += -lefence
 
 #
 # HAKit libs and bins

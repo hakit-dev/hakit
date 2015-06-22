@@ -12,12 +12,24 @@
 	<td id="brow">...</td>
 	<td id="ws_status_td" align="center" class="explain"><div id="ws_status">Not initialized</div></td>
       </tr>
+       <tr>
+ 	 <td id="dbg"></td>
+       </tr>
     </table>
 
-    <input type="button" id="offset" value="Get" onclick="get_all();" >
-    <form name="f">
-      <textarea name="output" onfocus="document.forms.f.output.blur()"></textarea>
-    </form>
+    <!-- <input type="button" id="offset" value="Get" onclick="get_all();" > -->
+
+    <table id="signals">
+      <thead>
+	<tr>
+	  <th>Direction</th>
+	  <th>Signal</th>
+	  <th>Value</th>
+	</tr>
+      </thead>
+      <tbody>
+     </tbody>
+    </table>
 
     <script src="BrowserDetect.js"></script>
     <script src="hakit.js"></script>
