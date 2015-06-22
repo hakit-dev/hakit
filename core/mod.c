@@ -145,9 +145,9 @@ void hk_pad_update_int(hk_pad_t *pad, int value)
  * HAKit nets
  */
 
-static HK_TAB_DECLARE(nets, hk_net_t);
+static HK_TAB_DECLARE(nets, hk_net_t *);
 
-#define HK_NET_ENTRY(i) HK_TAB_PTR(nets, hk_net_t, i)
+#define HK_NET_ENTRY(i) HK_TAB_VALUE(nets, hk_net_t *, i)
 
 
 hk_net_t *hk_net_find(char *name)
@@ -168,6 +168,7 @@ hk_net_t *hk_net_find(char *name)
 hk_net_t *hk_net_create(char *name)
 {
 	hk_net_t *net = hk_net_find(name);
+	hk_net_t **pnet;
 
 	if (net != NULL) {
 		log_str("ERROR: Net '%s' already exists", name);
@@ -176,10 +177,13 @@ hk_net_t *hk_net_create(char *name)
 
 	log_debug(2, "Creating net '%s'", name);
 
-	net = hk_tab_push(&nets);
-
+	net = (hk_net_t *) malloc(sizeof(hk_net_t));
+	memset(net, 0, sizeof(hk_net_t));
 	net->name = strdup(name);
 	hk_tab_init(&net->pads, sizeof(hk_pad_t *));
+
+	pnet = hk_tab_push(&nets);
+	*pnet = net;
 
 	return net;
 }
