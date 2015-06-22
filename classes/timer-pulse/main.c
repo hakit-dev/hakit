@@ -19,7 +19,7 @@
 #include "version.h"
 
 
-#define CLASS_NAME "pulse"
+#define CLASS_NAME "timer-pulse"
 
 #define	EDGE_RAISING 0x01
 #define	EDGE_FALLING 0x02

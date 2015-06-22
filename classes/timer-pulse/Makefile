@@ -5,6 +5,6 @@ OUTDIR := device/$(ARCH)
 
 include $(HAKIT)/defs.mk
 
-all:: $(OUTDIR)/pulse.so
+all:: $(OUTDIR)/timer-pulse.so
 
-$(OUTDIR)/pulse.so: $(OUTDIR)/main.o
+$(OUTDIR)/timer-pulse.so: $(OUTDIR)/main.o
