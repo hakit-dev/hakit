@@ -2,74 +2,25 @@
 <html lang="en">
   <head>
     <meta charset=utf-8 http-equiv="Content-Language" content="en"/>
-    <title>Minimal Websocket test app</title>
+    <title>HAKit Diagnostic</title>
     <link rel="stylesheet" type="text/css" href="style.css">
   </head>
 
   <body>
-    <header></header>
-    <article>
-      <table>
-	<tr>
-	  <td>
-	    <table width="100%">
-	      <tr>
-		<td valign=middle align=center>
-		  <a href="http://libwebsockets.org"><img src="/libwebsockets.org-logo.png"></a>
-		</td>
-		<td>
-		  <section class="browser">Detected Browser: <div id=brow>...</div></section>
-	        </td>
-	      </tr>
-	    </table>
-	  </td>
-	</tr>
-	<tr>
-	  <td>
-	    <section id="increment" class="group2">
-	      <div class="title">libwebsockets "dumb-increment-protocol"</div>
-	      <table>
-		<tr>
-		  <td>
-		    <table class="content" width="200px">
-		      <tr>
-			<td align=center><input type=button id=offset value="Reset counter" onclick="reset();" ></td>
-		      </tr>
-		      <tr>
-			<td width=200px align=center><div id=number> </div></td>
-		      </tr>
-		      <tr>
-			<td id=wsdi_statustd align=center class="explain"><div id=wsdi_status>Not initialized</div></td>
-		      </tr>
- 		    </table>
-		  </td>
-		  <td>
-		    &leftarrow;
-		  </td>
-		  <td class="explain">
-		    The incrementing number is coming from the server and is individual for
-		    each connection to the server... try opening a second browser window.
-		    <br/><br/>
-		    The button zeros just this connection's number.
-		    <br/><br/>
-		    Click <a href="/leaf.jpg" target="_blank">Here</a> to have the test server send a big picture by http.
-		  </td>
-		</tr>
-	      </table>
-	    </section>
-	  </td>
-	</tr>
-	<tr>
-	  <td>
-	    Looking for support? <a href="http://libwebsockets.org">http://libwebsockets.org</a><br/>
-	    Join the mailing list: ​<a href="http://ml.libwebsockets.org/mailman/listinfo/libwebsockets">http://ml.libwebsockets.org/mailman/listinfo/libwebsockets</a>
-          </td>
-        </tr>
-      </table>
-    </article>
+    <table>
+      <tr>
+	<td id="brow">...</td>
+	<td id="ws_status_td" align="center" class="explain"><div id="ws_status">Not initialized</div></td>
+      </tr>
+    </table>
+
+    <input type="button" id="offset" value="Get" onclick="get_all();" >
+    <form name="f">
+      <textarea name="output" onfocus="document.forms.f.output.blur()"></textarea>
+    </form>
 
     <script src="BrowserDetect.js"></script>
-    <script src="app.js"></script>
+    <script src="hakit.js"></script>
 
   </body>
 </html>
