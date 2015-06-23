@@ -72,11 +72,11 @@ function add_signal(line)
     var str = "";
     if ((fields[0] == 'sink') && (fields[1] & FLAG_PRIVATE)) {
 	var id = fields[2];
-	str = '<div class="switch demo1"><input type="checkbox" id="'+id+'" onclick="switch_clicked(this);"';
+	str = '<div class="switch demo3"><input type="checkbox" id="'+id+'" onclick="switch_clicked(this);"';
 	if ((fields[3] != '0') && (fields[3] != '')) {
 	    str += ' checked';
 	}
-	str += '><label></label></div>';
+	str += '><label><i></i></label></div>';
     }
 
     row.insertCell(4).innerHTML = str;

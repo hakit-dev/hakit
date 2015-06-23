@@ -170,8 +170,8 @@
 /* DEMO 3 */
 
 .switch.demo3 {
-  width: 180px;
-  height: 50px;
+  width: 70px;
+  height: 20px;
 }
 
 .switch.demo3 label {
@@ -198,11 +198,11 @@
   background: -webkit-gradient(linear, 0 0, 0 100%, from(#f2f2f2), to(#ababab));
   background: -webkit-linear-gradient(#f2f2f2, #ababab);
   background: linear-gradient(#f2f2f2, #ababab);
-  box-shadow: 0 0 10px rgba(0,0,0,0.3),
-        0 1px 1px rgba(0,0,0,0.25);
+  /*box-shadow: 0 0 10px rgba(0,0,0,0.3),
+        0 1px 1px rgba(0,0,0,0.25);*/
 }
 
-.switch.demo3 label:before {
+/*.switch.demo3 label:before {
   content: "";
   position: absolute;
   z-index: -1;
@@ -222,7 +222,7 @@
   -ms-filter: blur(1px);
   -o-filter: blur(1px);
   filter: blur(1px);
-}
+}*/
 
 .switch.demo3 label i {
   display: block;
@@ -272,11 +272,11 @@
   color: rgba(0,0,0,0.4);
   text-shadow: 0 1px 0 #bcb8ae, 0 -1px 0 #97958e;
   font-family: Helvetica, Arial, sans-serif;
-  font-size: 24px;
+  font-size: 12px;
   position: absolute;
   top: 50%;
-  margin-top: -12px;
-  right: -50%;
+  margin-top: -9px;
+  right: -56%;
 }
 
 .switch.demo3 input:checked ~ label {
@@ -289,7 +289,7 @@
 
 .switch.demo3 input:checked ~ label i:before {
   content: "on";
-  right: 115%;
+  right: 110%;
   color: #82a06a;
   text-shadow: 
     0 1px 0 #afcb9b,
