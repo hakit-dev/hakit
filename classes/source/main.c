@@ -22,8 +22,7 @@
 typedef struct {
 	hk_obj_t *obj;
 	hk_pad_t *input;
-	int inv;
-	int source;
+	int id;
 } ctx_t;
 
 
@@ -37,13 +36,12 @@ static int _new(hk_obj_t *obj)
 	obj->ctx = ctx;
 
 	ctx->input = hk_pad_create(obj, HK_PAD_IN, "in");
-	ctx->inv = hk_prop_get_int(&obj->props, "inv");
-	event = (hk_prop_get_int(&obj->props, "event") > 0) ? 1:0;
+	event = (hk_prop_get(&obj->props, "event") != NULL) ? 1:0;
 
-	ctx->source = comm_source_register(obj->name, event);
+	ctx->id = comm_source_register(obj->name, event);
 
-	if (hk_prop_get_int(&obj->props, "private")) {
-		comm_source_set_private(ctx->source);
+	if (hk_prop_get(&obj->props, "private") != NULL) {
+		comm_source_set_private(ctx->id);
 	}
 
 	return 0;
@@ -53,7 +51,7 @@ static int _new(hk_obj_t *obj)
 static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
-	comm_source_update_str(ctx->source, value);
+	comm_source_update_str(ctx->id, value);
 }
 
 

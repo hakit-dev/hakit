@@ -1,5 +1,5 @@
 [objects]
-input: sink
+input: sink private
 pulse: timer-pulse delay=3000
 output: source
 

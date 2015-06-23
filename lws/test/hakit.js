@@ -1,7 +1,13 @@
-BrowserDetect.init();
+var sock;
 
-document.getElementById("brow").textContent = " " + BrowserDetect.browser + " "
-	+ BrowserDetect.version +" " + BrowserDetect.OS +" ";
+const ST_READY = 0;
+const ST_GET_CMD = 1;
+const ST_GET_RSP = 2;
+var sock_state = ST_READY;
+
+const FLAG_EVENT = 0x01;
+const FLAG_PRIVATE = 0x02;
+
 
 function get_appropriate_ws_url()
 {
@@ -39,6 +45,14 @@ function clear_signals()
 }
 
 
+function switch_clicked(elmt)
+{
+    console.log("switch_clicked "+elmt.id+" "+elmt.checked);
+    var st = elmt.checked ? 1:0;
+    sock.send("set "+elmt.id+"="+st+"\n");
+}
+
+
 function add_signal(line)
 {
     console.log("add_signal('"+line+"')");
@@ -50,9 +64,22 @@ function add_signal(line)
     }
 
     var fields = line.split(" ");
-    for (var i = 0; i < fields.length; i++) {
+    var i;
+    for (i = 0; (i < fields.length) && (i < 5); i++) {
 	row.insertCell(i).innerHTML = fields[i];
     }
+
+    var str = "";
+    if ((fields[0] == 'sink') && (fields[1] & FLAG_PRIVATE)) {
+	var id = fields[2];
+	str = '<div class="switch demo1"><input type="checkbox" id="'+id+'" onclick="switch_clicked(this);"';
+	if ((fields[3] != '0') && (fields[3] != '')) {
+	    str += ' checked';
+	}
+	str += '><label></label></div>';
+    }
+
+    row.insertCell(4).innerHTML = str;
 }
 
 function update_signal(line)
@@ -65,10 +92,16 @@ function update_signal(line)
     // Update row with new value
     for (var i = 0; i < rows.length; i++) {
 	var row = rows[i];
-	if (row.cells[2].innerHTML == fields[2]) {
-	    row.cells[0].innerHTML = fields[0];
-	    row.cells[1].innerHTML = fields[1];
-	    row.cells[3].innerHTML = fields[3];
+	var id = fields[2];
+	if (row.cells[2].innerHTML == id) {
+	    var value = fields[3];
+	    row.cells[3].innerHTML = value;
+	    if ((value != '') && (value != '0')) {
+		document.getElementById(id).checked = true;
+	    }
+	    else {
+		document.getElementById(id).checked = false;
+	    }
 	    return;
 	}
     }
@@ -76,14 +109,6 @@ function update_signal(line)
     // If row not found, refresh the whole list
     get_all();
 }
-
-
-var sock;
-
-const ST_READY = 0;
-const ST_GET_CMD = 1;
-const ST_GET_RSP = 2;
-var sock_state = ST_READY;
 
 
 function recv_line(line) {
@@ -119,6 +144,12 @@ function get_all() {
 }
 
 
+/* Detect and show browser */
+BrowserDetect.init();
+document.getElementById("brow").textContent = " " + BrowserDetect.browser + " "
+	+ BrowserDetect.version +" " + BrowserDetect.OS +" ";
+
+/* Setup WebSocket connection */
 if (typeof MozWebSocket != "undefined") {
     sock = new MozWebSocket(get_appropriate_ws_url(), "hakit-events-protocol");
 } else {
@@ -149,8 +180,3 @@ try {
 } catch(exception) {
     alert('<p>ERROR: ' + exception + '</p>');  
 }
-
-
-$('.button-wrap').on("click", function(){
-  $(this).toggleClass('button-active');
-});

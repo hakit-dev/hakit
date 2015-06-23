@@ -27,9 +27,9 @@ typedef struct comm_s comm_t;
  * Source/Sink flags
  */
 
-#define COMM_FLAG_EVENT   0x01
-#define COMM_FLAG_MONITOR 0x02
-#define COMM_FLAG_PRIVATE 0x03
+#define COMM_FLAG_EVENT   0x0001
+#define COMM_FLAG_PRIVATE 0x0002
+#define COMM_FLAG_MONITOR 0x1000
 
 
 /*
