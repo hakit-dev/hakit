@@ -96,11 +96,15 @@ function update_signal(line)
 	if (row.cells[2].innerHTML == id) {
 	    var value = fields[3];
 	    row.cells[3].innerHTML = value;
-	    if ((value != '') && (value != '0')) {
-		document.getElementById(id).checked = true;
-	    }
-	    else {
-		document.getElementById(id).checked = false;
+
+	    var control = document.getElementById(id);
+	    if (control) {
+		if ((value != '') && (value != '0')) {
+		    control.checked = true;
+		}
+		else {
+		    control.checked = false;
+		}
 	    }
 	    return;
 	}
@@ -112,6 +116,8 @@ function update_signal(line)
 
 
 function recv_line(line) {
+    //console.log("recv_line('"+line+"')");
+
     if (line == ".") {
 	sock_state = ST_READY;
     }
