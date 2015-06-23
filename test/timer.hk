@@ -1,0 +1,14 @@
+[objects]
+input: sink private
+pulse: timer-pulse delay=3000
+pulse-output: source
+on: timer-on delay=1000
+on-output: source
+off: timer-off delay=5000
+off-output: source
+
+[nets]
+input.out pulse.in on.in off.in
+pulse.out pulse-output.in
+on.out on-output.in
+off.out off-output.in

@@ -1,8 +1,0 @@
-[objects]
-input: sink private
-pulse: timer-pulse delay=3000
-output: source
-
-[nets]
-input.out pulse.in
-pulse.out output.in
