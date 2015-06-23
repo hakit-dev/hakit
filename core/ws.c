@@ -629,10 +629,12 @@ int ws_session_add(ws_t *ws, void *pss)
 	void **ppss = NULL;
 	int i;
 
+	ws->salt++;
+	ws->salt &= 0xFF;
+
 	for (i = 0; i < ws->sessions.nmemb; i++) {
 		ppss = HK_TAB_PTR(ws->sessions, void *, i);
 		if (*ppss == NULL) {
-			ws->salt++;
 			goto done;
 		}
 	}
@@ -641,7 +643,7 @@ int ws_session_add(ws_t *ws, void *pss)
 done:
 	*ppss = pss;
 
-	return ((ws->salt << 8) & 0xFF00) + (i & 0xFF);
+	return (ws->salt << 8) + (i & 0xFF);
 }
 
 
