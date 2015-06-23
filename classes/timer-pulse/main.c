@@ -93,8 +93,8 @@ static void _input(hk_pad_t *pad, char *value)
 
 	pad->state = atoi(value) ? 1:0;
 
-	if (((ctx->edge | EDGE_RAISING) && (state0 == 0) && (pad->state == 1)) ||
-	    ((ctx->edge | EDGE_FALLING) && (state0 == 1) && (pad->state == 0))) {
+	if (((ctx->edge & EDGE_RAISING) && (state0 == 0) && (pad->state == 1)) ||
+	    ((ctx->edge & EDGE_FALLING) && (state0 == 1) && (pad->state == 0))) {
 		if ((ctx->output->state == 0) || ctx->retrigger) {
 			if (ctx->timeout_tag != 0) {
 				sys_remove(ctx->timeout_tag);
