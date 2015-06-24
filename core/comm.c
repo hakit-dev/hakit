@@ -1360,7 +1360,7 @@ static int comm_init_(comm_t *comm, int port)
 	if (comm->ws == NULL) {
 		goto DONE;
 	}
-	ws_set_document_root(comm->ws, "lws/test");
+	ws_set_document_root(comm->ws, "ui");
 	ws_set_command_handler(comm->ws, (ws_command_handler_t) comm_command_process, comm);
 
 	ret = 0;
