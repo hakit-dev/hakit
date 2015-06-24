@@ -94,10 +94,29 @@ function add_signal(line)
     }
 
     var flag = fields[1];
+    var value = fields[3];
     var str = "";
-    if ((fields[0] == 'sink') && (flag & FLAG_PRIVATE)) {
-	//str = switch_def_push(fields[2]);
-	str = switch_def_slide(fields[2], fields[3]);
+    if (fields[0] == 'sink') {
+	if (flag & FLAG_PRIVATE) {
+	    //str = switch_def_push(fields[2]);
+	    str = switch_def_slide(fields[2], value);
+	}
+	else {
+	    if ((value != '') && (value != '0')) {
+		str = '<div class="led led-green"></div>';
+	    }
+	    else {
+		str = '<div class="led led"></div>';
+	    }
+	}
+    }
+    else if (fields[0] == 'source') {
+	if ((value != '') && (value != '0')) {
+	    str = '<div class="led led-red"></div>';
+	}
+	else {
+	    str = '<div class="led led"></div>';
+	}
     }
 
     row.insertCell(4).innerHTML = str;
@@ -118,13 +137,33 @@ function update_signal(line)
 	    var value = fields[3];
 	    row.cells[3].innerHTML = value;
 
-	    var control = document.getElementById(id);
-	    if (control) {
-		if ((value != '') && (value != '0')) {
-		    control.checked = true;
+	    if (fields[0] == 'sink') {
+		var control = document.getElementById(id);
+		if (control) {
+		    if ((value != '') && (value != '0')) {
+			control.checked = true;
+			control.active = true;
+		    }
+		    else {
+			control.checked = false;
+			control.active = false;
+		    }
 		}
 		else {
-		    control.checked = false;
+		    if ((value != '') && (value != '0')) {
+			row.cells[4].innerHTML = '<div class="led led-green"></div>';
+		    }
+		    else {
+			row.cells[4].innerHTML = '<div class="led led"></div>';
+		    }
+		}
+	    }
+	    else {
+		if ((value != '') && (value != '0')) {
+		    row.cells[4].innerHTML = '<div class="led led-red"></div>';
+		}
+		else {
+		    row.cells[4].innerHTML = '<div class="led led"></div>';
 		}
 	    }
 	    return;
