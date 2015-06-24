@@ -11,6 +11,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <errno.h>
+#include <dirent.h>
 
 #include "hakit_version.h"
 #include "log.h"
@@ -113,14 +114,9 @@ static int ws_http_request(struct libwebsocket_context *context,
 		goto try_to_reuse;
 	}
 
-	/* This server has no concept of directory listing */
-	if (strchr(uri+1, '/') != NULL) {
-		libwebsockets_return_http_status(context, wsi, HTTP_STATUS_FORBIDDEN, NULL);
-		goto try_to_reuse;
-	}
-
 	/* If a legal POST URL, let it continue and accept data */
 	if (lws_hdr_total_length(wsi, WSI_TOKEN_POST_URI)) {
+		log_debug(2, "=> POST");
 		return 0;
 	}
 
@@ -158,18 +154,43 @@ static int ws_http_request(struct libwebsocket_context *context,
 		/* Construct full file name */
 		file_path_size = ws->document_root_len + len + 20;
 		file_path = malloc(file_path_size);
-		file_path_len = snprintf(file_path, file_path_size, "%s/%s", ws->document_root, uri);
 
-		if (file_path[file_path_len-1] == '/') {
-			strcpy(file_path+file_path_len, "index.html");
+		strcpy(file_path, ws->document_root);
+		file_path_len = ws->document_root_len;
+
+		if (uri[0] != '/') {
+			file_path[file_path_len++] = '/';
 		}
 
-		/* Open file */
-		pss->f = fopen(file_path, "r");
-		if (pss->f == NULL) {
-			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
-			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
-			goto failed;
+		strcpy(file_path+file_path_len, uri);
+		file_path_len += len;
+
+		/* Check if URI targets a directory */
+		DIR *d = opendir(file_path);
+		if (d != NULL) {
+			closedir(d);
+
+			/* Try to access 'index.html' in this directory */
+			if (file_path[file_path_len-1] != '/') {
+				file_path[file_path_len++] = '/';
+			}
+			strcpy(file_path+file_path_len, "index.html");
+
+			/* This server has no concept of directory listing */
+			pss->f = fopen(file_path, "r");
+			if (pss->f == NULL) {
+				libwebsockets_return_http_status(context, wsi, HTTP_STATUS_FORBIDDEN, NULL);
+				goto try_to_reuse;
+			}
+		}
+		else {
+			/* Not a directory: open file */
+			pss->f = fopen(file_path, "r");
+			if (pss->f == NULL) {
+				log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
+				libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
+				goto failed;
+			}
 		}
 
 		/* Get and check mime type */
@@ -184,6 +205,8 @@ static int ws_http_request(struct libwebsocket_context *context,
 		fseek(pss->f, 0, SEEK_END);
 		content_length = ftell(pss->f);
 		fseek(pss->f, 0, SEEK_SET);
+
+		log_debug(2, "=> '%s' %s (%d bytes)", file_path, mimetype, content_length);
 	}
 
 	/*
