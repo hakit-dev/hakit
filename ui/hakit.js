@@ -45,11 +45,35 @@ function clear_signals()
 }
 
 
+function switch_update(elmt, st)
+{
+    console.log("switch_update "+elmt.id+" "+st);
+    sock.send("set "+elmt.id+"="+st+"\n");
+}
+
+
 function switch_clicked(elmt)
 {
-    console.log("switch_clicked "+elmt.id+" "+elmt.checked);
     var st = elmt.checked ? 1:0;
-    sock.send("set "+elmt.id+"="+st+"\n");
+    switch_update(elmt, st);
+}
+
+
+function switch_def_slide(id, st)
+{
+    var str = '<div class="switch slide"><input type="checkbox" id="'+id+'" onclick="switch_clicked(this);"';
+    if ((st != '0') && (st != '')) {
+	str += ' checked';
+    }
+    str += '><label><i></i></label></div>';
+
+    return str;
+}
+
+
+function switch_def_push(id)
+{
+    return '<div class="switch push"><input type="button" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_update(this,0);"><label></label></div>';
 }
 
 
@@ -69,14 +93,11 @@ function add_signal(line)
 	row.insertCell(i).innerHTML = fields[i];
     }
 
+    var flag = fields[1];
     var str = "";
-    if ((fields[0] == 'sink') && (fields[1] & FLAG_PRIVATE)) {
-	var id = fields[2];
-	str = '<div class="switch demo3"><input type="checkbox" id="'+id+'" onclick="switch_clicked(this);"';
-	if ((fields[3] != '0') && (fields[3] != '')) {
-	    str += ' checked';
-	}
-	str += '><label><i></i></label></div>';
+    if ((fields[0] == 'sink') && (flag & FLAG_PRIVATE)) {
+	//str = switch_def_push(fields[2]);
+	str = switch_def_slide(fields[2], fields[3]);
     }
 
     row.insertCell(4).innerHTML = str;

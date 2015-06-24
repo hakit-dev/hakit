@@ -1,3 +1,6 @@
+/* HAKit CSS switches */
+/* Shamelessly inspired from http://tympanus.net/codrops/2012/09/13/button-switches-with-checkboxes-and-css3-fanciness/ */
+
 
 /* GLOBALS */
 
@@ -26,14 +29,16 @@
   cursor: pointer;
 }
 
-/* DEMO 1 */
+/* Push button with LED.
+   Could be either used as a bistable button (as input type=checkbox),
+   or an astable push button (as input type=button). */
 
-.switch.demo1 {
+.switch.push {
   width: 30px;
   height: 30px;
 }
 
-.switch.demo1 label {
+.switch.push label {
   border-radius: 50%;
   background: #eaeaea;
   box-shadow: 
@@ -43,7 +48,7 @@
       inset 0 5px 5px rgba(255,255,255,0.3);
 }
 
-.switch.demo1 label:after {
+.switch.push label:after {
   content: "";
   position: absolute;
   top: -8%; right: -8%; bottom: -8%; left: -8%;
@@ -61,7 +66,7 @@
     0 2px 5px rgba(200,200,200,0.1);
 }
 
-.switch.demo1 label:before {
+.switch.push label:before {
   content: "";
   position: absolute;
   width: 20%;
@@ -77,7 +82,7 @@
       inset 0 1px 0 white;
 }
 
-.switch.demo1 input:checked ~ label {
+.switch.push input:checked ~ label {
   background: #dedede;
   background: -moz-linear-gradient(#dedede, #fdfdfd);
   background: -ms-linear-gradient(#dedede, #fdfdfd);
@@ -87,7 +92,7 @@
   background: linear-gradient(#dedede, #fdfdfd);
 }
 
-.switch.demo1 input:checked ~ label:before {
+.switch.push input:checked ~ label:before {
   background: #25d025;
   background: radial-gradient(40% 35%, #5aef5a, #25d025 60%);
   box-shadow:
@@ -96,7 +101,27 @@
       0 0 10px 2px rgba(0, 210, 0, 0.5);
 }
 
-/* DEMO 2 */
+.switch.push input:active ~ label {
+  background: #dedede;
+  background: -moz-linear-gradient(#dedede, #fdfdfd);
+  background: -ms-linear-gradient(#dedede, #fdfdfd);
+  background: -o-linear-gradient(#dedede, #fdfdfd);
+  background: -webkit-gradient(linear, 0 0, 0 100%, from(#dedede), to(#fdfdfd));
+  background: -webkit-linear-gradient(#dedede, #fdfdfd);
+  background: linear-gradient(#dedede, #fdfdfd);
+}
+
+.switch.push input:active ~ label:before {
+  background: #25d025;
+  background: radial-gradient(40% 35%, #5aef5a, #25d025 60%);
+  box-shadow:
+      inset 0 3px 5px 1px rgba(0,0,0,0.1),
+      0 1px 0 rgba(255,255,255,0.4),
+      0 0 10px 2px rgba(0, 210, 0, 0.5);
+}
+
+
+/* Flip-flop button */
 
 .switch.demo2 {
   width: 50px;
@@ -167,14 +192,14 @@
       0 8px 6px rgba(0,0,0,0.18);
 }
 
-/* DEMO 3 */
+/* Slide switch */
 
-.switch.demo3 {
+.switch.slide {
   width: 70px;
   height: 20px;
 }
 
-.switch.demo3 label {
+.switch.slide label {
   display: block;
   width: 100%;
   height: 100%;
@@ -185,7 +210,7 @@
       0 1px 0 rgba(255,255,255,0.5);
 }
 
-.switch.demo3 label:after {
+.switch.slide label:after {
   content: "";
   position: absolute;
   z-index: -1;
@@ -202,7 +227,7 @@
         0 1px 1px rgba(0,0,0,0.25);*/
 }
 
-/*.switch.demo3 label:before {
+/*.switch.slide label:before {
   content: "";
   position: absolute;
   z-index: -1;
@@ -224,7 +249,7 @@
   filter: blur(1px);
 }*/
 
-.switch.demo3 label i {
+.switch.slide label i {
   display: block;
   height: 100%;
   width: 60%;
@@ -247,7 +272,7 @@
       0 5px 5px rgba(0,0,0,0.2);
 }
 
-.switch.demo3 label i:after {
+.switch.slide label i:after {
   content: "";
   position: absolute;
   left: 15%;
@@ -264,7 +289,7 @@
   border-radius: inherit;
 }
 
-.switch.demo3 label i:before {
+.switch.slide label i:before {
   content: "off";
   text-transform: uppercase;
   font-style: normal;
@@ -274,20 +299,20 @@
   font-family: Helvetica, Arial, sans-serif;
   font-size: 12px;
   position: absolute;
-  top: 50%;
+  top: 60%;
   margin-top: -9px;
   right: -56%;
 }
 
-.switch.demo3 input:checked ~ label {
+.switch.slide input:checked ~ label {
   background: #9abb82;
 }
 
-.switch.demo3 input:checked ~ label i {
+.switch.slide input:checked ~ label i {
   right: -1%;
 }
 
-.switch.demo3 input:checked ~ label i:before {
+.switch.slide input:checked ~ label i:before {
   content: "on";
   right: 110%;
   color: #82a06a;
@@ -296,7 +321,7 @@
     0 -1px 0 #6b8659;
 }
 
-/* DEMO 4 */
+/* Power button */
 
 .switch.demo4 {
   width: 150px;
