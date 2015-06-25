@@ -214,7 +214,7 @@
   content: "";
   position: absolute;
   z-index: -1;
-  top: -8px; right: -8px; bottom: -8px; left: -8px;
+  /*top: -8px; right: -8px; bottom: -8px; left: -8px;*/
   border-radius: inherit;
   background: #ababab;
   background: -moz-linear-gradient(#f2f2f2, #ababab);
