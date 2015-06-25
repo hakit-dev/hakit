@@ -59,6 +59,13 @@ function switch_clicked(elmt)
 }
 
 
+function switch_release(elmt)
+{
+    elmt.checked = false;
+    switch_update(elmt, 0);
+}
+
+
 function widget_led(widget, value)
 {
     if ((value != '') && (value != '0')) {
@@ -86,11 +93,16 @@ function widget_switch_slide(id, value)
 
 function widget_switch_push(id, value)
 {
-    var str = '<div class="switch push"><input type="button" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_update(this,0);"';
+    /*var str = '<div class="switch push"><input type="button" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_update(this,0);"';
     if ((value != '0') && (value != '')) {
 	str += ' active';
     }
-    str += '><label></label></div>';
+    str += '><label></label></div>';*/
+    var str = '<div class="switch push"><input type="checkbox" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_release(this);"';
+    if ((value != '0') && (value != '')) {
+	str += ' checked';
+    }
+    str += '><label><i></i></label></div>';
 
     return str;
 }
@@ -155,14 +167,7 @@ function update_signal(line)
 	    else {
 		var control = document.getElementById(name);
 		if (control) {
-		    if ((value != '') && (value != '0')) {
-			control.checked = true;
-			control.active = true;
-		    }
-		    else {
-			control.checked = false;
-			control.active = false;
-		    }
+		    control.checked = ((value != '') && (value != '0'));
 		}
 	    }
 	    return;
@@ -175,7 +180,7 @@ function update_signal(line)
 
 
 function recv_line(line) {
-    console.log("recv_line('"+line+"')");
+    //console.log("recv_line('"+line+"')");
 
     if (line == ".") {
 	sock_state = ST_READY;
