@@ -24,6 +24,7 @@ typedef struct {
 	hk_obj_t *obj;
 	hk_pad_t *output;
 	int id;
+	int local;
 } ctx_t;
 
 
@@ -45,13 +46,13 @@ static int _new(hk_obj_t *obj)
 
 	ctx->id = comm_sink_register(obj->name, (comm_sink_func_t) _event, ctx);
 
-	if (hk_prop_get(&obj->props, "private") != NULL) {
-		comm_sink_set_private(ctx->id);
+	ctx->local = (hk_prop_get(&obj->props, "local") != NULL);
+	if (ctx->local) {
+		comm_sink_set_local(ctx->id);
 	}
 
 	return 0;
 }
-
 
 hk_class_t _class = {
 	.name = CLASS_NAME,

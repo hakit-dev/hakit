@@ -24,10 +24,10 @@ extern int comm_init(void);
 extern void comm_monitor(comm_sink_func_t func, void *user_data);
 
 extern int comm_sink_register(char *name, comm_sink_func_t func, void *user_data);
-extern void comm_sink_set_private(int id);
+extern void comm_sink_set_local(int id);
 
 extern int comm_source_register(char *name, int event);
-extern void comm_source_set_private(int id);
+extern void comm_source_set_local(int id);
 extern void comm_source_update_str(int id, char *value);
 extern void comm_source_update_int(int id, int value);
 
