@@ -34,13 +34,16 @@ static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
 	char *str;
-	int ninputs;
+	int ninputs = 1;
 	int i;
 
-	ninputs = hk_prop_get_int(&obj->props, "ninputs");
-	if (ninputs < 2) {
-		log_str("ERROR: Class '" CLASS_NAME "': cannot instanciate object '%s' with less than 2 inputs", obj->name);
-		return -1;
+	str = hk_prop_get(&obj->props, "ninputs");
+	if (str != NULL) {
+		ninputs = atoi(str);
+		if (ninputs < 1) {
+			log_str("ERROR: Class '" CLASS_NAME "': cannot instanciate object '%s' with less than 1 input", obj->name);
+			return -1;
+		}
 	}
 
 	ctx = malloc(sizeof(ctx_t));
