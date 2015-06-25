@@ -1,4 +1,4 @@
-CLASSES := sink source and \
+CLASSES := sink source and or \
 	timer-pulse timer-on timer-off
 
 all::

@@ -1,5 +1,7 @@
 [objects]
-input: sink private
+input1: sink private
+input2: sink
+input: or ninputs=2
 pulse: timer-pulse delay=3000
 pulse-output: source
 on: timer-on delay=1000
@@ -8,6 +10,8 @@ off: timer-off delay=5000
 off-output: source
 
 [nets]
+input1.out input.in1
+input2.out input.in2
 input.out pulse.in on.in off.in
 pulse.out pulse-output.in
 on.out on-output.in
