@@ -383,6 +383,26 @@ static void comm_sink_set_local_(comm_t *comm, int id)
 }
 
 
+static void comm_sink_set_widget_(comm_t *comm, int id, char *widget_name)
+{
+	comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, id);
+
+	if (sink->name != NULL) {
+		log_debug(2, "comm_sink_set_widget_ '%s'", widget_name);
+		if (sink->widget != NULL) {
+			free(sink->widget);
+			sink->widget = NULL;
+		}
+		if (widget_name != NULL) {
+			sink->widget = strdup(widget_name);
+		}
+	}
+	else {
+		log_str("PANIC: Attempting to set widget name on unknown sink #%d\n", id);
+	}
+}
+
+
 static comm_sink_t *comm_sink_monitor(comm_t *comm, char *name)
 {
 	comm_sink_t *sink;
@@ -413,6 +433,25 @@ static void comm_sink_unregister_(comm_t *comm, char *name)
 	}
 }
 #endif
+
+
+
+static char *comm_sink_widget(comm_sink_t *sink)
+{
+	char *widget;
+
+	if (sink->widget != NULL) {
+		widget = sink->widget;
+	}
+	else if (sink->flag & COMM_FLAG_LOCAL) {
+		widget = "switch-slide";
+	}
+	else {
+		widget = "led-green";
+	}
+
+	return widget;
+}
 
 
 /*
@@ -535,6 +574,26 @@ static void comm_source_set_local_(comm_t *comm, int id)
 }
 
 
+static void comm_source_set_widget_(comm_t *comm, int id, char *widget_name)
+{
+	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
+
+	if (source->name != NULL) {
+		log_debug(2, "comm_source_set_widget_ '%s'", widget_name);
+		if (source->widget != NULL) {
+			free(source->widget);
+			source->widget = NULL;
+		}
+		if (widget_name != NULL) {
+			source->widget = strdup(widget_name);
+		}
+	}
+	else {
+		log_str("PANIC: Attempting to set widget name on unknown source #%d\n", id);
+	}
+}
+
+
 static comm_source_t *comm_source_monitor(comm_t *comm, char *name)
 {
 	comm_source_t *source;
@@ -610,6 +669,21 @@ static void comm_source_attach_node(comm_source_t *source, comm_node_t *node)
 }
 
 
+static char *comm_source_widget(comm_source_t *source)
+{
+	char *widget;
+
+	if (source->widget != NULL) {
+		widget = source->widget;
+	}
+	else {
+		widget = "led-red";
+	}
+
+	return widget;
+}
+
+
 static void comm_source_send_initial_value(comm_source_t *source, comm_node_t *node)
 {
 	log_debug(3, "comm_source_send_initial_value source='%s' flag=%02X node=#%d='%s'", source->name, source->flag, node->id, node->name);
@@ -639,7 +713,7 @@ static void comm_source_send(comm_t *comm, int id)
 	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
 
 	if (source->name != NULL) {
-		int size = strlen(source->name) + source->value.len + 20;
+		int size = strlen(source->name) + source->value.len + 80;
 		char str[size];
 		int len;
 		int i;
@@ -661,7 +735,7 @@ static void comm_source_send(comm_t *comm, int id)
 		}
 
 		/* Send WebSocket event */
-		snprintf(str, size, "!source %d %s %s", source->flag, source->name, source->value.base);
+		snprintf(str, size, "!source %s %s %s", comm_source_widget(source), source->name, source->value.base);
 		ws_events_send(comm->ws, str);
 	}
 	else {
@@ -969,10 +1043,10 @@ static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf
 
 				/* Send WebSocket event */
 				{
-					int size = strlen(sink->name) + sink->value.len + 10;
+					int size = strlen(sink->name) + sink->value.len + 80;
 					char str[size];
 
-					snprintf(str, size, "!sink %d %s %s", sink->flag, sink->name, sink->value.base);
+					snprintf(str, size, "!sink %s %s %s", comm_sink_widget(sink), sink->name, sink->value.base);
 					ws_events_send(comm->ws, str);
 				}
 
@@ -1007,7 +1081,7 @@ static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf
 static void comm_command_dump_source(comm_source_t *source, buf_t *out_buf)
 {
 	buf_append_str(out_buf, "source ");
-	buf_append_int(out_buf, source->flag);
+	buf_append_str(out_buf, comm_source_widget(source));
 	buf_append_byte(out_buf, ' ');
 	buf_append_str(out_buf, source->name);
 	buf_append_byte(out_buf, ' ');
@@ -1019,7 +1093,7 @@ static void comm_command_dump_source(comm_source_t *source, buf_t *out_buf)
 static void comm_command_dump_sink(comm_sink_t *sink, buf_t *out_buf)
 {
 	buf_append_str(out_buf, "sink ");
-	buf_append_int(out_buf, sink->flag);
+	buf_append_str(out_buf, comm_sink_widget(sink));
 	buf_append_byte(out_buf, ' ');
 	buf_append_str(out_buf, sink->name);
 	buf_append_byte(out_buf, ' ');
@@ -1427,6 +1501,12 @@ void comm_sink_set_local(int id)
 }
 
 
+void comm_sink_set_widget(int id, char *widget_name)
+{
+	comm_sink_set_widget_(&hk_comm, id, widget_name);
+}
+
+
 int comm_source_register(char *name, int event)
 {
 	return comm_source_register_(&hk_comm, name, event);
@@ -1436,6 +1516,12 @@ int comm_source_register(char *name, int event)
 void comm_source_set_local(int id)
 {
 	comm_source_set_local_(&hk_comm, id);
+}
+
+
+void comm_source_set_widget(int id, char *widget_name)
+{
+	comm_source_set_widget_(&hk_comm, id, widget_name);
 }
 
 

@@ -1,6 +1,6 @@
 [objects]
 input1: sink local
-input2: sink local
+input2: sink local widget=switch-push
 input3: sink
 input: or ninputs=3
 pulse: timer-pulse delay=3000

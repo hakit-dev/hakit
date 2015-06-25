@@ -56,6 +56,7 @@ typedef struct {
 	char *name;              /* Sink name */
 	buf_t value;
 	unsigned int flag;
+	char *widget;
 	comm_sink_func_t func;   /* Handler to call when sink is updated */
 	void *user_data;
 } comm_sink_t;
@@ -70,6 +71,7 @@ typedef struct {
 	char *name;              /* Source name */
 	buf_t value;
 	unsigned int flag;
+	char *widget;
 	hk_tab_t nodes;       // Table of (comm_node_t *)
 } comm_source_t;
 

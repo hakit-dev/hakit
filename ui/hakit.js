@@ -59,10 +59,23 @@ function switch_clicked(elmt)
 }
 
 
-function switch_def_slide(id, st)
+function widget_led(widget, value)
+{
+    if ((value != '') && (value != '0')) {
+	str = '<div class="led '+widget+'"></div>';
+    }
+    else {
+	str = '<div class="led led"></div>';
+    }
+
+    return str;
+}
+
+
+function widget_switch_slide(id, value)
 {
     var str = '<div class="switch slide"><input type="checkbox" id="'+id+'" onclick="switch_clicked(this);"';
-    if ((st != '0') && (st != '')) {
+    if ((value != '0') && (value != '')) {
 	str += ' checked';
     }
     str += '><label><i></i></label></div>';
@@ -71,9 +84,15 @@ function switch_def_slide(id, st)
 }
 
 
-function switch_def_push(id)
+function widget_switch_push(id, value)
 {
-    return '<div class="switch push"><input type="button" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_update(this,0);"><label></label></div>';
+    var str = '<div class="switch push"><input type="button" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_update(this,0);"';
+    if ((value != '0') && (value != '')) {
+	str += ' active';
+    }
+    str += '><label></label></div>';
+
+    return str;
 }
 
 
@@ -88,39 +107,29 @@ function add_signal(line)
     }
 
     var fields = line.split(" ");
-    var i;
-    for (i = 0; (i < fields.length) && (i < 5); i++) {
-	row.insertCell(i).innerHTML = fields[i];
-    }
-
-    var flag = fields[1];
+    var dir = fields[0];
+    var widget = fields[1];
+    var name = fields[2];
     var value = fields[3];
+
+    row.insertCell(0).innerHTML = dir;
+    row.insertCell(1).innerHTML = name;
+    row.insertCell(2).innerHTML = value;
+
     var str = "";
-    if (fields[0] == 'sink') {
-	if (flag & FLAG_PRIVATE) {
-	    //str = switch_def_push(fields[2]);
-	    str = switch_def_slide(fields[2], value);
-	}
-	else {
-	    if ((value != '') && (value != '0')) {
-		str = '<div class="led led-green"></div>';
-	    }
-	    else {
-		str = '<div class="led led"></div>';
-	    }
-	}
+    if (widget.substr(0, 4) == 'led-') {
+	str = widget_led(widget, value);
     }
-    else if (fields[0] == 'source') {
-	if ((value != '') && (value != '0')) {
-	    str = '<div class="led led-red"></div>';
-	}
-	else {
-	    str = '<div class="led led"></div>';
-	}
+    else if (widget == 'switch-slide') {
+	str = widget_switch_slide(name, value);
+    }
+    else if (widget == 'switch-push') {
+	str = widget_switch_push(name, value);
     }
 
-    row.insertCell(4).innerHTML = str;
+    row.insertCell(3).innerHTML = str;
 }
+
 
 function update_signal(line)
 {
@@ -128,17 +137,23 @@ function update_signal(line)
     var signals = document.getElementById("signals");
     var rows = signals.rows;
     var fields = line.split(" ");
+    var dir = fields[0];
+    var widget = fields[1];
+    var name = fields[2];
+    var value = fields[3];
 
     // Update row with new value
     for (var i = 0; i < rows.length; i++) {
 	var row = rows[i];
-	var id = fields[2];
-	if (row.cells[2].innerHTML == id) {
-	    var value = fields[3];
-	    row.cells[3].innerHTML = value;
 
-	    if (fields[0] == 'sink') {
-		var control = document.getElementById(id);
+	if (row.cells[1].innerHTML == name) {
+	    row.cells[2].innerHTML = value;
+
+	    if (widget.substr(0, 4) == 'led-') {
+		row.cells[3].innerHTML = widget_led(widget, value);
+	    }
+	    else {
+		var control = document.getElementById(name);
 		if (control) {
 		    if ((value != '') && (value != '0')) {
 			control.checked = true;
@@ -148,22 +163,6 @@ function update_signal(line)
 			control.checked = false;
 			control.active = false;
 		    }
-		}
-		else {
-		    if ((value != '') && (value != '0')) {
-			row.cells[4].innerHTML = '<div class="led led-green"></div>';
-		    }
-		    else {
-			row.cells[4].innerHTML = '<div class="led led"></div>';
-		    }
-		}
-	    }
-	    else {
-		if ((value != '') && (value != '0')) {
-		    row.cells[4].innerHTML = '<div class="led led-red"></div>';
-		}
-		else {
-		    row.cells[4].innerHTML = '<div class="led led"></div>';
 		}
 	    }
 	    return;
@@ -176,7 +175,7 @@ function update_signal(line)
 
 
 function recv_line(line) {
-    //console.log("recv_line('"+line+"')");
+    console.log("recv_line('"+line+"')");
 
     if (line == ".") {
 	sock_state = ST_READY;
@@ -231,12 +230,14 @@ try {
 
     sock.onmessage = function got_packet(msg) {
 	var lines = msg.data.split("\n");
+	//console.log("=== ["+msg.data.length+"] "+lines.length+" '"+msg.data+"'");
 	for (var i = 0; i < lines.length; i++) {
 	    var line = lines[i];
 	    if (line != "") {
 		recv_line(line);
 	    }
 	}
+	//console.log("===");
     } 
 
     sock.onclose = function(){

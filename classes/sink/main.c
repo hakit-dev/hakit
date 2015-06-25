@@ -46,16 +46,32 @@ static int _new(hk_obj_t *obj)
 
 	ctx->id = comm_sink_register(obj->name, (comm_sink_func_t) _event, ctx);
 
-	ctx->local = (hk_prop_get(&obj->props, "local") != NULL);
-	if (ctx->local) {
+	if (hk_prop_get(&obj->props, "local") != NULL) {
 		comm_sink_set_local(ctx->id);
+	}
+
+	char *widget = hk_prop_get(&obj->props, "widget");
+	if (widget != NULL) {
+		comm_sink_set_widget(ctx->id, widget);
 	}
 
 	return 0;
 }
 
+static void _start(hk_obj_t *obj)
+{
+	ctx_t *ctx = obj->ctx;
+
+	char *value = hk_prop_get(&obj->props, "default");
+	if (value != NULL) {
+		hk_pad_update_str(ctx->output, value);
+	}
+}
+
+
 hk_class_t _class = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
+	.start = _start,
 };

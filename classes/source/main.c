@@ -23,7 +23,6 @@ typedef struct {
 	hk_obj_t *obj;
 	hk_pad_t *input;
 	int id;
-	int local;
 } ctx_t;
 
 
@@ -41,10 +40,11 @@ static int _new(hk_obj_t *obj)
 
 	ctx->id = comm_source_register(obj->name, event);
 
-	ctx->local = (hk_prop_get(&obj->props, "local") != NULL);
-	if (ctx->local) {
+	if (hk_prop_get(&obj->props, "local") != NULL) {
 		comm_source_set_local(ctx->id);
 	}
+
+	comm_source_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
 
 	return 0;
 }
