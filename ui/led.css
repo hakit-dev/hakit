@@ -4,7 +4,7 @@
     height: 10px;
     border-radius: 50%;
     background-color: rgba(0, 0, 0, 0.25);
-    box-shadow: #000 0 -1px 6px 1px;
+    box-shadow: #000 0 -1px 1px 1px;
 }
 .led-red {
     background-color: #F00;
