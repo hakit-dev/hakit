@@ -713,7 +713,7 @@ static void comm_source_send(comm_t *comm, int id)
 	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
 
 	if (source->name != NULL) {
-		int size = strlen(source->name) + source->value.len + 80;
+		int size = strlen(source->name) + source->value.len + 20;
 		char str[size];
 		int len;
 		int i;
@@ -735,7 +735,7 @@ static void comm_source_send(comm_t *comm, int id)
 		}
 
 		/* Send WebSocket event */
-		snprintf(str, size, "!source %s %s %s", comm_source_widget(source), source->name, source->value.base);
+		snprintf(str, size, "!%s %s", source->name, source->value.base);
 		ws_events_send(comm->ws, str);
 	}
 	else {
@@ -1043,10 +1043,10 @@ static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf
 
 				/* Send WebSocket event */
 				{
-					int size = strlen(sink->name) + sink->value.len + 80;
+					int size = strlen(sink->name) + sink->value.len + 4;
 					char str[size];
 
-					snprintf(str, size, "!sink %s %s %s", comm_sink_widget(sink), sink->name, sink->value.base);
+					snprintf(str, size, "!%s %s", sink->name, sink->value.base);
 					ws_events_send(comm->ws, str);
 				}
 

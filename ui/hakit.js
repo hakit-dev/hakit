@@ -93,12 +93,7 @@ function widget_switch_slide(id, value)
 
 function widget_switch_push(id, value)
 {
-    /*var str = '<div class="switch push"><input type="button" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_update(this,0);"';
-    if ((value != '0') && (value != '')) {
-	str += ' active';
-    }
-    str += '><label></label></div>';*/
-    var str = '<div class="switch push"><input type="checkbox" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_release(this);"';
+    var str = '<div class="switch push"><input type="checkbox" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_release(this);" onmouseout="switch_release(this);";';
     if ((value != '0') && (value != '')) {
 	str += ' checked';
     }
@@ -140,6 +135,10 @@ function add_signal(line)
     }
 
     row.insertCell(3).innerHTML = str;
+
+    var cell = row.insertCell(4);
+    cell.hidden = true;
+    cell.innerHTML = widget;
 }
 
 
@@ -149,10 +148,8 @@ function update_signal(line)
     var signals = document.getElementById("signals");
     var rows = signals.rows;
     var fields = line.split(" ");
-    var dir = fields[0];
-    var widget = fields[1];
-    var name = fields[2];
-    var value = fields[3];
+    var name = fields[0];
+    var value = fields[1];
 
     // Update row with new value
     for (var i = 0; i < rows.length; i++) {
@@ -160,6 +157,7 @@ function update_signal(line)
 
 	if (row.cells[1].innerHTML == name) {
 	    row.cells[2].innerHTML = value;
+	    var widget = row.cells[4].innerHTML;
 
 	    if (widget.substr(0, 4) == 'led-') {
 		row.cells[3].innerHTML = widget_led(widget, value);
