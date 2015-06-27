@@ -22,8 +22,8 @@ LIB_DIR = $(OUTDIR)/lib
 INC = $(SRC_DIR)/lib/libwebsockets.h
 LIB = $(LIB_DIR)/libwebsockets.a
 
-ifeq ($(ARCH),mips)
-CMAKE_FLAGS = -DCMAKE_TOOLCHAIN_FILE=../../cross-mips-openwrt.cmake
+ifdef CROSS_COMPILE
+CMAKE_FLAGS = -DCMAKE_TOOLCHAIN_FILE=../../cross-openwrt.cmake
 #CMAKE_FLAGS += -DOPENSSL_ROOT_DIR="$(STAGING_DIR)/target-mips_r2_uClibc-0.9.33.2/usr"
 endif
 CMAKE_FLAGS += -DLWS_WITHOUT_EXTENSIONS=1 -DLWS_WITH_ZLIB=0
