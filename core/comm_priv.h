@@ -72,9 +72,13 @@ typedef struct {
  */
 
 typedef struct {
-	comm_ep_t ep;
-	comm_sink_func_t func;   /* Handler to call when sink is updated */
+	comm_sink_func_t func;
 	void *user_data;
+} comm_sink_handler_t;
+
+typedef struct {
+	comm_ep_t ep;
+	hk_tab_t handlers;   // Table of (comm_sink_handler_t);
 } comm_sink_t;
 
 
@@ -104,7 +108,6 @@ struct comm_s {
 	io_channel_t chan_stdin;
 	comm_sink_func_t monitor_func;
 	void *monitor_user_data;
-	ws_t *ws;
 };
 
 #endif /* __HAKIT_COMM_PRIV_H__ */

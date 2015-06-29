@@ -24,6 +24,7 @@ extern int comm_init(void);
 extern void comm_monitor(comm_sink_func_t func, void *user_data);
 
 extern int comm_sink_register(char *name, comm_sink_func_t func, void *user_data);
+extern void comm_sink_add_handler(int id, comm_sink_func_t func, void *user_data);
 extern void comm_sink_set_local(int id);
 extern void comm_sink_set_widget(int id, char *widget_name);
 

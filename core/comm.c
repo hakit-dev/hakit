@@ -330,17 +330,6 @@ static void comm_ep_append_name(comm_ep_t *ep, buf_t *out_buf)
 }
 
 
-static void comm_ep_send_ws(comm_ep_t *ep, ws_t *ws)
-{
-	int size = strlen(ep->name) + ep->value.len + 4;
-	char str[size];
-
-	/* Send WebSocket event */
-	snprintf(str, size, "!%s %s", ep->name, ep->value.base);
-	ws_events_send(ws, str);
-}
-
-
 static void comm_ep_dump(comm_ep_t *ep, buf_t *out_buf)
 {
 	buf_append_str(out_buf, (char *) comm_ep_type_str(ep));
@@ -450,6 +439,18 @@ static void comm_sink_set_widget_name(comm_sink_t *sink, char *widget_name)
 }
 
 
+static void comm_sink_add_handler_(comm_t *comm, int id, comm_sink_func_t func, void *user_data)
+{
+	comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, id);
+
+	if (sink->ep.name != NULL) {
+		comm_sink_handler_t *handler = hk_tab_push(&sink->handlers);
+		handler->func = func;
+		handler->user_data = user_data;
+	}
+}
+
+
 static int comm_sink_register_(comm_t *comm, char *name, comm_sink_func_t func, void *user_data)
 {
 	comm_sink_t *sink = comm_sink_retrieve(comm, name);
@@ -463,8 +464,11 @@ static int comm_sink_register_(comm_t *comm, char *name, comm_sink_func_t func, 
 
 	buf_set_str(&sink->ep.value, "");
 	comm_sink_set_widget_name(sink, NULL);
-	sink->func = func;
-	sink->user_data = user_data;
+
+	hk_tab_init(&sink->handlers, sizeof(comm_sink_handler_t));
+	comm_sink_handler_t *handler = hk_tab_push(&sink->handlers);
+	handler->func = func;
+	handler->user_data = user_data;
 
 	comm_advertise(comm);
 
@@ -498,6 +502,8 @@ static comm_sink_t *comm_sink_monitor(comm_t *comm, char *name)
 	buf_set_str(&sink->ep.value, "");
 	sink->ep.flag |= COMM_FLAG_MONITOR;
 
+	hk_tab_init(&sink->handlers, sizeof(comm_sink_handler_t));
+
 	return sink;
 }
 
@@ -508,25 +514,33 @@ static void comm_sink_unregister_(comm_t *comm, char *name)
 	comm_sink_t *sink = comm_sink_retrieve(comm, name);
 
 	if (sink != NULL) {
-		free(sink->name);
-		buf_cleanup(&sink->value);
-		sink->flag = 0;
-		sink->func = NULL;
-		sink->user_data = NULL;
+		free(sink->ep.name);
+		buf_cleanup(&sink->ep.value);
+		sink->ep.flag = 0;
+		hk_tab_cleanup(&sink->handlers);
 	}
 }
 #endif
 
 
-static void comm_sink_update(comm_sink_t *sink, char *value)
+static char *comm_sink_update(comm_sink_t *sink, char *value)
 {
 	/* Update sink value */
 	buf_set_str(&sink->ep.value, value);
 
 	/* Invoke sink event callback */
-	if ((sink->func != NULL) && ((sink->ep.flag & COMM_FLAG_MONITOR) == 0)) {
-		sink->func(sink->user_data, sink->ep.name, (char *) sink->ep.value.base);
+	if ((sink->ep.flag & COMM_FLAG_MONITOR) == 0) {
+		int i;
+
+		for (i = 0; i < sink->handlers.nmemb; i++) {
+			comm_sink_handler_t *handler = HK_TAB_PTR(sink->handlers, comm_sink_handler_t, i);
+			if (handler->func != NULL) {
+				handler->func(handler->user_data, sink->ep.name, (char *) sink->ep.value.base);
+			}
+		}
 	}
+
+	return sink->ep.name;
 }
 
 
@@ -787,33 +801,19 @@ static void comm_source_send(comm_source_t *source)
 }
 
 
-static void comm_source_update_str_(comm_t *comm, int id, char *value)
+static char *comm_source_update(comm_t *comm, int id, char *value)
 {
 	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
 
 	if (source->ep.name != NULL) {
 		buf_set_str(&source->ep.value, value);
 		comm_source_send(source);
-		comm_ep_send_ws(COMM_EP(source), comm->ws);
 	}
 	else {
 		log_str("PANIC: Attempting to update unknown source #%d\n", id);
 	}
-}
 
-
-static void comm_source_update_int_(comm_t *comm, int id, int value)
-{
-	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
-
-	if (source->ep.name != NULL) {
-		buf_set_int(&source->ep.value, value);
-		comm_source_send(source);
-		comm_ep_send_ws(COMM_EP(source), comm->ws);
-	}
-	else {
-		log_str("PANIC: Attempting to update unknown source #%d\n", id);
-	}
+	return source->ep.name;
 }
 
 
@@ -1061,9 +1061,6 @@ static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf
 			if (sink != NULL) {
 				/* Update sink value and invoke sink event callback */
 				comm_sink_update(sink, value);
-
-				/* Send WebSocket event */
-				comm_ep_send_ws(COMM_EP(sink), comm->ws);
 			}
 			else {
 				/* Send back error message if not in monitor mode */
@@ -1415,22 +1412,10 @@ static int comm_init_(comm_t *comm, int port)
 	comm->ninterfaces = netif_show_interfaces();
 	sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) comm_check_interfaces, comm);
 
-	/* Init HTTP/WebSocket server */
-	comm->ws = ws_new(HAKIT_HTTP_PORT);
-	if (comm->ws == NULL) {
-		goto DONE;
-	}
-	ws_set_document_root(comm->ws, "ui");
-	ws_set_command_handler(comm->ws, (ws_command_handler_t) comm_command_process, comm);
-
 	ret = 0;
 
 DONE:
 	if (ret < 0) {
-		if (comm->ws != NULL) {
-			ws_destroy(comm->ws);
-		}
-
 		if (comm->udp_srv.chan.fd > 0) {
 			udp_srv_shutdown(&comm->udp_srv);
 		}
@@ -1462,10 +1447,37 @@ static void comm_monitor_(comm_t *comm, comm_sink_func_t func, void *user_data)
  */
 
 static comm_t hk_comm;
+static ws_t *hk_ws = NULL;
+
+
+static void comm_ws_send(ws_t *ws, char *name, char *value)
+{
+	int size = strlen(name) + strlen(value) + 4;
+	char str[size];
+
+	/* Send WebSocket event */
+	snprintf(str, size, "!%s %s", name, value);
+	ws_events_send(ws, str);
+}
+
 
 int comm_init(void)
 {
-	return comm_init_(&hk_comm, HAKIT_COMM_PORT);
+	/* Init HKCP gears */
+	int ret = comm_init_(&hk_comm, HAKIT_COMM_PORT);
+	if (ret != 0) {
+		return ret;
+	}
+
+	/* Init HTTP/WebSocket server */
+	hk_ws = ws_new(HAKIT_HTTP_PORT);
+	if (hk_ws == NULL) {
+		return -1;
+	}
+	ws_set_document_root(hk_ws, "ui");
+	ws_set_command_handler(hk_ws, (ws_command_handler_t) comm_command_process, &hk_comm);
+
+	return 0;
 }
 
 
@@ -1477,7 +1489,19 @@ void comm_monitor(comm_sink_func_t func, void *user_data)
 
 int comm_sink_register(char *name, comm_sink_func_t func, void *user_data)
 {
-	return comm_sink_register_(&hk_comm, name, func, user_data);
+	int id = comm_sink_register_(&hk_comm, name, func, user_data);
+
+	if (id >= 0) {
+		comm_sink_add_handler_(&hk_comm, id, (comm_sink_func_t) comm_ws_send, hk_ws);
+	}
+
+	return id;
+}
+
+
+void comm_sink_add_handler(int id, comm_sink_func_t func, void *user_data)
+{
+	comm_sink_add_handler_(&hk_comm, id, func, user_data);
 }
 
 
@@ -1513,11 +1537,17 @@ void comm_source_set_widget(int id, char *widget_name)
 
 void comm_source_update_str(int id, char *value)
 {
-	comm_source_update_str_(&hk_comm, id, value);
+	char *name = comm_source_update(&hk_comm, id, value);
+
+	if (name != NULL) {
+		comm_ws_send(hk_ws, name, value);
+	}
 }
 
 
 void comm_source_update_int(int id, int value)
 {
-	comm_source_update_int_(&hk_comm, id, value);
+	char str[32];
+	snprintf(str, sizeof(str), "%d", value);
+	comm_source_update_str(id, str);
 }
