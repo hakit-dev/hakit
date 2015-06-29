@@ -50,10 +50,7 @@ static int _new(hk_obj_t *obj)
 		comm_sink_set_local(ctx->id);
 	}
 
-	char *widget = hk_prop_get(&obj->props, "widget");
-	if (widget != NULL) {
-		comm_sink_set_widget(ctx->id, widget);
-	}
+	comm_sink_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
 
 	return 0;
 }

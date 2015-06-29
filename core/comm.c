@@ -275,6 +275,19 @@ static comm_node_t *comm_node_add(comm_t *comm, char *name)
 
 #define COMM_EP(ep) ((comm_ep_t *)(ep))
 
+static inline const char *comm_ep_type_str(comm_ep_t *ep)
+{
+	static const char *tab[COMM_EP_NTYPES] = {
+		"sink", "source"
+	};
+
+	if (ep->type >= COMM_EP_NTYPES) {
+		return "?";
+	}
+
+	return tab[ep->type];
+}
+
 
 static void comm_ep_set_local(comm_ep_t *ep)
 {
@@ -282,7 +295,7 @@ static void comm_ep_set_local(comm_ep_t *ep)
 		ep->flag |= COMM_FLAG_LOCAL;
 	}
 	else {
-		log_str("PANIC: Attempting to set LOCAL flag on unknown endpoint #%d\n", ep->id);
+		log_str("PANIC: Attempting to set LOCAL flag on unknown %s #%d\n", comm_ep_type_str(ep), ep->id);
 	}
 }
 
@@ -300,7 +313,19 @@ static void comm_ep_set_widget(comm_ep_t *ep, char *widget_name)
 		}
 	}
 	else {
-		log_str("PANIC: Attempting to set widget name on unknown endpoint #%d\n", ep->id);
+		log_str("PANIC: Attempting to set widget name on unknown %s #%d\n", comm_ep_type_str(ep), ep->id);
+	}
+}
+
+
+static void comm_ep_append_name(comm_ep_t *ep, buf_t *out_buf)
+{
+	if (ep->flag & COMM_FLAG_MONITOR) {
+		buf_append_str(out_buf, "(");
+	}
+	buf_append_str(out_buf, ep->name);
+	if (ep->flag & COMM_FLAG_MONITOR) {
+		buf_append_str(out_buf, ")");
 	}
 }
 
@@ -313,6 +338,19 @@ static void comm_ep_send_ws(comm_ep_t *ep, ws_t *ws)
 	/* Send WebSocket event */
 	snprintf(str, size, "!%s %s", ep->name, ep->value.base);
 	ws_events_send(ws, str);
+}
+
+
+static void comm_ep_dump(comm_ep_t *ep, buf_t *out_buf)
+{
+	buf_append_str(out_buf, (char *) comm_ep_type_str(ep));
+	buf_append_byte(out_buf, ' ');
+	buf_append_str(out_buf, ep->widget);
+	buf_append_byte(out_buf, ' ');
+	buf_append_str(out_buf, ep->name);
+	buf_append_byte(out_buf, ' ');
+	buf_append(out_buf, ep->value.base, ep->value.len);
+	buf_append_byte(out_buf, '\n');
 }
 
 
@@ -389,10 +427,26 @@ static comm_sink_t *comm_sink_alloc(comm_t *comm)
 
 	sink = hk_tab_push(&comm->sinks);
 
+	sink->ep.type = COMM_EP_SINK;
 	sink->ep.id = i;
 	buf_init(&sink->ep.value);
 
 	return sink;
+}
+
+
+static void comm_sink_set_widget_name(comm_sink_t *sink, char *widget_name)
+{
+	if (widget_name == NULL) {
+		if (sink->ep.flag & COMM_FLAG_LOCAL) {
+			widget_name = "switch-slide";
+		}
+		else {
+			widget_name = "led-green";
+		}
+	}
+
+	comm_ep_set_widget(COMM_EP(sink), widget_name);
 }
 
 
@@ -408,6 +462,7 @@ static int comm_sink_register_(comm_t *comm, char *name, comm_sink_func_t func, 
 	log_debug(2, "comm_sink_register sink='%s' (%d elements)", name, comm->sinks.nmemb);
 
 	buf_set_str(&sink->ep.value, "");
+	comm_sink_set_widget_name(sink, NULL);
 	sink->func = func;
 	sink->user_data = user_data;
 
@@ -427,7 +482,7 @@ static void comm_sink_set_local_(comm_t *comm, int id)
 static void comm_sink_set_widget_(comm_t *comm, int id, char *widget_name)
 {
 	comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, id);
-	comm_ep_set_widget(COMM_EP(sink), widget_name);
+	comm_sink_set_widget_name(sink, widget_name);
 }
 
 
@@ -463,22 +518,15 @@ static void comm_sink_unregister_(comm_t *comm, char *name)
 #endif
 
 
-
-static char *comm_sink_widget(comm_sink_t *sink)
+static void comm_sink_update(comm_sink_t *sink, char *value)
 {
-	char *widget;
+	/* Update sink value */
+	buf_set_str(&sink->ep.value, value);
 
-	if (sink->ep.widget != NULL) {
-		widget = sink->ep.widget;
+	/* Invoke sink event callback */
+	if ((sink->func != NULL) && ((sink->ep.flag & COMM_FLAG_MONITOR) == 0)) {
+		sink->func(sink->user_data, sink->ep.name, (char *) sink->ep.value.base);
 	}
-	else if (sink->ep.flag & COMM_FLAG_LOCAL) {
-		widget = "switch-slide";
-	}
-	else {
-		widget = "led-green";
-	}
-
-	return widget;
 }
 
 
@@ -557,12 +605,23 @@ static comm_source_t *comm_source_alloc(comm_t *comm)
 	i = comm->sources.nmemb;
 	source = hk_tab_push(&comm->sources);
 
+	source->ep.type = COMM_EP_SOURCE;
 	source->ep.id = i;
 	buf_init(&source->ep.value);
 
 	hk_tab_init(&source->nodes, sizeof(comm_node_t *));
 
 	return source;
+}
+
+
+static void comm_source_set_widget_name(comm_source_t *source, char *widget_name)
+{
+	if (widget_name == NULL) {
+		widget_name = "led-red";
+	}
+
+	comm_ep_set_widget(COMM_EP(source), widget_name);
 }
 
 
@@ -577,6 +636,7 @@ static int comm_source_register_(comm_t *comm, char *name, int event)
 
 	log_debug(2, "comm_source_register name='%s' (%d elements)", name, comm->sources.nmemb);
 
+	comm_source_set_widget_name(source, NULL);
 	buf_set_str(&source->ep.value, "");
 
 	if (event) {
@@ -599,7 +659,7 @@ static void comm_source_set_local_(comm_t *comm, int id)
 static void comm_source_set_widget_(comm_t *comm, int id, char *widget_name)
 {
 	comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, id);
-	comm_ep_set_widget(COMM_EP(source), widget_name);
+	comm_source_set_widget_name(source, widget_name);
 }
 
 
@@ -675,21 +735,6 @@ static void comm_source_attach_node(comm_source_t *source, comm_node_t *node)
 	*pnode = node;
 
 	log_debug(2, "comm_source_attach_node source='%s' node=#%d='%s' (%d elements)", source->ep.name, node->id, node->name, source->nodes.nmemb);
-}
-
-
-static char *comm_source_widget(comm_source_t *source)
-{
-	char *widget;
-
-	if (source->ep.widget != NULL) {
-		widget = source->ep.widget;
-	}
-	else {
-		widget = "led-red";
-	}
-
-	return widget;
 }
 
 
@@ -963,64 +1008,40 @@ static void comm_udp_event(comm_t *comm, unsigned char *buf, int size)
 
 
 /*
- * TCP/stdin commands
+ * TCP/stdin/websocket commands
  */
 
 typedef struct {
 	comm_t *comm;
 	tcp_sock_t *tcp_sock;
 	command_t *cmd;
-} comm_cmd_ctx_t;
+} comm_command_ctx_t;
 
 
-static void comm_command_ctx(comm_cmd_ctx_t *ctx, int argc, char **argv)
+static void comm_command_ctx_recv(comm_command_ctx_t *ctx, int argc, char **argv)
 {
 	comm_command_tcp(ctx->comm, argc, argv, ctx->tcp_sock);
 }
 
 
-static comm_cmd_ctx_t *comm_cmd_ctx_new(tcp_sock_t *tcp_sock)
+static comm_command_ctx_t *comm_command_ctx_new(tcp_sock_t *tcp_sock)
 {
-	comm_cmd_ctx_t *ctx;
+	comm_command_ctx_t *ctx;
 
-	ctx = (comm_cmd_ctx_t *) malloc(sizeof(comm_cmd_ctx_t));
+	ctx = (comm_command_ctx_t *) malloc(sizeof(comm_command_ctx_t));
 	ctx->comm = tcp_sock_get_data(tcp_sock);
 	ctx->tcp_sock = tcp_sock;
-	ctx->cmd = command_new((command_handler_t) comm_command_ctx, ctx);
+	ctx->cmd = command_new((command_handler_t) comm_command_ctx_recv, ctx);
 
 	return ctx;
 }
 
 
-static void comm_cmd_ctx_destroy(comm_cmd_ctx_t *ctx)
+static void comm_command_ctx_destroy(comm_command_ctx_t *ctx)
 {
 	command_destroy(ctx->cmd);
-	memset(ctx, 0, sizeof(comm_cmd_ctx_t));
+	memset(ctx, 0, sizeof(comm_command_ctx_t));
 	free(ctx);
-}
-
-
-static void comm_source_append_name(comm_source_t *source, buf_t *out_buf)
-{
-	if (source->ep.flag & COMM_FLAG_MONITOR) {
-		buf_append_str(out_buf, "(");
-	}
-	buf_append_str(out_buf, source->ep.name);
-	if (source->ep.flag & COMM_FLAG_MONITOR) {
-		buf_append_str(out_buf, ")");
-	}
-}
-
-
-static void comm_sink_append_name(comm_sink_t *sink, buf_t *out_buf)
-{
-	if (sink->ep.flag & COMM_FLAG_MONITOR) {
-		buf_append_str(out_buf, "(");
-	}
-	buf_append_str(out_buf, sink->ep.name);
-	if (sink->ep.flag & COMM_FLAG_MONITOR) {
-		buf_append_str(out_buf, ")");
-	}
 }
 
 
@@ -1038,16 +1059,11 @@ static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf
 			*(value++) = '\0';
 			sink = comm_sink_retrieve(comm, args);
 			if (sink != NULL) {
-				/* Update sink value */
-				buf_set_str(&sink->ep.value, value);
+				/* Update sink value and invoke sink event callback */
+				comm_sink_update(sink, value);
 
 				/* Send WebSocket event */
 				comm_ep_send_ws(COMM_EP(sink), comm->ws);
-
-				/* Invoke sink event callback */
-				if ((sink->func != NULL) && ((sink->ep.flag & COMM_FLAG_MONITOR) == 0)) {
-					sink->func(sink->user_data, args, value);
-				}
 			}
 			else {
 				/* Send back error message if not in monitor mode */
@@ -1072,30 +1088,6 @@ static void comm_command_set(comm_t *comm, int argc, char **argv, buf_t *out_buf
 }
 
 
-static void comm_command_dump_source(comm_source_t *source, buf_t *out_buf)
-{
-	buf_append_str(out_buf, "source ");
-	buf_append_str(out_buf, comm_source_widget(source));
-	buf_append_byte(out_buf, ' ');
-	buf_append_str(out_buf, source->ep.name);
-	buf_append_byte(out_buf, ' ');
-	buf_append(out_buf, source->ep.value.base, source->ep.value.len);
-	buf_append_byte(out_buf, '\n');
-}
-
-
-static void comm_command_dump_sink(comm_sink_t *sink, buf_t *out_buf)
-{
-	buf_append_str(out_buf, "sink ");
-	buf_append_str(out_buf, comm_sink_widget(sink));
-	buf_append_byte(out_buf, ' ');
-	buf_append_str(out_buf, sink->ep.name);
-	buf_append_byte(out_buf, ' ');
-	buf_append(out_buf, sink->ep.value.base, sink->ep.value.len);
-	buf_append_byte(out_buf, '\n');
-}
-
-
 static void comm_command_get(comm_t *comm, int argc, char **argv, buf_t *out_buf)
 {
 	int i;
@@ -1104,13 +1096,13 @@ static void comm_command_get(comm_t *comm, int argc, char **argv, buf_t *out_buf
 		for (i = 1; i < argc; i++) {
 			comm_source_t *source = comm_source_retrieve(comm, argv[i]);
 			if (source != NULL) {
-				comm_command_dump_source(source, out_buf);
+				comm_ep_dump(COMM_EP(source), out_buf);
 			}
 		}
 		for (i = 1; i < argc; i++) {
 			comm_sink_t *sink = comm_sink_retrieve(comm, argv[i]);
 			if (sink != NULL) {
-				comm_command_dump_sink(sink, out_buf);
+				comm_ep_dump(COMM_EP(sink), out_buf);
 			}
 		}
 	}
@@ -1118,13 +1110,13 @@ static void comm_command_get(comm_t *comm, int argc, char **argv, buf_t *out_buf
 		for (i = 0; i < comm->sources.nmemb; i++) {
 			comm_source_t *source = HK_TAB_PTR(comm->sources, comm_source_t, i);
 			if (source->ep.name != NULL) {
-				comm_command_dump_source(source, out_buf);
+				comm_ep_dump(COMM_EP(source), out_buf);
 			}
 		}
 		for (i = 0; i < comm->sinks.nmemb; i++) {
 			comm_sink_t *sink = HK_TAB_PTR(comm->sinks, comm_sink_t, i);
 			if (sink->ep.name != NULL) {
-				comm_command_dump_sink(sink, out_buf);
+				comm_ep_dump(COMM_EP(sink), out_buf);
 			}
 		}
 	}
@@ -1154,7 +1146,7 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 						comm_node_t *node2 = HK_TAB_VALUE(source->nodes, comm_node_t *, k);
 						if (node2 == node) {
 							buf_append_str(out_buf, " ");
-							comm_source_append_name(source, out_buf);
+							comm_ep_append_name(COMM_EP(source), out_buf);
 						}
 					}
 				}
@@ -1171,7 +1163,7 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 
 		if (source->ep.name != NULL) {
 			buf_append_str(out_buf, "  ");
-			comm_source_append_name(source, out_buf);
+			comm_ep_append_name(COMM_EP(source), out_buf);
 
 			buf_append_str(out_buf, " \"");
 			buf_append(out_buf, source->ep.value.base, source->ep.value.len);
@@ -1195,7 +1187,7 @@ static void comm_command_status(comm_t *comm, buf_t *out_buf)
 
 		if (sink->ep.name != NULL) {
 			buf_append_str(out_buf, "  ");
-			comm_sink_append_name(sink, out_buf);
+			comm_ep_append_name(COMM_EP(sink), out_buf);
 
 			buf_append_str(out_buf, " \"");
 			buf_append(out_buf, sink->ep.value.base, sink->ep.value.len);
@@ -1279,7 +1271,7 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 
 static void comm_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rsize)
 {
-	comm_cmd_ctx_t *ctx;
+	comm_command_ctx_t *ctx;
 
 	log_debug(2, "comm_tcp_event [%d]", tcp_sock->chan.fd);
 	log_debug_data((unsigned char *) rbuf, rsize);
@@ -1287,7 +1279,7 @@ static void comm_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
 	switch (io) {
 	case TCP_IO_CONNECT:
 		log_debug(2, "  CONNECT %s", rbuf);
-		ctx = comm_cmd_ctx_new(tcp_sock);
+		ctx = comm_command_ctx_new(tcp_sock);
 		tcp_sock_set_data(tcp_sock, ctx);
 		break;
 	case TCP_IO_DATA:
@@ -1298,7 +1290,7 @@ static void comm_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
 	case TCP_IO_HUP:
 		log_debug(2, "  HUP");
 		ctx = tcp_sock_get_data(tcp_sock);
-		comm_cmd_ctx_destroy(ctx);
+		comm_command_ctx_destroy(ctx);
 		break;
 	default:
 		log_str("  PANIC: unknown event caught");

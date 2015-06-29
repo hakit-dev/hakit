@@ -51,7 +51,14 @@ typedef struct {
  * Generic endpoint dataset
  */
 
+typedef enum {
+	COMM_EP_SINK=0,
+	COMM_EP_SOURCE,
+	COMM_EP_NTYPES
+} comm_ep_type_t;
+
 typedef struct {
+	comm_ep_type_t type;
 	int id;                  /* Endpoint id */
 	char *name;              /* Endpoint name */
 	buf_t value;
