@@ -48,30 +48,35 @@ typedef struct {
 
 
 /*
- * Sinks
+ * Generic endpoint dataset
  */
 
 typedef struct {
-	int id;
-	char *name;              /* Sink name */
+	int id;                  /* Endpoint id */
+	char *name;              /* Endpoint name */
 	buf_t value;
 	unsigned int flag;
 	char *widget;
+} comm_ep_t;
+
+
+/*
+ * Sink endpoint
+ */
+
+typedef struct {
+	comm_ep_t ep;
 	comm_sink_func_t func;   /* Handler to call when sink is updated */
 	void *user_data;
 } comm_sink_t;
 
 
 /*
- * Sources
+ * Source endpoint
  */
 
 typedef struct {
-	int id;
-	char *name;              /* Source name */
-	buf_t value;
-	unsigned int flag;
-	char *widget;
+	comm_ep_t ep;
 	hk_tab_t nodes;       // Table of (comm_node_t *)
 } comm_source_t;
 
