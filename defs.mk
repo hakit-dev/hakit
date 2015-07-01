@@ -23,10 +23,10 @@ endif
 # Tools
 #
 
-CC = $(CROSS_COMPILE)gcc
-AR = $(CROSS_COMPILE)ar
-RANLIB = $(CROSS_COMPILE)ranlib
-OBJCOPY = $(CROSS_COMPILE)objcopy
+CC = $(CROSS_PATH)/bin/$(CROSS_COMPILE)gcc
+AR = $(CROSS_PATH)/bin/$(CROSS_COMPILE)ar
+RANLIB = $(CROSS_PATH)/bin/$(CROSS_COMPILE)ranlib
+OBJCOPY = $(CROSS_PATH)/bin/$(CROSS_COMPILE)objcopy
 MKDIR = mkdir -p
 RM = rm -rf
 
