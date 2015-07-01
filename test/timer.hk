@@ -11,9 +11,9 @@ off: timer-off delay=5000
 off-output: source
 
 [nets]
-input1.out input.in1
-input2.out input.in2
-input3.out input.in3
+input1.out input.in0
+input2.out input.in1
+input3.out input.in2
 input.out pulse.in on.in off.in
 pulse.out pulse-output.in
 on.out on-output.in
