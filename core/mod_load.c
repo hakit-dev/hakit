@@ -22,6 +22,7 @@ typedef enum {
 	SECTION_NONE=0,
 	SECTION_OBJECTS,
 	SECTION_NETS,
+	SECTION_UNKNOWN,
 	NSECTIONS
 } load_section_t;
 
@@ -159,11 +160,11 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 			ctx->section = SECTION_NETS;
 		}
 		else {
-			log_str("ERROR: %s:%s: unknown section definition '%s'", ctx->fname, ctx->lnum, line);
-			ret = -1;
+			ctx->section = SECTION_UNKNOWN;
+			log_str("WARNING: %s:%s: ignoring unknown section %s", ctx->fname, ctx->lnum, line);
 		}
 
-		return ret;
+		return 0;
 	}
 
 	/* Skip leadink blanks */
