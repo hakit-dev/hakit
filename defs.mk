@@ -13,7 +13,10 @@ ifeq ($(APP_DIR),$(HAKIT_DIR))
 HAKIT_BUILD := 1
 endif
 
-CHECK_PACKAGES = cmake
+#
+# Check build tools dependencies
+#
+include $(HAKIT_DIR)check.mk
 
 #
 # Compile/link options

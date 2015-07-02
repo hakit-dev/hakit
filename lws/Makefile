@@ -9,12 +9,15 @@
 # directory for more details.
 #
 
+CHECK_PACKAGES = cmake
+include ../check.mk
+
 ARCH ?= $(shell arch)
 OUTDIR = out/$(ARCH)
 
 GIT_URL = git://git.libwebsockets.org/libwebsockets
-LWS_VERSION = v1.4-chrome43-firefox-36
-#LWS_VERSION = master
+#LWS_VERSION = v1.4-chrome43-firefox-36
+LWS_VERSION = master
 
 SRC_DIR = libwebsockets
 LIB_DIR = $(OUTDIR)/lib
@@ -31,7 +34,7 @@ CMAKE_FLAGS += -DLWS_WITH_SSL=0
 CMAKE_FLAGS += -DLWS_WITHOUT_TESTAPPS=1 -DLWS_WITHOUT_DAEMONIZE=1
 CMAKE_FLAGS += -DLWS_WITH_STATIC=1
 
-all: $(OUTDIR) $(LIB)
+all:: $(OUTDIR) $(LIB)
 
 $(OUTDIR):
 	mkdir -p $(OUTDIR)
