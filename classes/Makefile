@@ -3,10 +3,18 @@ CLASSES := sink source and or \
 
 all::
 	for dir in $(CLASSES); do \
-	  make -C $$dir all ;\
+	  [ -f $$dir/Makefile ] && MK=Makefile || MK=../classes.mk ;\
+	  make -C $$dir -f $$MK NAME=$$dir all ;\
 	done
 
 clean::
 	for dir in $(CLASSES); do \
-	  make -C $$dir clean ;\
+	  [ -f $$dir/Makefile ] && MK=Makefile || MK=../classes.mk ;\
+	  make -C $$dir -f $$MK NAME=$$dir clean ;\
+	done
+
+install::
+	for dir in $(CLASSES); do \
+	  [ -f $$dir/Makefile ] && MK=Makefile || MK=../classes.mk ;\
+	  make -C $$dir -f $$MK NAME=$$dir DESTDIR=$(DESTDIR) install ;\
 	done
