@@ -7,13 +7,16 @@
 # directory for more details.
 #
 
+PKGNAME := hakit
+
 ARCH ?= $(shell arch)
 OUTDIR := out/$(ARCH)
 
 ARCH_LIB = $(OUTDIR)/libhakit.a
 ARCH_LIBS = $(ARCH_LIB)
 
-BINS = hakit-test-proc hakit-test-comm hakit
+BINS = hakit
+#BINS += hakit-test-proc hakit-test-comm
 ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 include defs.mk
@@ -62,3 +65,17 @@ clean::
 	make -C classes clean
 	make -C lws clean
 	$(RM) os/*~ core/*~
+
+
+#
+# Install and packaging
+#
+
+INSTALL_BIN = $(DESTDIR)/usr/bin
+INSTALL_SHARE = $(DESTDIR)/usr/share/hakit
+
+install:: all
+	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE)
+	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
+	$(CP) -a ui $(INSTALL_SHARE)/
+	make -C classes DESTDIR=$(abspath $(HAKIT_DIR)$(DESTDIR)) install

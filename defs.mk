@@ -45,7 +45,9 @@ AR = $(CROSS_PREFIX)ar
 RANLIB = $(CROSS_PREFIX)ranlib
 OBJCOPY = $(CROSS_PREFIX)objcopy
 MKDIR = mkdir -p
+CP = cp -fv
 RM = rm -rf
+MV = mv -fv
 
 #
 # Output directory
@@ -64,13 +66,15 @@ $(OUTDIR):
 
 .PHONY: version-h
 
-VERSION := $(shell git describe --long --always --dirty 2>/dev/null)
+VERSION := $(shell $(HAKIT_DIR)tools/gitversion.sh)
 
 ifeq ($(VERSION),)
 VERSION := $(strip $(shell svnversion -c . 2>/dev/null | sed 's/^[0-9]*://'))
 endif
 
-SHORT_VERSION := $(shell echo $(VERSION) | sed -e 's/-dirty$$//' -e 's/-[a-zA-Z0-9]\+$$//')
+SHORT_VERSION := $($(HAKIT_DIR)tools/gitversion.sh --short)
+
+BUILDDATE = $(shell date +%y%m%d)
 
 VERSION_FILE := $(OUTDIR)/.version
 PREV_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null || echo 'X')
@@ -129,3 +133,8 @@ $(ARCH_BINS):
 
 clean::
 	$(RM) $(OUTDIR) *~
+
+#
+# Packaging
+#
+include $(HAKIT_DIR)tools/pkg.mk

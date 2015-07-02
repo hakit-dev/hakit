@@ -1,0 +1,17 @@
+Name:     @NAME@
+Version:  @VERSION@
+Release:  @RELEASE@
+Summary:  HAKit device engine
+Packager: Sylvain Giroudon <giroudon {at} hakit.net>
+
+Group:          hakit
+License:        GPL
+URL:		http://www.hakit.net
+
+%description
+HAKit device engine
+
+%files -f RPM.files
+%defattr(-,root,root,-)
+
+%clean
