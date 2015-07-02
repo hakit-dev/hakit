@@ -1,9 +1,7 @@
-HAKIT := ../..
-
 ARCH ?= $(shell arch)
 OUTDIR := device/$(ARCH)
 
-include $(HAKIT)/defs.mk
+include ../../defs.mk
 
 all:: $(OUTDIR)/timer-off.so
 

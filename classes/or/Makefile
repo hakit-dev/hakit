@@ -1,10 +1,9 @@
 NAME := or
-HAKIT := ../..
 
 ARCH ?= $(shell arch)
 OUTDIR := device/$(ARCH)
 
-include $(HAKIT)/defs.mk
+include ../../defs.mk
 
 OBJ = $(OUTDIR)/$(NAME).so
 

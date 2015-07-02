@@ -7,16 +7,26 @@
 # directory for more details.
 #
 
-CFLAGS  = -Wall -O2 -fPIC
+HAKIT_DIR := $(dir $(lastword $(MAKEFILE_LIST)))
+APP_DIR := $(dir $(firstword $(MAKEFILE_LIST)))
+ifeq ($(APP_DIR),$(HAKIT_DIR))
+HAKIT_BUILD := 1
+endif
+
+CHECK_PACKAGES = cmake
+
+#
+# Compile/link options
+#
+
+CFLAGS  = -Wall -O2 -fPIC -I$(HAKIT_DIR)include
 LDFLAGS =
 
-ifeq ($(HAKIT),)
-VPATH = os:core:classes
-CFLAGS  += -I. -Iinclude -Ios
-#LDFLAGS += -L$(OUTDIR) -lhakit
+ifdef HAKIT_BUILD
+VPATH = os:core
+CFLAGS  += -I. -Ios
 else
-CFLAGS  += -I$(HAKIT)/include
-LDFLAGS += -L$(HAKIT)/out/$(ARCH) -lhakit
+LDFLAGS += -L$(HAKIT_DIR)out/$(ARCH) -lhakit
 endif
 
 #
@@ -61,8 +71,8 @@ ifneq ($(VERSION),$(PREV_VERSION))
 all:: version-h
 endif
 
-ifneq ($(HAKIT),)
-CFLAGS  += -I$(HAKIT)/out/include
+ifndef HAKIT_BUILD
+CFLAGS  += -I$(HAKIT_DIR)out/$(ARCH)
 endif
 CFLAGS  += -I$(OUTDIR)
 
@@ -70,7 +80,7 @@ $(VERSION_FILE): out-dir
 	echo $(VERSION) >$(VERSION_FILE)
 
 version-h: $(VERSION_FILE)
-ifeq ($(HAKIT),)
+ifdef HAKIT_BUILD
 	echo '#define HAKIT_VERSION "$(VERSION)"' >$(OUTDIR)/hakit_version.h
 	echo '#define ARCH "$(ARCH)"' >>$(OUTDIR)/hakit_version.h
 else
@@ -81,13 +91,9 @@ endif
 #
 # WebSockets
 #
-ifneq ($(HAKIT),)
-LWS_OUT_DIR = $(HAKIT)/lws/out/$(ARCH)
-else
-LWS_OUT_DIR = lws/out/$(ARCH)
-endif
-LWS_LIB_DIR = $(LWS_OUT_DIR)/lib
-
+LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
+LWS_LIB_DIR = $(LWS_DIR)/lib
+LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 
 #
 # Standard rules
@@ -105,7 +111,7 @@ $(OUTDIR)/%.o: %.c
 	@$(RM) $(D).tmp
 
 $(OUTDIR)/%.so:
-	$(CC) -o $@ $^ $(LDFLAGS) -shared -nostartfiles
+	$(CC) -o $@ $^ -shared -nostartfiles
 
 $(ARCH_LIBS):
 	$(AR) rv $@ $^
