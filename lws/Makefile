@@ -10,7 +10,7 @@
 #
 
 CHECK_PACKAGES = cmake
-include ../check.mk
+include ../tools/check.mk
 
 ARCH ?= $(shell arch)
 OUTDIR = out/$(ARCH)

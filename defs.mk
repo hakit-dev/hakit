@@ -16,7 +16,7 @@ endif
 #
 # Check build tools dependencies
 #
-include $(HAKIT_DIR)check.mk
+include $(HAKIT_DIR)tools/check.mk
 
 #
 # Compile/link options
@@ -36,10 +36,14 @@ endif
 # Tools
 #
 
-CC = $(CROSS_PATH)/bin/$(CROSS_COMPILE)gcc
-AR = $(CROSS_PATH)/bin/$(CROSS_COMPILE)ar
-RANLIB = $(CROSS_PATH)/bin/$(CROSS_COMPILE)ranlib
-OBJCOPY = $(CROSS_PATH)/bin/$(CROSS_COMPILE)objcopy
+ifdef CROSS_PATH
+CROSS_PREFIX = $(CROSS_PATH)/bin/$(CROSS_COMPILE)
+endif
+
+CC = $(CROSS_PREFIX)gcc
+AR = $(CROSS_PREFIX)ar
+RANLIB = $(CROSS_PREFIX)ranlib
+OBJCOPY = $(CROSS_PREFIX)objcopy
 MKDIR = mkdir -p
 RM = rm -rf
 
