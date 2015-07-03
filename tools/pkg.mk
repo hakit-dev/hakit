@@ -46,6 +46,17 @@ deb: check check_pkg_vars install
 	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
 	    control.in > $(DESTDIR)/DEBIAN/control
 	fakeroot dpkg-deb --build $(DESTDIR) $(PKGDIR)/$(DEBNAME)
+
+ipk: check check_pkg_vars install
+	$(MKDIR) $(DESTDIR)/DEBIAN
+	for file in preinst postinst prerm postrm; do \
+		[ -f $$file ] && install -m 755 $$file $(DESTDIR)/DEBIAN/; done; \
+	sed -e 's/@NAME@/$(PKGNAME)/' \
+	    -e 's/@ARCH@/$(ARCH)/' \
+	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
+	    control.in > $(DESTDIR)/DEBIAN/control
+	fakeroot $(HAKIT_DIR)tools/opkg-build $(DESTDIR) $(OUTDIR)
+
 endif
 
 pkgclean:

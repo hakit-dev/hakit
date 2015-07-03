@@ -225,6 +225,7 @@ case $# in
 esac
 
 pkg_dir=$1
+dest_dir=$(readlink -f "$dest_dir")
 
 if [ ! -d $pkg_dir ]; then
 	echo "*** Error: Directory $pkg_dir does not exist" >&2
