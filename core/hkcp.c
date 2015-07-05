@@ -783,7 +783,7 @@ static void hkcp_source_send(hkcp_source_t *source)
 		/* Setup command to send */
 		len = snprintf(str, size-1, "set %s=%s", source->ep.name, source->ep.value.base);
 		log_debug(2, "hkcp_source_send cmd='%s' (%d nodes)", str, source->nodes.nmemb);
-		str[len] = '\n';
+		str[len++] = '\n';
 
 		/* Send to all nodes that subscribed this source */
 		for (i = 0; i < source->nodes.nmemb; i++) {
