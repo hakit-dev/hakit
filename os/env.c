@@ -11,17 +11,20 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <malloc.h>
 #include <libgen.h>
 #include <unistd.h>
 
 
 static int env_devel_ = 0;
-
+static char *env_bindir_ = NULL;
 
 void env_init(int argc, char *argv[])
 {
 	char *bindir = dirname(argv[0]);
 	char path[strlen(bindir)+64];
+
+	env_bindir_ = strdup(bindir);
 
 	snprintf(path, sizeof(path), "%s/classes/Makefile", bindir);
 
@@ -34,4 +37,28 @@ void env_init(int argc, char *argv[])
 int env_devel(void)
 {
 	return env_devel_;
+}
+
+
+char *env_bindir(char *subpath)
+{
+	static char *path = NULL;
+	char *bindir = ".";
+
+	if (env_bindir_ != NULL) {
+		bindir = env_bindir_;
+	}
+
+	if (path != NULL) {
+		free(path);
+		path = NULL;
+	}
+
+	{
+		int size = strlen(bindir)+strlen(subpath)+4;
+		path = malloc(size);
+		snprintf(path, size, "%s/%s", bindir, subpath);
+	}
+
+	return path;
 }

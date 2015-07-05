@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "env.h"
 #include "log.h"
 #include "ws.h"
 #include "ws_events.h"
@@ -49,7 +50,13 @@ int comm_init(void)
 	if (hk_ws == NULL) {
 		return -1;
 	}
-	ws_set_document_root(hk_ws, "ui");
+
+	if (env_devel()) {
+		ws_set_document_root(hk_ws, env_bindir("ui"));
+	}
+	else {
+		ws_set_document_root(hk_ws, "/usr/share/hakit/ui");
+	}
 	ws_set_command_handler(hk_ws, (ws_command_handler_t) hkcp_command, &hk_hkcp);
 
 	return 0;
