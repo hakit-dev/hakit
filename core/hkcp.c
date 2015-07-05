@@ -75,7 +75,7 @@ static void hkcp_node_command(hkcp_node_t *node, int argc, char **argv)
 static hkcp_node_t *hkcp_node_alloc(hkcp_t *hkcp)
 {
 	hkcp_node_t *node;
-	hkcp_node_t **pnode;
+	hkcp_node_t **pnode = NULL;
 	int i;
 
 	/* Alloc node descriptor */
@@ -96,7 +96,12 @@ static hkcp_node_t *hkcp_node_alloc(hkcp_t *hkcp)
 		pnode = hk_tab_push(&hkcp->nodes);
 	}
 
-	*pnode = node;
+	if (pnode != NULL) {
+		*pnode = node;
+	}
+	else {
+		log_str("PANIC: node entry allocation failed");
+	}
 
 	/* Init node entry */
 	node->id = i;
