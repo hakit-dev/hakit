@@ -18,6 +18,7 @@
 #include <dlfcn.h>
 
 #include "types.h"
+#include "env.h"
 #include "log.h"
 #include "mod.h"
 #include "hakit_version.h"
@@ -97,7 +98,7 @@ int hk_mod_init(void)
 	}
 
 	if (ret == 0) {
-		if (access("classes/Makefile", R_OK) == 0) {
+		if (env_devel()) {
 			ret = hk_mod_init_dir("classes");
 		}
 	}

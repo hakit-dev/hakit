@@ -15,8 +15,9 @@
 
 #include "types.h"
 #include "options.h"
-#include "sys.h"
+#include "env.h"
 #include "log.h"
+#include "sys.h"
 #include "comm.h"
 #include "mod.h"
 #include "mod_init.h"
@@ -94,6 +95,9 @@ int main(int argc, char *argv[])
 	if (opt_daemon) {
 		run_as_daemon();
 	}
+
+	/* Init exec environment */
+	env_init(argc, argv);
 
 	/* Init log management */
 	log_init("hakit");

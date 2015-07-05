@@ -21,7 +21,7 @@ ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 include defs.mk
 
-OS_SRCS = logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
+OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c mod_init.c
 CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c mod_load.c prop.c \
 	http.c eventq.c ws.c ws_utils.c ws_demo.c ws_events.c
