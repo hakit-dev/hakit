@@ -14,5 +14,6 @@
 
 extern void env_init(int argc, char *argv[]);
 extern int env_devel(void);
+extern char *env_bindir(char *subpath);
 
 #endif /* __HK_ENV_H__ */
