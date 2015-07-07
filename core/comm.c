@@ -52,7 +52,7 @@ int comm_init(void)
 	}
 
 	if (env_devel()) {
-		ws_set_document_root(hk_ws, env_bindir("ui"));
+		ws_set_document_root(hk_ws, "ui");
 	}
 	else {
 		ws_set_document_root(hk_ws, "/usr/share/hakit/ui");
