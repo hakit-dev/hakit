@@ -105,6 +105,11 @@ void hk_pad_update_str(hk_pad_t *pad, char *value)
 
 	log_debug(2, "hk_pad_update_str %s.%s='%s'", pad->obj->name, pad->name, value);
 
+	/* Do nothing if no net is connected to this pad */
+	if (net == NULL) {
+		return;
+	}
+
 	/* Raise lock to detect loop references */
 	pad->lock = 1;
 
