@@ -421,3 +421,17 @@
     0 -2px 5px rgba(255,255,255,0.05),
     0 2px 5px rgba(255,255,255,0.1);
 }
+
+input[type=range] {
+    -webkit-appearance: none;
+    width: 80px;
+    border: 0px solid white;
+    outline: 0px solid white;
+    outline-offset: -1px;
+}
+input[type=range]:focus {
+    outline: none;
+}
+input[type=range]::-moz-focus-outer {
+    border: 0;
+}

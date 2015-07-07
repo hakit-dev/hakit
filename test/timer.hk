@@ -10,6 +10,9 @@ on-output: source
 off: timer-off delay=5000
 off-output: source
 
+meter: sink local widget=meter:min=0,low=10,high=90,max=100
+slider: sink local widget=slider:min=0,max=100,step=10
+
 [nets]
 input1.out input.in0
 input2.out input.in1

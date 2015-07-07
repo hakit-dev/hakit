@@ -45,24 +45,25 @@ function clear_signals()
 }
 
 
-function switch_update(elmt, st)
+function signal_update(elmt, st)
 {
-    console.log("switch_update "+elmt.id+" "+st);
-    sock.send("set "+elmt.id+"="+st+"\n");
+    var id = elmt.id.split(':')[0];
+    console.log("signal_update "+id+" "+st);
+    sock.send("set "+id+"="+st+"\n");
 }
 
 
 function switch_clicked(elmt)
 {
     var st = elmt.checked ? 1:0;
-    switch_update(elmt, st);
+    signal_update(elmt, st);
 }
 
 
 function switch_release(elmt)
 {
     elmt.checked = false;
-    switch_update(elmt, 0);
+    signal_update(elmt, 0);
 }
 
 
@@ -81,7 +82,7 @@ function widget_led(widget, value)
 
 function widget_switch_slide(id, value)
 {
-    var str = '<div class="switch slide"><input type="checkbox" id="'+id+'" onclick="switch_clicked(this);"';
+    var str = '<div class="switch slide"><input type="checkbox" id="'+id+':switch" onclick="switch_clicked(this);"';
     if ((value != '0') && (value != '')) {
 	str += ' checked';
     }
@@ -93,11 +94,50 @@ function widget_switch_slide(id, value)
 
 function widget_switch_push(id, value)
 {
-    var str = '<div class="switch push"><input type="checkbox" id="'+id+'" onmousedown="switch_update(this,1);" onmouseup="switch_release(this);" onmouseout="switch_release(this);";';
+    var str = '<div class="switch push"><input type="checkbox" id="'+id+':switch" onmousedown="signal_update(this,1);" onmouseup="switch_release(this);" onmouseout="switch_release(this);";';
     if ((value != '0') && (value != '')) {
 	str += ' checked';
     }
     str += '><label><i></i></label></div>';
+
+    return str;
+}
+
+
+function widget_slider(id, value, options)
+{
+    var str = '<input type="range" class="slider" id="'+id+':slider" onchange="signal_update(this,this.value);"';
+
+    if (value) {
+	str += ' value="'+value+'"';
+    }
+
+    var list = options.split(',');
+    for (var i = 0; i < list.length; i++) {
+	str += ' '+list[i];
+    }
+
+    str += ' />';
+
+    return str;
+}
+
+
+function widget_meter(id, value, options)
+{
+
+    var str = '<meter id="'+id+':meter"';
+
+    if (value) {
+	str += ' value="'+value+'"';
+    }
+
+    var list = options.split(',');
+    for (var i = 0; i < list.length; i++) {
+	str += ' '+list[i];
+    }
+
+    str += '>'+value+'</meter>';
 
     return str;
 }
@@ -124,7 +164,7 @@ function add_signal(line)
     row.insertCell(2).innerHTML = value;
 
     var str = "";
-    if (widget.substr(0, 4) == 'led-') {
+    if (widget.substr(0,4) == 'led-') {
 	str = widget_led(widget, value);
     }
     else if (widget == 'switch-slide') {
@@ -132,6 +172,14 @@ function add_signal(line)
     }
     else if (widget == 'switch-push') {
 	str = widget_switch_push(name, value);
+    }
+    else if (widget.substr(0,5) == 'meter') {
+	var args = widget.split(':');
+	str = widget_meter(name, value, args[1]);
+    }
+    else if (widget.substr(0,6) == 'slider') {
+	var args = widget.split(':');
+	str = widget_slider(name, value, args[1]);
     }
 
     row.insertCell(3).innerHTML = str;
@@ -163,9 +211,19 @@ function update_signal(line)
 		row.cells[3].innerHTML = widget_led(widget, value);
 	    }
 	    else {
-		var control = document.getElementById(name);
-		if (control) {
-		    control.checked = ((value != '') && (value != '0'));
+		var elmt = document.getElementById(name+':switch');
+		if (elmt) {
+		    elmt.checked = ((value != '') && (value != '0'));
+		}
+
+		elmt = document.getElementById(name+':meter');
+		if (elmt) {
+		    elmt.value = value;
+		}
+
+		elmt = document.getElementById(name+':slider');
+		if (elmt) {
+		    elmt.value = value;
 		}
 	    }
 	    return;
