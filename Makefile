@@ -16,13 +16,15 @@ ARCH_LIB = $(OUTDIR)/libhakit.a
 ARCH_LIBS = $(ARCH_LIB)
 
 BINS = hakit
+BINS += hakit-test-usb
 #BINS += hakit-test-proc hakit-test-comm
 ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 include defs.mk
 
 OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
-	gpio.c serial.c proc.c mod_init.c
+	gpio.c serial.c proc.c mod_init.c \
+	usb_io.c usb_device.c
 CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c mod_load.c prop.c \
 	http.c eventq.c ws.c ws_utils.c ws_demo.c ws_events.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
@@ -59,6 +61,7 @@ $(ARCH_BINS): $(ARCH_LIBS)
 
 $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o
 $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o
+$(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o
 $(OUTDIR)/hakit: $(OUTDIR)/hakit.o
 
 clean::
