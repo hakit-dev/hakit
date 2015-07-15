@@ -291,13 +291,13 @@ int _usb_open_(char *devname)
 	/* Open USB device */
 	fd = open(devname, O_RDWR);
 	if (fd < 0) {
-		log_str("ERROR: USB device %s: couldn't open device: %s", devname, strerror(errno));
+		log_str("ERROR: Cannot open USB device %s: %s", devname, strerror(errno));
 		return -1;
 	}
 
 	/* Claim USB interface 0 */
 	if (ioctl(fd, USBDEVFS_CLAIMINTERFACE, &interface) < 0) {
-		log_str("ERROR: USB device %s: couldn't claim interface %d: %s", devname, interface, strerror(errno));
+		log_str("ERROR: USB device %s: cannot claim interface %d: %s", devname, interface, strerror(errno));
 		return -2;
 	}
 
