@@ -216,6 +216,7 @@ int _usb_control_msg_(int fd, unsigned char requesttype, unsigned char request,
 		      int value, int index, unsigned char *buf, int size, int timeout)
 {
 	struct usbdevfs_ctrltransfer ctrl;
+	int ret;
 
 	ctrl.bRequestType = requesttype;
 	ctrl.bRequest = request;
@@ -225,7 +226,12 @@ int _usb_control_msg_(int fd, unsigned char requesttype, unsigned char request,
 	ctrl.timeout = timeout;
 	ctrl.data = buf;
 
-	return ioctl(fd, USBDEVFS_CONTROL, &ctrl);
+	ret = ioctl(fd, USBDEVFS_CONTROL, &ctrl);
+	if (ret < 0) {
+		log_str("ERROR: USB control: %s", strerror(errno));
+	}
+
+	return ret;
 }
 
 
@@ -259,7 +265,6 @@ int _usb_reset_ep_(int fd, int ep)
 	int ret;
 
 	ret = ioctl(fd, USBDEVFS_RESETEP, &ep);
-
 	if (ret < 0) {
 		log_str("ERROR: USB reset EP: %s", strerror(errno));
 	}
@@ -273,6 +278,9 @@ int _usb_reset_device_(int fd)
 	int ret;
 
 	ret = ioctl(fd, USBDEVFS_RESET, NULL);
+	if (ret < 0) {
+		log_str("ERROR: USB device reset failed: %s", strerror(errno));
+	}
 
 	return ret;
 }
