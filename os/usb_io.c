@@ -16,9 +16,8 @@
 #include <sys/select.h>
 #include <sys/ioctl.h>
 
-#include <linux/usb/ch9.h>
-
 #include "log.h"
+#include "linux_usb.h"
 #include "usb_io.h"
 
 
@@ -218,11 +217,19 @@ int _usb_control_msg_(int fd, unsigned char requesttype, unsigned char request,
 	struct usbdevfs_ctrltransfer ctrl;
 	int ret;
 
+#ifdef OLD_USBDEVICE_FS
+	ctrl.requesttype = requesttype;
+	ctrl.request = request;
+	ctrl.value = value;
+	ctrl.index = index;
+	ctrl.length = size;
+#else
 	ctrl.bRequestType = requesttype;
 	ctrl.bRequest = request;
 	ctrl.wValue = value;
 	ctrl.wIndex = index;
 	ctrl.wLength = size;
+#endif
 	ctrl.timeout = timeout;
 	ctrl.data = buf;
 
