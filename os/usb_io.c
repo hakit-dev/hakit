@@ -17,7 +17,6 @@
 #include <sys/ioctl.h>
 
 #include "log.h"
-#include "linux_usb.h"
 #include "usb_io.h"
 
 
