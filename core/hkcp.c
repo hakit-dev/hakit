@@ -442,10 +442,13 @@ void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_sink_func_t func, void *us
 {
 	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
 
-	if (sink->ep.name != NULL) {
+	if ((sink != NULL) && (sink->ep.name != NULL)) {
 		hkcp_sink_handler_t *handler = hk_tab_push(&sink->handlers);
 		handler->func = func;
 		handler->user_data = user_data;
+	}
+	else {
+		log_str("PANIC: Attempting to and event handler on unknown sink #%d\n", id);
 	}
 }
 
@@ -475,14 +478,24 @@ int hkcp_sink_register(hkcp_t *hkcp, char *name)
 void hkcp_sink_set_local(hkcp_t *hkcp, int id)
 {
 	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
-	hkcp_ep_set_local(HKCP_EP(sink));
+	if (sink != NULL) {
+		hkcp_ep_set_local(HKCP_EP(sink));
+	}
+	else {
+		log_str("PANIC: Attempting to set local flag on unknown sink #%d\n", id);
+	}
 }
 
 
 void hkcp_sink_set_widget(hkcp_t *hkcp, int id, char *widget_name)
 {
 	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
-	hkcp_sink_set_widget_name(sink, widget_name);
+	if (sink != NULL) {
+		hkcp_sink_set_widget_name(sink, widget_name);
+	}
+	else {
+		log_str("PANIC: Attempting to set widget on unknown sink #%d\n", id);
+	}
 }
 
 
@@ -662,14 +675,24 @@ int hkcp_source_register(hkcp_t *hkcp, char *name, int event)
 void hkcp_source_set_local(hkcp_t *hkcp, int id)
 {
 	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
-	hkcp_ep_set_local(HKCP_EP(source));
+	if (source != NULL) {
+		hkcp_ep_set_local(HKCP_EP(source));
+	}
+	else {
+		log_str("PANIC: Attempting to set local flag on unknown source #%d\n", id);
+	}
 }
 
 
 void hkcp_source_set_widget(hkcp_t *hkcp, int id, char *widget_name)
 {
 	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
-	hkcp_source_set_widget_name(source, widget_name);
+	if (source != NULL) {
+		hkcp_source_set_widget_name(source, widget_name);
+	}
+	else {
+		log_str("PANIC: Attempting to set widget on unknown source #%d\n", id);
+	}
 }
 
 
@@ -801,7 +824,7 @@ char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
 {
 	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
 
-	if (source->ep.name != NULL) {
+	if ((source != NULL) && (source->ep.name != NULL)) {
 		buf_set_str(&source->ep.value, value);
 		hkcp_source_send(source);
 	}
