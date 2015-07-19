@@ -83,8 +83,103 @@ char *usb_device_find(unsigned int vendor_id, unsigned int product_id, char *ser
 }
 
 
-int usb_device_list(unsigned int vendor_id, unsigned int product_id,
-		    usb_device_func func, void *user_data)
+static int usb_device_list_proc(unsigned int vendor_id, unsigned int product_id,
+				usb_device_func func, void *user_data)
+{
+	int count = 0;
+	FILE *f;
+	unsigned int c_bus = 0;
+	unsigned int c_dev = 0;
+
+	f = fopen("/proc/bus/usb/devices", "r");
+	if (f == NULL) {
+		return 0;
+	}
+
+	while (!feof(f)) {
+		char buf[128];
+		char *str, *tok;
+		int len;
+
+		str = fgets(buf, sizeof(buf), f);
+		if (str == NULL)
+			break;
+
+		len = strlen(str);
+		if (len < 4)
+			continue;
+
+		if (strncmp(str, "T:", 2) == 0) {
+			tok = strstr(str, " Bus=");
+			if (tok == NULL) {
+				c_bus = c_dev = 0;
+				continue;
+			}
+
+			if (sscanf(tok+5, "%u", &c_bus) != 1) {
+				c_bus = c_dev = 0;
+				continue;
+			}
+
+			tok = strstr(str, " Dev#=");
+			if (tok == NULL) {
+				c_bus = c_dev = 0;
+				continue;
+			}
+
+			if (sscanf(tok+6, "%u", &c_dev) != 1) {
+				c_bus = c_dev = 0;
+				continue;
+			}
+		}
+		else if (strncmp(str, "P:", 2) == 0) {
+			unsigned int c_vendor_id, c_product_id;
+
+			if ((c_bus == 0) || (c_dev == 0))
+				continue;
+
+			tok = strstr(str, " Vendor=");
+			if (tok == NULL) {
+				continue;
+			}
+
+			if (sscanf(tok+8, "%x", &c_vendor_id) != 1) {
+				continue;
+			}
+
+			if (c_vendor_id != vendor_id) {
+				continue;
+			}
+
+			tok = strstr(str, " ProdID=");
+			if (tok == NULL) {
+				continue;
+			}
+
+			if (sscanf(tok+8, "%x", &c_product_id) != 1) {
+				continue;
+			}
+
+			if (c_product_id != product_id) {
+				continue;
+			}
+
+			count++;
+
+			if (func(c_vendor_id, c_product_id, usb_device_name(c_bus, c_dev), user_data)) {
+				break;
+			}
+		}
+	}
+
+	fclose(f);
+
+	return count;
+}
+
+
+static int usb_device_list_sys(unsigned int vendor_id, unsigned int product_id,
+			       usb_device_func func, void *user_data)
 {
 	int count = 0;
 	DIR *d;
@@ -172,4 +267,18 @@ int usb_device_list(unsigned int vendor_id, unsigned int product_id,
 	closedir(d);
 
 	return count;
+}
+
+
+int usb_device_list(unsigned int vendor_id, unsigned int product_id,
+		    usb_device_func func, void *user_data)
+{
+	int ret;
+
+	ret = usb_device_list_sys(vendor_id, product_id, func, user_data);
+	if (ret <= 0) {
+		ret = usb_device_list_proc(vendor_id, product_id, func, user_data);
+	}
+
+	return ret;
 }
