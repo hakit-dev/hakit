@@ -33,12 +33,14 @@
 
 const char *options_summary = "HAKit " HAKIT_VERSION " (" ARCH ")";
 static int opt_monitor = 0;
+static char *opt_class_path = NULL;
 
 const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
 	{ "daemon",  'D', 0, OPTIONS_TYPE_NONE,   &opt_daemon,  "Run in background as a daemon" },
 	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit host names", "HOST" },
 	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable monitor mode" },
+	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 	{ NULL }
 };
 
@@ -71,7 +73,6 @@ static void run_as_daemon(void)
 		log_str("ERROR: Fork failed: %s", strerror(errno));
 		exit(3);
 	}
-
 
 	if (pid > 0) {
 		exit(0);
@@ -117,7 +118,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* Init module management */
-	if (hk_mod_init()) {
+	if (hk_mod_init(opt_class_path)) {
 		return 2;
 	}
 

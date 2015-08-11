@@ -80,14 +80,16 @@ static int hk_mod_init_dir(char *dir)
 }
 
 
-int hk_mod_init(void)
+int hk_mod_init(char *class_path)
 {
-	char *path = getenv("HAKIT_MOD_PATH");
-	char *s1 = path;
+	char *s1 = class_path;
 	int ret = 0;
 
 	while ((s1 != NULL) && (ret == 0)) {
 		char *s2 = strchr(s1, ':');
+		if (s2 == NULL) {
+			s2 = strchr(s1, ',');
+		}
 		if (s2 != NULL) {
 			*(s2++) = '\0';
 		}
