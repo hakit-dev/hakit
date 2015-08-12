@@ -13,7 +13,7 @@
 #include "serial.h"
 
 
-static int serial_set_custom_speed(int fd, unsigned int speed)
+int serial_set_custom_speed(int fd, unsigned int speed)
 {
 	struct serial_struct serial;
 
@@ -134,4 +134,10 @@ int serial_open(char *devname, unsigned int speed, int rtscts)
 failed:
 	close(fd);
 	return -1;
+}
+
+
+void serial_close(int fd)
+{
+	close(fd);
 }
