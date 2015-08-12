@@ -51,11 +51,15 @@ static int hk_mod_init_dir(char *dir)
 			}
 			closedir(d);
 
-			/* Compute device library file name */
-			snprintf(path, sizeof(path), "%s/%s/device/" ARCH "/%s.so", dir, name, name);
-
 			/* Open device library */
+			snprintf(path, sizeof(path), "%s/%s/device/" ARCH "/%s.so", dir, name, name);
 			void *dl = dlopen(path, RTLD_LAZY);
+
+			if (dl == NULL) {
+				snprintf(path, sizeof(path), "%s/%s/device/%s.so", dir, name, name);
+				dl = dlopen(path, RTLD_LAZY);
+			}
+
 			if (dl != NULL) {
 				hk_class_t *class = dlsym(dl, "_class");
 				if (class != NULL) {
@@ -69,7 +73,7 @@ static int hk_mod_init_dir(char *dir)
 				}
 			}
 			else {
-				log_str("Class '%s': %s", name, dlerror());
+				log_str("Class '%s': %s: %s", name, path, dlerror());
 			}
 		}
 	}
@@ -106,7 +110,7 @@ int hk_mod_init(char *class_path)
 	}
 
 	if (ret == 0) {
-		ret = hk_mod_init_dir("/usr/lib/hakit");
+		ret = hk_mod_init_dir("/usr/lib/hakit/classes");
 	}
 
 	return ret;
