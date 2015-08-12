@@ -75,12 +75,11 @@ LDFLAGS += -rdynamic -ldl
 # HAKit libs and bins
 #
 $(ARCH_LIB): $(OBJS)
-$(ARCH_BINS): $(ARCH_LIBS)
 
-$(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o
-$(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o
-$(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o
-$(OUTDIR)/hakit: $(OUTDIR)/hakit.o
+$(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIBS)
+$(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIBS)
+$(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o $(ARCH_LIBS)
+$(OUTDIR)/hakit: $(OUTDIR)/hakit.o $(OBJS)
 
 clean::
 	make -C classes clean
