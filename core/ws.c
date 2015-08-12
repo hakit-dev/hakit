@@ -19,7 +19,6 @@
 #include "tab.h"
 #include "ws.h"
 #include "ws_utils.h"
-#include "ws_demo.h"
 #include "ws_events.h"
 
 #define SERVER_NAME "HAKit"
@@ -540,7 +539,6 @@ static struct libwebsocket_protocols ws_protocols[] = {
 		.rx_buffer_size = 0,
 	},
 	{ }, /* Room for hakit-events-protocol */
-	{ }, /* Room for dumb-increment-protocol */
 	{ NULL, NULL, 0, 0 } /* terminator */
 };
 
@@ -560,7 +558,6 @@ ws_t *ws_new(int port)
 	memset(ws, 0, sizeof(ws_t));
 
 	ws_events_init(&ws_protocols[1]);
-	ws_demo_init(&ws_protocols[2]);
 
 	memset(&info, 0, sizeof(info));
 	info.port = port;
