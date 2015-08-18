@@ -30,13 +30,13 @@ static int hk_mod_init_dir(char *dir)
 	DIR *d;
 	struct dirent *ent;
 
-	log_str("Scanning class directory '%s' ...", dir);
-
 	d = opendir(dir);
 	if (d == NULL) {
 		log_debug(2, "Directory '%s' not found", dir);
 		return 0;
 	}
+
+	log_str("Scanning class directory '%s' ...", dir);
 
 	while ((ent = readdir(d)) != NULL) {
 		char *name = ent->d_name;
@@ -104,13 +104,13 @@ int hk_mod_init(char *class_path)
 	}
 
 	if (ret == 0) {
-		if (env_devel()) {
-			ret = hk_mod_init_dir("classes");
-		}
+		hk_mod_init_dir("classes");
+		/* Don't care if this directory does not exist */
 	}
 
 	if (ret == 0) {
-		ret = hk_mod_init_dir("/usr/lib/hakit/classes");
+		hk_mod_init_dir("/usr/lib/hakit/classes");
+		/* Don't care if this directory does not exist */
 	}
 
 	return ret;
