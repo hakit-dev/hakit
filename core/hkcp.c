@@ -532,7 +532,7 @@ static void hkcp_sink_unregister_(hkcp_t *hkcp, char *name)
 #endif
 
 
-static char *hkcp_sink_update(hkcp_sink_t *sink, char *value)
+static char *hkcp_sink_update_(hkcp_sink_t *sink, char *value)
 {
 	/* Update sink value */
 	buf_set_str(&sink->ep.value, value);
@@ -550,6 +550,19 @@ static char *hkcp_sink_update(hkcp_sink_t *sink, char *value)
 	}
 
 	return sink->ep.name;
+}
+
+
+char *hkcp_sink_update(hkcp_t *hkcp, int id, char *value)
+{
+	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
+
+	if ((sink == NULL) || (sink->ep.name == NULL)) {
+		log_str("PANIC: Attempting to update unknown sink #%d\n", id);
+		return NULL;
+	}
+
+	return hkcp_sink_update_(sink, value);
 }
 
 
@@ -824,13 +837,13 @@ char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
 {
 	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
 
-	if ((source != NULL) && (source->ep.name != NULL)) {
-		buf_set_str(&source->ep.value, value);
-		hkcp_source_send(source);
-	}
-	else {
+	if ((source == NULL) || (source->ep.name == NULL)) {
 		log_str("PANIC: Attempting to update unknown source #%d\n", id);
+		return NULL;
 	}
+
+	buf_set_str(&source->ep.value, value);
+	hkcp_source_send(source);
 
 	return source->ep.name;
 }
@@ -1079,7 +1092,7 @@ static void hkcp_command_set(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf
 			sink = hkcp_sink_retrieve(hkcp, args);
 			if (sink != NULL) {
 				/* Update sink value and invoke sink event callback */
-				hkcp_sink_update(sink, value);
+				hkcp_sink_update_(sink, value);
 			}
 			else {
 				/* Send back error message if not in monitor mode */

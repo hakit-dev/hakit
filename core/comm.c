@@ -94,6 +94,24 @@ void comm_sink_set_widget(int id, char *widget_name)
 }
 
 
+void comm_sink_update_str(int id, char *value)
+{
+	char *name = hkcp_sink_update(&hk_hkcp, id, value);
+
+	if (name != NULL) {
+		comm_ws_send(hk_ws, name, value);
+	}
+}
+
+
+void comm_sink_update_int(int id, int value)
+{
+	char str[32];
+	snprintf(str, sizeof(str), "%d", value);
+	comm_sink_update_str(id, str);
+}
+
+
 int comm_source_register(char *name, int event)
 {
 	return hkcp_source_register(&hk_hkcp, name, event);
