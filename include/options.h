@@ -26,6 +26,7 @@ extern const options_entry_t options_entries[];
 
 extern int opt_debug;
 extern int opt_daemon;
+extern int opt_no_hkcp;
 extern char *opt_hosts;
 
 extern int options_parse(int *_argc, char *argv[], char *parameter_string);

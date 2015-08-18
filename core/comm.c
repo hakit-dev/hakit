@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "env.h"
+#include "options.h"
 #include "log.h"
 #include "ws.h"
 #include "ws_events.h"
@@ -46,7 +47,7 @@ int comm_init(void)
 	}
 
 	/* Init HTTP/WebSocket server */
-	hk_ws = ws_new(HAKIT_HTTP_PORT);
+	hk_ws = ws_new(opt_no_hkcp ? 0:HAKIT_HTTP_PORT);
 	if (hk_ws == NULL) {
 		return -1;
 	}

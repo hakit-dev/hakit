@@ -38,8 +38,9 @@ static char *opt_class_path = NULL;
 const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
 	{ "daemon",  'D', 0, OPTIONS_TYPE_NONE,   &opt_daemon,  "Run in background as a daemon" },
-	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit host names", "HOST" },
-	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable monitor mode" },
+	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
+	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
+	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable HKCP monitor mode" },
 	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 	{ NULL }
 };

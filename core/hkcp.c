@@ -352,6 +352,12 @@ static void hkcp_sink_advertise(hkcp_t *hkcp, int reply)
 	buf_t buf;
 	int i;
 
+	// Nothing to do in local mode
+	if (hkcp->udp_srv.chan.fd > 0) {
+		return;
+	}
+
+	// Nothing to do if no sink registered
 	if (nsinks <= 0) {
 		return;
 	}
@@ -576,6 +582,12 @@ static void hkcp_source_advertise(hkcp_t *hkcp, int reply)
 	buf_t buf;
 	int i;
 
+	// Nothing to do in local mode
+	if (hkcp->udp_srv.chan.fd > 0) {
+		return;
+	}
+
+	// Nothing to do if no source registered
 	if (nsources <= 0) {
 		return;
 	}
@@ -856,6 +868,11 @@ char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
 static void hkcp_udp_send(hkcp_t *hkcp, buf_t *buf, int reply)
 {
 	int i;
+
+	// Nothing to do in local mode
+	if (hkcp->udp_srv.chan.fd > 0) {
+		return;
+	}
 
 	if (reply) {
 		udp_srv_send_reply(&hkcp->udp_srv, (char *) buf->base, buf->len);
@@ -1367,8 +1384,10 @@ static void hkcp_advertise(hkcp_t *hkcp)
 		hkcp->advertise_tag = 0;
 	}
 
-	log_debug(2, "Will send advertisement request in %lu ms", ADVERTISE_DELAY);
-	hkcp->advertise_tag = sys_timeout(ADVERTISE_DELAY, (sys_func_t) hkcp_advertise_now, hkcp);
+	if (hkcp->udp_srv.chan.fd > 0) {
+		log_debug(2, "Will send advertisement request in %lu ms", ADVERTISE_DELAY);
+		hkcp->advertise_tag = sys_timeout(ADVERTISE_DELAY, (sys_func_t) hkcp_advertise_now, hkcp);
+	}
 }
 
 
@@ -1424,12 +1443,14 @@ int hkcp_init(hkcp_t *hkcp, int port)
 	hk_tab_init(&hkcp->sinks, sizeof(hkcp_sink_t));
 	hk_tab_init(&hkcp->sources, sizeof(hkcp_source_t));
 
-	if (udp_srv_init(&hkcp->udp_srv, port, (io_func_t) hkcp_udp_event, hkcp)) {
-		goto DONE;
-	}
+	if (port > 0) {
+		if (udp_srv_init(&hkcp->udp_srv, port, (io_func_t) hkcp_udp_event, hkcp)) {
+			goto DONE;
+		}
 
-	if (tcp_srv_init(&hkcp->tcp_srv, port, hkcp_tcp_event, hkcp)) {
-		goto DONE;
+		if (tcp_srv_init(&hkcp->tcp_srv, port, hkcp_tcp_event, hkcp)) {
+			goto DONE;
+		}
 	}
 
 	if (!opt_daemon) {
@@ -1441,8 +1462,10 @@ int hkcp_init(hkcp_t *hkcp, int port)
 	hkcp_init_hosts(hkcp);
 
 	/* Init network interface check */
-	hkcp->ninterfaces = netif_show_interfaces();
-	sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) hkcp_check_interfaces, hkcp);
+	if (port > 0) {
+		hkcp->ninterfaces = netif_show_interfaces();
+		sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) hkcp_check_interfaces, hkcp);
+	}
 
 	ret = 0;
 
