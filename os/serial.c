@@ -114,8 +114,8 @@ int serial_open(char *devname, unsigned int speed, int rtscts)
 	termio.c_cc[VMIN] = 1;
 	termio.c_cc[VTIME] = 0;
 
-	cfsetispeed(&termio, speed);
-	cfsetospeed(&termio, speed);
+	cfsetispeed(&termio, tspeed);
+	cfsetospeed(&termio, tspeed);
 
 	if ( tcsetattr(fd, TCSANOW, &termio) ) {
 		log_str("ERROR: tcsetattr(%s): %s", devname, strerror(errno));
