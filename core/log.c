@@ -40,25 +40,30 @@ void log_tstamp(void)
 {
 	static struct timeval t0 = {0,0};
 	struct timeval t;
-	int dt_sec, dt_usec;
 	char str[32];
-
-	if (t0.tv_sec == 0) {
-		gettimeofday(&t0, NULL);
-	}
+	int len;
 
 	gettimeofday(&t, NULL);
 
-	dt_sec = t.tv_sec - t0.tv_sec;
-	dt_usec = t.tv_usec - t0.tv_usec;
-	if (dt_usec < 0) {
-		dt_usec += 1000000;
-		dt_sec--;
+	len = strftime(str, sizeof(str), "%d-%b-%Y %H:%M:%S ", localtime(&t.tv_sec));
+	log_put(str, len);
+
+	if (opt_debug > 0) {
+		int dt_sec, dt_usec;
+
+		if (t0.tv_sec == 0) {
+			t0 = t;
+		}
+
+		dt_sec = t.tv_sec - t0.tv_sec;
+		dt_usec = t.tv_usec - t0.tv_usec;
+		if (dt_usec < 0) {
+			dt_usec += 1000000;
+			dt_sec--;
+		}
+
+		log_printf("%d.%06d ", dt_sec, dt_usec);
 	}
-
-	strftime(str, sizeof(str), "%d-%b-%Y %H:%M:%S", localtime(&t.tv_sec));
-
-	log_printf("%s %d.%06d ", str, dt_sec, dt_usec);
 }
 
 
