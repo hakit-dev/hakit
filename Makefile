@@ -98,8 +98,17 @@ clean::
 
 INSTALL_BIN = $(DESTDIR)/usr/bin
 INSTALL_SHARE = $(DESTDIR)/usr/share/hakit
+INSTALL_INIT = $(DESTDIR)/etc/init.d
+
+ifeq ($(ARCH),mips)
+INIT_SCRIPT = hakit-openwrt.sh
+else
+INIT_SCRIPT = hakit.sh
+endif
 
 install:: all
-	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE)
+	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE) $(INSTALL_INIT)
 	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
+	$(CP) -a ui test/timer.hk $(INSTALL_SHARE)/
+	$(CP) -a $(INIT_SCRIPT) $(INSTALL_INIT)/hakit
 	make -C classes DESTDIR=$(abspath $(HAKIT_DIR)$(DESTDIR)) install

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+NAME=hakit
+
+update-rc.d $NAME defaults
+update-rc.d $NAME enable
+service $NAME restart
