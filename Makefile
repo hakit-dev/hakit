@@ -16,8 +16,10 @@ ARCH_LIB = $(OUTDIR)/libhakit.a
 ARCH_LIBS = $(ARCH_LIB)
 
 BINS = hakit
-BINS += hakit-test-usb
-#BINS += hakit-test-proc hakit-test-comm
+ifdef BUILD_TEST
+BINS += hakit-test-proc hakit-test-comm hakit-test-usb
+endif
+
 ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 include defs.mk
