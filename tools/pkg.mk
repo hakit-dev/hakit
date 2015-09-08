@@ -55,13 +55,6 @@ ipk: check check_pkg_vars install
 	    -e 's/@ARCH@/$(ARCH)/' \
 	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
 	    control.in > $(DESTDIR)/DEBIAN/control
-	fakeroot $(HAKIT_DIR)tools/opkg-build $(DESTDIR) $(OUTDIR)
+	fakeroot $(HAKIT_DIR)tools/opkg-build $(DESTDIR) $(PKGDIR)
 
-endif
-
-pkgclean:
-ifdef PKGDIR
-	$(RM) $(PKGDIR)
-else
-	@true
 endif
