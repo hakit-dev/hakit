@@ -13,7 +13,6 @@ START=99
 
 NAME='hakit'
 BIN="/usr/bin/$NAME"
-LOG="/var/log/$NAME.log"
 CONF="/etc/$NAME.conf"
 
 [ -r $CONF ] && . $CONF
@@ -43,8 +42,7 @@ stop() {
 start() {
     stop
     sleep 5
-    /bin/rm -f $LOG
-    $BIN -d1 --daemon $ARGS $APP 2>>$LOG >>$LOG
+    $BIN -d1 --daemon $ARGS $APP
 }
 
 status() {

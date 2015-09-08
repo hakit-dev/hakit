@@ -7,7 +7,7 @@
 
 
 static char *log_prefix = "HAKit";
-static FILE *log_f = NULL;
+static int log_opened = 0;
 static buf_t log_buf;
 
 
@@ -19,8 +19,8 @@ void log_init(char *prefix)
 
 static void log_open(void)
 {
-	if (log_f == NULL) {
-		log_f = stderr;
+	if (!log_opened) {
+		log_opened = 1;
 		buf_init(&log_buf);
 		if (opt_daemon) {
 			openlog(log_prefix, LOG_PID, LOG_LOCAL0);
@@ -33,13 +33,14 @@ static void log_flush(void)
 {
 	if (log_buf.len > 0) {
 		if (log_buf.base[log_buf.len-1] == '\n') {
-			fwrite(log_buf.base, 1, log_buf.len, log_f);
-			fflush(log_f);
-
 			if (opt_daemon) {
 				log_buf.len--;
 				log_buf.base[log_buf.len] = '\0';
 				syslog(LOG_DEBUG, "%s", (char *) log_buf.base);
+			}
+			else {
+				fwrite(log_buf.base, 1, log_buf.len, stderr);
+				fflush(stderr);
 			}
 
 			log_buf.len = 0;
