@@ -109,6 +109,6 @@ endif
 install:: all
 	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE) $(INSTALL_INIT)
 	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
-	$(CP) -a ui test/timer.hk $(INSTALL_SHARE)/
+	$(CP) -a ui test/timer.hk $(INSTALL_SHARE)/test.hk
 	$(CP) -a $(INIT_SCRIPT) $(INSTALL_INIT)/hakit
 	make -C classes DESTDIR=$(abspath $(HAKIT_DIR)$(DESTDIR)) install
