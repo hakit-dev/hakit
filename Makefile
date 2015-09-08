@@ -32,7 +32,7 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
+all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes favicon
 
 
 #
@@ -83,10 +83,13 @@ $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit: $(OUTDIR)/hakit.o $(OBJS)
 
+.PHONY: favicon
+favicon: ui/favicon.ico
+
 clean::
 	make -C classes clean
 	make -C lws clean
-	$(RM) os/*~ core/*~
+	$(RM) os/*~ core/*~ ui/favicon.ico
 
 
 #
@@ -99,5 +102,4 @@ INSTALL_SHARE = $(DESTDIR)/usr/share/hakit
 install:: all
 	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE)
 	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
-	$(CP) -a ui $(INSTALL_SHARE)/
 	make -C classes DESTDIR=$(abspath $(HAKIT_DIR)$(DESTDIR)) install
