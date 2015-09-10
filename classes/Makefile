@@ -1,5 +1,6 @@
 CLASSES := sink source and or \
-	timer-pulse timer-on timer-off
+	timer-pulse timer-on timer-off \
+	link-serial
 
 all::
 	for dir in $(CLASSES); do \
