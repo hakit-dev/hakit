@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <malloc.h>
 
@@ -96,11 +97,30 @@ static void tty_recv(ctx_t *ctx, char *buf, int size)
 			tty_recv_line(ctx, (char *) ctx->lbuf.base);
 			ctx->lbuf.len = 0;
 		}
-		else {
+		else if (c >= ' ') {
 			buf_append_byte(&ctx->lbuf, c);
 		}
 	}
 }
+
+
+static int tty_send(ctx_t *ctx, char *fmt, ...)
+{
+	char str[128];
+	int len;
+	va_list ap;
+
+	va_start(ap, fmt);
+	len = vsnprintf(str, sizeof(str)-1, fmt, ap);
+	va_end(ap);
+
+	log_debug(2, "%s [SEND]: '%s'", ctx->tty_name, str);
+
+	str[len++] = '\n';
+
+	return io_channel_write(&ctx->tty_chan, str, len);
+}
+
 
 
 static int _new(hk_obj_t *obj)
@@ -179,20 +199,14 @@ static void _start(hk_obj_t *obj)
 	io_channel_setup(&ctx->tty_chan, fd, (io_func_t) tty_recv, ctx);
 
 	/* Ask device to send status */
-	io_channel_write(&ctx->tty_chan, "status\n", 7);
+	tty_send(ctx, "status");
 }
 
 
 static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
-	char str[64];
-	int len;
-
-	len = snprintf(str, sizeof(str), "%s=%s\n", pad->name, value);
-	log_debug(2, "%s [SEND]: '%s'", ctx->tty_name, str);
-
-	io_channel_write(&ctx->tty_chan, str, len);
+	tty_send(ctx, "%s=%s", pad->name, value);
 }
 
 
