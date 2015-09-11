@@ -1,0 +1,9 @@
+[objects]
+board: link-serial tty=/dev/ttyACM0 speed=115200 inputs=led outputs=button
+
+button: source local
+led: sink local widget=slider:min=0,max=100,step=10
+
+[nets]
+button.in board.button
+led.out board.led
