@@ -19,11 +19,13 @@
 # Description:       Start/stop HAKit, the Home Automation Kit service
 ### END INIT INFO
 
+DEBUG=1
+
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="HAKit daemon"
 NAME=hakit
 DAEMON="/usr/bin/$NAME"
-DAEMON_ARGS="--debug=1 --daemon"
+DAEMON_ARGS=""
 PIDFILE=/var/run/$NAME.pid
 CONF=/etc/$NAME.conf
 
@@ -50,7 +52,7 @@ do_start()
 	#   2 if daemon could not be started
 	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
 		|| return 1
-	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- --daemon $DAEMON_ARGS $APP \
+	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- --daemon --debug=$DEBUG $DAEMON_ARGS $APP \
 		|| return 2
 	return 0;
 }

@@ -11,8 +11,11 @@
 
 START=99
 
+DEBUG=1
+
 NAME='hakit'
-BIN="/usr/bin/$NAME"
+DAEMON="/usr/bin/$NAME"
+DAEMON_ARGS=""
 CONF="/etc/$NAME.conf"
 
 [ -r $CONF ] && . $CONF
@@ -42,7 +45,7 @@ stop() {
 start() {
     stop
     sleep 5
-    $BIN -d1 --daemon $ARGS $APP
+    $DAEMON --daemon --debug=$DEBUG $DAEMON_ARGS $APP
 }
 
 status() {
