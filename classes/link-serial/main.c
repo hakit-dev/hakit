@@ -29,7 +29,14 @@
 
 
 typedef struct {
+	char *str;
+	int len;
+} prefix_t;
+
+typedef struct {
 	hk_obj_t *obj;
+	prefix_t tx_prefix;
+	prefix_t rx_prefix;
 	hk_tab_t inputs;
 	hk_tab_t outputs;
 	char *tty_name;
@@ -60,14 +67,30 @@ static void tty_recv_line(ctx_t *ctx, char *key)
 
 	log_debug(2, "%s [RECV]: '%s'", ctx->tty_name, key);
 
-	/* Extract key and value from device event */
-	value = strchr(key, '=');
-	if (value == NULL) {
-		log_str("%s [WARN]: Received badly formatted datagram: %s", ctx->tty_name, key);
-		return;
+	/* Filter against RX prefix */
+	if (ctx->rx_prefix.str != NULL) {
+		if (strncmp(key, ctx->rx_prefix.str, ctx->rx_prefix.len) != 0) {
+			return;
+		}
+		key += ctx->rx_prefix.len;
 	}
 
-	*(value++) = '\0';
+	/* Extract key and value from device event */
+	value = key;
+	while (*value > ' ') {
+		value++;
+	}
+	if (*value != '\0') {
+		*(value++) = '\0';
+	}
+	while ((*value != '\0') && (*value <= ' ')) {
+		value++;
+	}
+
+	/* No value provided => do nothing */
+	if (*value == '\0') {
+		return;
+	}
 
 	/* Find output pad corresponding to the key */
 	pad = find_pad(&ctx->outputs, key);
@@ -165,6 +188,25 @@ static int _new(hk_obj_t *obj)
 		s1 = s2;
 	}
 
+	/* Get serial device name */
+	ctx->tty_name = hk_prop_get(&obj->props, "tty");
+	if (ctx->tty_name == NULL) {
+		ctx->tty_name = DEFAULT_DEV;
+	}
+
+	/* Get tx/rx command prefixes */
+	ctx->tx_prefix.str = hk_prop_get(&obj->props, "tx-prefix");
+	if (ctx->tx_prefix.str != NULL) {
+		log_debug(1, "%s: tx-prefix='%s'", ctx->tty_name, ctx->tx_prefix.str);
+		ctx->tx_prefix.len = strlen(ctx->tx_prefix.str);
+	}
+
+	ctx->rx_prefix.str = hk_prop_get(&obj->props, "rx-prefix");
+	if (ctx->rx_prefix.str != NULL) {
+		log_debug(1, "%s: rx-prefix='%s'", ctx->tty_name, ctx->rx_prefix.str);
+		ctx->rx_prefix.len = strlen(ctx->rx_prefix.str);
+	}
+
 	return 0;
 }
 
@@ -174,12 +216,6 @@ static void _start(hk_obj_t *obj)
 	ctx_t *ctx = obj->ctx;
 	int speed;
 	int fd;
-
-	/* Get serial device name */
-	ctx->tty_name = hk_prop_get(&obj->props, "tty");
-	if (ctx->tty_name == NULL) {
-		ctx->tty_name = DEFAULT_DEV;
-	}
 
 	/* Get serial speed */
 	speed = hk_prop_get_int(&obj->props, "speed");
