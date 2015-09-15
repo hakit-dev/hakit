@@ -41,7 +41,7 @@ $(OUTDIR):
 
 $(INC):
 	git clone $(GIT_URL)
-	git -C $(SRC_DIR) checkout $(LWS_VERSION)
+	(cd $(SRC_DIR) && git checkout $(LWS_VERSION))
 
 $(LIB): $(INC)
 	(cd $(OUTDIR) && cmake ../../$(SRC_DIR) $(CMAKE_FLAGS))
