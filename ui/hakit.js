@@ -201,9 +201,13 @@ function update_signal(line)
 {
     console.log("update_signal('"+line+"')");
 
-    var fields = line.split(" ");
-    var name = fields[0];
-    var value = fields[1];
+    var i = line.indexOf(" ");
+    if (i <= 0) {
+	return;
+    }
+
+    var name = line.substr(0,i);
+    var value = line.substr(i+1);
 
     if (hakit_dashboard) {
 	dashboard_update(name, value);
