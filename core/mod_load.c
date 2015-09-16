@@ -151,6 +151,21 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 
 	log_debug(2, "hk_mod_load_line %s:%d: '%s'", ctx->fname, ctx->lnum, line);
 
+	/* Skip leadink blanks */
+	while ((*line <= ' ') && (*line != '\0')) {
+		line++;
+	}
+
+	/* Ignore empty lines */
+	if (*line == '\0') {
+		return 0;
+	}
+
+	/* Ignore commented lines */
+	if ((*line == ';') || (*line == '#')) {
+		return 0;
+	}
+
 	/* Check for new section id */
 	if (*line == '[') {
 		if (strcmp(line, "[objects]") == 0) {
@@ -164,16 +179,6 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 			log_str("WARNING: %s:%s: ignoring unknown section %s", ctx->fname, ctx->lnum, line);
 		}
 
-		return 0;
-	}
-
-	/* Skip leadink blanks */
-	while ((*line <= ' ') && (*line != '\0')) {
-		line++;
-	}
-
-	/* Ignore empty lines */
-	if (*line == '\0') {
 		return 0;
 	}
 
