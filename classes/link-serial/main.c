@@ -130,11 +130,15 @@ static void tty_recv(ctx_t *ctx, char *buf, int size)
 static int tty_send(ctx_t *ctx, char *fmt, ...)
 {
 	char str[128];
-	int len;
+	int len = 0;
 	va_list ap;
 
+	if (ctx->tx_prefix.str != NULL) {
+		len += snprintf(str+len, sizeof(str)-1-len, "%s", ctx->tx_prefix.str);
+	}
+
 	va_start(ap, fmt);
-	len = vsnprintf(str, sizeof(str)-1, fmt, ap);
+	len += vsnprintf(str+len, sizeof(str)-1-len, fmt, ap);
 	va_end(ap);
 
 	log_debug(2, "%s [SEND]: '%s'", ctx->tty_name, str);

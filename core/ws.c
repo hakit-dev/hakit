@@ -17,50 +17,12 @@
 #include "log.h"
 #include "sys.h"
 #include "tab.h"
+#include "mime.h"
 #include "ws.h"
 #include "ws_utils.h"
 #include "ws_events.h"
 
 #define SERVER_NAME "HAKit"
-
-
-/*
- * Mime types
- */
-
-typedef struct {
-	const char *suffix;
-	const char *type;
-} ws_mime_t;
-
-static const ws_mime_t ws_mimes[] = {
-	{"ico",  "image/x-icon"},
-	{"png",  "image/png"},
-	{"jpg",  "image/jpeg"},
-	{"html", "text/html"},
-	{"js",   "text/javascript"},
-	{"css",  "text/css"},
-	{NULL, NULL}
-};
-
-
-static const char *get_mimetype(const char *file)
-{
-	char *suffix = strrchr(file, '.');
-	const ws_mime_t *mime = ws_mimes;
-
-	if (suffix != NULL) {
-		suffix++;
-		while (mime->suffix != NULL) {
-			if (strcmp(suffix, mime->suffix) == 0) {
-				return mime->type;
-			}
-			mime++;
-		}
-	}
-
-	return NULL;
-}
 
 
 /*
@@ -86,6 +48,51 @@ static int ws_callback_poll(struct libwebsocket_context *context, struct pollfd 
 		log_debug(3, "  => %d", ret);
 	}
 	return 1;
+}
+
+
+static char *search_file(ws_t *ws, char *uri, size_t uri_len)
+{
+	int i;
+
+	for (i = 0; i < ws->document_roots.nmemb; i++) {
+		char *dir = HK_TAB_VALUE(ws->document_roots, char *, i);
+		int file_path_len = strlen(dir);
+		int file_path_size = file_path_len + uri_len + 20;
+		char *file_path = malloc(file_path_size);
+
+		strcpy(file_path, dir);
+
+		if (uri[0] != '/') {
+			file_path[file_path_len++] = '/';
+		}
+
+		strcpy(file_path+file_path_len, uri);
+		file_path_len += uri_len;
+
+		/* Check if URI targets a directory */
+		DIR *d = opendir(file_path);
+		if (d != NULL) {
+			closedir(d);
+
+			/* Try to access 'index.html' in this directory */
+			if (file_path[file_path_len-1] != '/') {
+				file_path[file_path_len++] = '/';
+			}
+			strcpy(file_path+file_path_len, "index.html");
+		}
+
+		FILE *f = fopen(file_path, "r");
+		if (f != NULL) {
+			fclose(f);
+			return file_path;
+		}
+
+		free(file_path);
+		file_path = NULL;
+	}
+
+	return NULL;
 }
 
 
@@ -140,56 +147,12 @@ static int ws_http_request(struct libwebsocket_context *context,
 		content_length = pss->rsp.len;
 	}
 	else {
-		int file_path_size;
-		int file_path_len;
-
-		/* Check a document root is defined */
-		if (ws->document_root == NULL) {
-			log_str("HTTP ERROR: No document root directory defined");
+		/* Search file among root directory list */
+		file_path = search_file(ws, uri, len);
+		if (file_path == NULL) {
+			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
 			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
 			goto failed;
-		}
-
-		/* Construct full file name */
-		file_path_size = ws->document_root_len + len + 20;
-		file_path = malloc(file_path_size);
-
-		strcpy(file_path, ws->document_root);
-		file_path_len = ws->document_root_len;
-
-		if (uri[0] != '/') {
-			file_path[file_path_len++] = '/';
-		}
-
-		strcpy(file_path+file_path_len, uri);
-		file_path_len += len;
-
-		/* Check if URI targets a directory */
-		DIR *d = opendir(file_path);
-		if (d != NULL) {
-			closedir(d);
-
-			/* Try to access 'index.html' in this directory */
-			if (file_path[file_path_len-1] != '/') {
-				file_path[file_path_len++] = '/';
-			}
-			strcpy(file_path+file_path_len, "index.html");
-
-			/* This server has no concept of directory listing */
-			pss->f = fopen(file_path, "r");
-			if (pss->f == NULL) {
-				libwebsockets_return_http_status(context, wsi, HTTP_STATUS_FORBIDDEN, NULL);
-				goto try_to_reuse;
-			}
-		}
-		else {
-			/* Not a directory: open file */
-			pss->f = fopen(file_path, "r");
-			if (pss->f == NULL) {
-				log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
-				libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
-				goto failed;
-			}
 		}
 
 		/* Get and check mime type */
@@ -197,6 +160,14 @@ static int ws_http_request(struct libwebsocket_context *context,
 		if (mimetype == NULL) {
 			log_str("HTTP ERROR: Unknown mimetype for '%s'", file_path);
 			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
+			goto failed;
+		}
+
+		/* Open file */
+		pss->f = fopen(file_path, "r");
+		if (pss->f == NULL) {
+			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
+			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
 			goto failed;
 		}
 
@@ -582,6 +553,9 @@ ws_t *ws_new(int port)
 		return NULL;
 	}
 
+	/* Init table of document root directories */
+	hk_tab_init(&ws->document_roots, sizeof(char *));
+
 	/* Init table of aliases */
 	hk_tab_init(&ws->aliases, sizeof(ws_alias_t));
 
@@ -594,10 +568,15 @@ ws_t *ws_new(int port)
 
 void ws_destroy(ws_t *ws)
 {
-	/* Free document root directory name */
-	if (ws->document_root != NULL) {
-		free(ws->document_root);
+	int i;
+
+	/* Free document root directory list */
+	for (i = 0; i < ws->document_roots.nmemb; i++) {
+		char **p = HK_TAB_PTR(ws->document_roots, char *, i);
+		free(*p);
+		*p = NULL;
 	}
+	hk_tab_cleanup(&ws->document_roots);
 
 	/* Destroy libwebsockets context */
 	if (ws->context != NULL) {
@@ -613,14 +592,11 @@ void ws_destroy(ws_t *ws)
  * HTTP directory and aliased locations
  */
 
-void ws_set_document_root(ws_t *ws, char *document_root)
+void ws_add_document_root(ws_t *ws, char *dir)
 {
-	if (ws->document_root != NULL) {
-		free(ws->document_root);
-	}
-
-	ws->document_root = strdup(document_root);
-	ws->document_root_len = strlen(ws->document_root);
+	log_debug(2, "ws_add_document_root '%s'", dir);
+	char **p = hk_tab_push(&ws->document_roots);
+	*p = strdup(dir);
 }
 
 

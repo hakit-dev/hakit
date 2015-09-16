@@ -9,11 +9,14 @@
  * directory for more details.
  */
 
-#ifndef __HK_ENV_H__
-#define __HK_ENV_H__
+#ifndef __HAKIT_ENV_H__
+#define __HAKIT_ENV_H__
 
 extern void env_init(int argc, char *argv[]);
-extern int env_devel(void);
+extern char *env_devdir(char *subpath);
 extern char *env_bindir(char *subpath);
 
-#endif /* __HK_ENV_H__ */
+extern char *env_app(void);
+extern char *env_appdir(char *subpath);
+
+#endif /* __HAKIT_ENV_H__ */

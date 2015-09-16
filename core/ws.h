@@ -26,8 +26,7 @@ typedef struct {
 
 struct ws_s {
 	void *context;
-	char *document_root;
-	int document_root_len;
+	hk_tab_t document_roots; // Table of (char *)
 	hk_tab_t aliases;       // Table of (ws_alias_t)
 	hk_tab_t sessions;      // Table of WebSocket sessions (void *)
 	ws_command_handler_t command_handler;
@@ -40,7 +39,7 @@ extern ws_t *ws_new(int port);
 extern void ws_destroy(ws_t *ws);
 
 /* HTTP server configuration */
-extern void ws_set_document_root(ws_t *ws, char *document_root);
+extern void ws_add_document_root(ws_t *ws, char *dir);
 extern void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_data);
 
 /* WebSocket command handling */

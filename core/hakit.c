@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libgen.h>
 #include <errno.h>
 #include <unistd.h>
 
@@ -90,6 +91,8 @@ static void run_as_daemon(void)
 
 int main(int argc, char *argv[])
 {
+	char *app;
+
 	if (options_parse(&argc, argv, NULL) != 0) {
 		exit(1);
 	}
@@ -123,8 +126,9 @@ int main(int argc, char *argv[])
 		return 2;
 	}
 
-	if (argc > 1) {
-		if (hk_mod_load(argv[1])) {
+	app = env_app();
+	if (app != NULL) {
+		if (hk_mod_load(app)) {
 			return 3;
 		}
 		hk_obj_start_all();
