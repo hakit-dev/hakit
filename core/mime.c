@@ -23,6 +23,7 @@ static const ws_mime_t ws_mimes[] = {
 	{"ico",  "image/x-icon"},
 	{"png",  "image/png"},
 	{"jpg",  "image/jpeg"},
+	{"svg",  "image/svg+xml"},
 	{"html", "text/html"},
 	{"js",   "text/javascript"},
 	{"css",  "text/css"},
