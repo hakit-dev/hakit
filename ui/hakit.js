@@ -1,10 +1,11 @@
 
-const ST_READY = 0;
-const ST_GET_CMD = 1;
-const ST_GET_RSP = 2;
+const ST_IDLE = 0;
+const ST_READY = 1;
+const ST_GET_CMD = 2;
+const ST_GET_RSP = 3;
 
 var hakit_sock;
-var hakit_sock_state = ST_READY;
+var hakit_sock_state = ST_IDLE;
 var hakit_signals;
 var hakit_dashboard;
 
@@ -36,6 +37,18 @@ function get_appropriate_ws_url()
 }
 
 
+function hakit_send(msg) {
+    console.log("hakit_send('"+msg+"')");
+    if (hakit_sock) {
+	hakit_sock.send(msg+"\n");
+    }
+}
+
+function hakit_update(id, value) {
+    hakit_send('set '+id+'="'+value+'"');
+}
+
+
 function clear_signals()
 {
     if (hakit_signals) {
@@ -50,7 +63,7 @@ function signal_update(elmt, st)
 {
     var id = elmt.id.split(':')[0];
     console.log("signal_update "+id+" "+st);
-    hakit_sock.send("set "+id+"="+st+"\n");
+    hakit_update(id, st);
 }
 
 
@@ -278,7 +291,7 @@ function recv_line(line) {
 
 function get_all() {
     if (hakit_sock_state == ST_READY) {
-	hakit_sock.send("get\n");
+	hakit_send("get");
 	hakit_sock_state = ST_GET_CMD;
     }
     else {
@@ -307,6 +320,8 @@ if (typeof MozWebSocket != "undefined") {
 
 try {
     hakit_sock.onopen = function() {
+	hakit_sock_state = ST_READY;
+
 	if (hakit_signals) {
 	    document.getElementById("ws_status_td").style.backgroundColor = "#40ff40";
 	    document.getElementById("ws_status").textContent = "Connected";
@@ -330,6 +345,8 @@ try {
     } 
 
     hakit_sock.onclose = function(){
+	hakit_sock_state = ST_IDLE;
+
 	if (hakit_signals) {
 	    document.getElementById("ws_status_td").style.backgroundColor = "#ff4040";
 	    document.getElementById("ws_status").textContent = "Disconnected";
