@@ -239,14 +239,14 @@ static void _start(hk_obj_t *obj)
 	io_channel_setup(&ctx->tty_chan, fd, (io_func_t) tty_recv, ctx);
 
 	/* Ask device to send status */
-	tty_send(ctx, "status");
+	//tty_send(ctx, "status");
 }
 
 
 static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
-	tty_send(ctx, "%s=%s", pad->name, value);
+	tty_send(ctx, "%s %s", pad->name, value);
 }
 
 
