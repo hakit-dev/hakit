@@ -32,7 +32,7 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes favicon
+all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
 
 #
@@ -83,9 +83,6 @@ $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit: $(OUTDIR)/hakit.o $(OBJS)
 
-.PHONY: favicon
-favicon: ui/favicon.ico
-
 clean::
 	make -C classes clean
 	make -C lws clean
@@ -95,6 +92,8 @@ clean::
 #
 # Install and packaging
 #
+
+INSTALL_DESTDIR = $(abspath $(HAKIT_DIR)$(DESTDIR))
 
 INSTALL_BIN = $(DESTDIR)/usr/bin
 INSTALL_SHARE = $(DESTDIR)/usr/share/hakit
@@ -109,7 +108,7 @@ endif
 install:: all
 	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE) $(INSTALL_INIT)
 	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
-	$(CP) -a ui $(INSTALL_SHARE)/
 	$(CP) -a test/timer.hk $(INSTALL_SHARE)/test.hk
 	$(CP) -a $(INIT_SCRIPT) $(INSTALL_INIT)/hakit
-	make -C classes DESTDIR=$(abspath $(HAKIT_DIR)$(DESTDIR)) install
+	make -C classes DESTDIR=$(INSTALL_DESTDIR) install
+	make -C ui DESTDIR=$(INSTALL_DESTDIR) install
