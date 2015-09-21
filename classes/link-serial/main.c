@@ -67,6 +67,10 @@ static void tty_recv_line(ctx_t *ctx, char *key)
 
 	log_debug(2, "%s [RECV]: '%s'", ctx->tty_name, key);
 
+	if (key == NULL) {
+		return;
+	}
+
 	/* Filter against RX prefix */
 	if (ctx->rx_prefix.str != NULL) {
 		if (strncmp(key, ctx->rx_prefix.str, ctx->rx_prefix.len) != 0) {
