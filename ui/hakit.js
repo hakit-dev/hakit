@@ -300,6 +300,57 @@ function get_all() {
 }
 
 
+function hakit_connect() {
+    /* Setup WebSocket connection */
+    if (typeof MozWebSocket != "undefined") {
+	hakit_sock = new MozWebSocket(get_appropriate_ws_url(), "hakit-events-protocol");
+    } else {
+	hakit_sock = new WebSocket(get_appropriate_ws_url(), "hakit-events-protocol");
+    }
+
+    try {
+	hakit_sock.onopen = function() {
+	    hakit_sock_state = ST_READY;
+
+	    if (hakit_signals) {
+		document.getElementById("ws_status_td").style.backgroundColor = "#40ff40";
+		document.getElementById("ws_status").textContent = "Connected";
+	    }
+	    if (hakit_dashboard) {
+		dashboard_connect(true);
+	    }
+	    get_all();
+	} 
+
+	hakit_sock.onmessage = function got_packet(msg) {
+	    var lines = msg.data.split("\n");
+	    //console.log("=== ["+msg.data.length+"] "+lines.length+" '"+msg.data+"'");
+	    for (var i = 0; i < lines.length; i++) {
+		var line = lines[i];
+		if (line != "") {
+		    recv_line(line);
+		}
+	    }
+	    //console.log("===");
+	} 
+
+	hakit_sock.onclose = function(){
+	    hakit_sock_state = ST_IDLE;
+
+	    if (hakit_signals) {
+		document.getElementById("ws_status_td").style.backgroundColor = "#ff4040";
+		document.getElementById("ws_status").textContent = "Disconnected";
+	    }
+	    if (hakit_dashboard) {
+		dashboard_connect(false);
+	    }
+	}
+    } catch(exception) {
+	alert('<p>ERROR: ' + exception + '</p>');  
+    }
+}
+
+
 /* Detect and show browser */
 var browser = document.getElementById("brow");
 if (browser) {
@@ -311,50 +362,3 @@ if (browser) {
 hakit_signals = document.getElementById("signals");
 hakit_dashboard = document.getElementById("dashboard");
 
-/* Setup WebSocket connection */
-if (typeof MozWebSocket != "undefined") {
-    hakit_sock = new MozWebSocket(get_appropriate_ws_url(), "hakit-events-protocol");
-} else {
-    hakit_sock = new WebSocket(get_appropriate_ws_url(), "hakit-events-protocol");
-}
-
-try {
-    hakit_sock.onopen = function() {
-	hakit_sock_state = ST_READY;
-
-	if (hakit_signals) {
-	    document.getElementById("ws_status_td").style.backgroundColor = "#40ff40";
-	    document.getElementById("ws_status").textContent = "Connected";
-	}
-	if (hakit_dashboard) {
-	    dashboard_connect(true);
-	}
-	get_all();
-    } 
-
-    hakit_sock.onmessage = function got_packet(msg) {
-	var lines = msg.data.split("\n");
-	//console.log("=== ["+msg.data.length+"] "+lines.length+" '"+msg.data+"'");
-	for (var i = 0; i < lines.length; i++) {
-	    var line = lines[i];
-	    if (line != "") {
-		recv_line(line);
-	    }
-	}
-	//console.log("===");
-    } 
-
-    hakit_sock.onclose = function(){
-	hakit_sock_state = ST_IDLE;
-
-	if (hakit_signals) {
-	    document.getElementById("ws_status_td").style.backgroundColor = "#ff4040";
-	    document.getElementById("ws_status").textContent = "Disconnected";
-	}
-	if (hakit_dashboard) {
-	    dashboard_connect(false);
-	}
-    }
-} catch(exception) {
-    alert('<p>ERROR: ' + exception + '</p>');  
-}
