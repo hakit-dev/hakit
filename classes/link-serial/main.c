@@ -39,6 +39,7 @@ typedef struct {
 	hk_obj_t *obj;
 	prefix_t tx_prefix;
 	prefix_t rx_prefix;
+	hk_pad_t *connected_pad;
 	hk_tab_t inputs;
 	hk_tab_t outputs;
 	char *tty_name;
@@ -124,6 +125,10 @@ static void tty_recv(ctx_t *ctx, char *buf, int size)
 		log_str("%s: Serial device hung up.", ctx->tty_name);
 		io_channel_close(&ctx->tty_chan);
 		ctx->timeout = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
+
+		/* Update connection state pad */
+		hk_pad_update_int(ctx->connected_pad, 0);
+
 		return;
 	}
 
@@ -233,6 +238,10 @@ static int _new(hk_obj_t *obj)
 	/* Clear io channel */
 	io_channel_clear(&ctx->tty_chan);
 
+	/* Update connection state pad */
+	ctx->connected_pad = hk_pad_create(obj, HK_PAD_OUT, "connected");
+	hk_pad_update_int(ctx->connected_pad, 0);
+
 	return 0;
 }
 
@@ -251,6 +260,9 @@ static int tty_connect(ctx_t *ctx)
 
 	/* Hook TTY to io channel */
 	io_channel_setup(&ctx->tty_chan, fd, (io_func_t) tty_recv, ctx);
+
+	/* Update connection state pad */
+	hk_pad_update_int(ctx->connected_pad, 1);
 
 	/* Ask device to send status */
 	//tty_send(ctx, "status");
