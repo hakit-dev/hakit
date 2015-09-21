@@ -27,6 +27,8 @@
 #define DEFAULT_DEV  "/dev/ttyUSB0"
 #define DEFAULT_SPEED 115200
 
+#define RETRY_DELAY 5000
+
 
 typedef struct {
 	char *str;
@@ -40,9 +42,14 @@ typedef struct {
 	hk_tab_t inputs;
 	hk_tab_t outputs;
 	char *tty_name;
+	int tty_speed;
 	io_channel_t tty_chan;
+	sys_tag_t timeout;
 	buf_t lbuf;
 } ctx_t;
+
+
+static int tty_retry(ctx_t *ctx);
 
 
 static hk_pad_t *find_pad(hk_tab_t *tab, char *key)
@@ -114,7 +121,9 @@ static void tty_recv(ctx_t *ctx, char *buf, int size)
 
 	/* Stop object is TTY hangup detected */
 	if (buf == NULL) {
-		log_str("Serial device hangup");
+		log_str("%s: Serial device hung up.", ctx->tty_name);
+		io_channel_close(&ctx->tty_chan);
+		ctx->timeout = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
 		return;
 	}
 
@@ -202,6 +211,12 @@ static int _new(hk_obj_t *obj)
 		ctx->tty_name = DEFAULT_DEV;
 	}
 
+	/* Get serial speed */
+	ctx->tty_speed = hk_prop_get_int(&obj->props, "speed");
+	if (ctx->tty_speed <= 0) {
+		ctx->tty_speed = DEFAULT_SPEED;
+	}
+
 	/* Get tx/rx command prefixes */
 	ctx->tx_prefix.str = hk_prop_get(&obj->props, "tx-prefix");
 	if (ctx->tx_prefix.str != NULL) {
@@ -215,28 +230,23 @@ static int _new(hk_obj_t *obj)
 		ctx->rx_prefix.len = strlen(ctx->rx_prefix.str);
 	}
 
+	/* Clear io channel */
+	io_channel_clear(&ctx->tty_chan);
+
 	return 0;
 }
 
 
-static void _start(hk_obj_t *obj)
+static int tty_connect(ctx_t *ctx)
 {
-	ctx_t *ctx = obj->ctx;
-	int speed;
 	int fd;
 
-	/* Get serial speed */
-	speed = hk_prop_get_int(&obj->props, "speed");
-	if (speed <= 0) {
-		speed = DEFAULT_SPEED;
-	}
-
 	/* Open serial device */
-        fd = serial_open(ctx->tty_name, speed, 0);
+        fd = serial_open(ctx->tty_name, ctx->tty_speed, 0);
 
 	/* Abort if serial device open fails */
 	if (fd < 0) {
-		return;
+		return -1;
 	}
 
 	/* Hook TTY to io channel */
@@ -244,6 +254,32 @@ static void _start(hk_obj_t *obj)
 
 	/* Ask device to send status */
 	//tty_send(ctx, "status");
+
+	return 0;
+}
+
+
+static int tty_retry(ctx_t *ctx)
+{
+	if (tty_connect(ctx)) {
+		return 1;
+	}
+
+	log_str("%s: Serial device is back...", ctx->tty_name);
+
+	ctx->timeout = 0;
+
+	return 0;
+}
+
+
+static void _start(hk_obj_t *obj)
+{
+	ctx_t *ctx = obj->ctx;
+
+	if (tty_connect(ctx)) {
+		ctx->timeout = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
+	}
 }
 
 
