@@ -301,6 +301,10 @@ function get_all() {
 
 
 function hakit_connect() {
+    /* Get document elements */
+    hakit_signals = document.getElementById("signals");
+    hakit_dashboard = document.getElementById("dashboard");
+
     /* Setup WebSocket connection */
     if (typeof MozWebSocket != "undefined") {
 	hakit_sock = new MozWebSocket(get_appropriate_ws_url(), "hakit-events-protocol");
@@ -349,16 +353,3 @@ function hakit_connect() {
 	alert('<p>ERROR: ' + exception + '</p>');  
     }
 }
-
-
-/* Detect and show browser */
-var browser = document.getElementById("brow");
-if (browser) {
-    BrowserDetect.init();
-    browser.textContent = " " + BrowserDetect.browser + " " + BrowserDetect.version +" " + BrowserDetect.OS +" ";
-}
-
-/* Get document elements */
-hakit_signals = document.getElementById("signals");
-hakit_dashboard = document.getElementById("dashboard");
-

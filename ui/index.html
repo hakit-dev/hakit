@@ -7,6 +7,7 @@
     <link rel="stylesheet" type="text/css" href="vendor/pure-tables.css">
     <link rel="stylesheet" type="text/css" href="switch.css">
     <link rel="stylesheet" type="text/css" href="led.css">
+    <script src="hakit.js"></script>
   </head>
 
   <body onload="hakit_connect();">
@@ -35,6 +36,10 @@
     </table>
 
     <script src="BrowserDetect.js"></script>
-    <script src="hakit.js"></script>
+    <script type="text/javascript">
+      BrowserDetect.init();
+      var browser = document.getElementById("brow");
+      browser.textContent = " " + BrowserDetect.browser + " " + BrowserDetect.version +" " + BrowserDetect.OS +" ";
+    </script>
   </body>
 </html>
