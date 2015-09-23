@@ -15,6 +15,7 @@ const HAKIT_ST_GET = 2;
 
 var hakit_sock;
 var hakit_sock_state = HAKIT_ST_IDLE;
+var hakit_sock_timeout;
 
 
 function get_appropriate_ws_url()
@@ -44,19 +45,22 @@ function get_appropriate_ws_url()
 }
 
 
-function hakit_send(msg) {
+function hakit_send(msg)
+{
     console.log("hakit_send('"+msg+"')");
     if (hakit_sock) {
 	hakit_sock.send(msg+"\n");
     }
 }
 
-function hakit_set(name, value) {
+function hakit_set(name, value)
+{
     hakit_send('set '+name+'="'+value+'"');
 }
 
 
-function hakit_get(name) {
+function hakit_get(name)
+{
     if (hakit_sock_state == HAKIT_ST_READY) {
 	if (name) {
 	    hakit_send("get "+name);
@@ -72,7 +76,8 @@ function hakit_get(name) {
 }
 
 
-function hakit_recv_line(line) {
+function hakit_recv_line(line)
+{
     //console.log("hakit_recv_line('"+line+"')");
 
     if (line == ".") {
@@ -105,7 +110,14 @@ function hakit_recv_line(line) {
 }
 
 
-function hakit_connect() {
+function hakit_connect()
+{
+    /* Clear pending connect timeout (if any) */
+    if (hakit_sock_timeout) {
+	window.clearTimeout(hakit_sock_timeout);
+	hakit_sock_timeout = undefined;
+    }
+
     /* Setup WebSocket connection */
     if (typeof MozWebSocket != "undefined") {
 	hakit_sock = new MozWebSocket(get_appropriate_ws_url(), "hakit-events-protocol");
@@ -115,8 +127,8 @@ function hakit_connect() {
 
     try {
 	hakit_sock.onopen = function() {
-	    hakit_sock_state = HAKIT_ST_READY;
 	    console.log("hakit_connect: connection established");
+	    hakit_sock_state = HAKIT_ST_READY;
 	    hakit_connected(true);
 	    hakit_get();
 	} 
@@ -133,10 +145,19 @@ function hakit_connect() {
 	    //console.log("===");
 	} 
 
-	hakit_sock.onclose = function(){
-	    hakit_sock_state = HAKIT_ST_IDLE;
-	    console.log("hakit_connect: connection close");
-	    hakit_connected(false);
+	hakit_sock.onclose = function() {
+	    hakit_sock = undefined;
+
+	    if (hakit_sock_state != HAKIT_ST_IDLE) {
+		console.log("hakit_connect: connection closed");
+		hakit_sock_state = HAKIT_ST_IDLE;
+		hakit_connected(false);
+	    }
+	    else {
+		console.log("hakit_connect: connection failure");
+	    }
+
+	    hakit_sock_timeout = setTimeout(hakit_connect, 10000);
 	}
     } catch(exception) {
 	alert('<p>ERROR: ' + exception + '</p>');  
