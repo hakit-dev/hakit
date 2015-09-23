@@ -16,6 +16,7 @@ const HAKIT_ST_GET = 2;
 var hakit_sock;
 var hakit_sock_state = HAKIT_ST_IDLE;
 var hakit_sock_timeout;
+var hakit_sock_failures = 0;
 
 
 function get_appropriate_ws_url()
@@ -152,12 +153,16 @@ function hakit_connect()
 		console.log("hakit_connect: connection closed");
 		hakit_sock_state = HAKIT_ST_IDLE;
 		hakit_connected(false);
+		hakit_sock_failures = 0;
 	    }
 	    else {
-		console.log("hakit_connect: connection failure");
+		hakit_sock_failures++;
+		console.log("hakit_connect: connection failure ("+hakit_sock_failures+")");
 	    }
 
-	    hakit_sock_timeout = setTimeout(hakit_connect, 10000);
+	    if (hakit_sock_failures < 60) {
+		hakit_sock_timeout = setTimeout(hakit_connect, 10000);
+	    }
 	}
     } catch(exception) {
 	alert('<p>ERROR: ' + exception + '</p>');  
