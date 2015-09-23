@@ -1,4 +1,15 @@
 <!DOCTYPE html>
+<!--
+ * HAKit - The Home Automation Kit
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * Dynamic table of source/sink signals
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+-->
+
 <html lang="en">
   <head>
     <meta charset=utf-8 http-equiv="Content-Language" content="en"/>
@@ -8,9 +19,10 @@
     <link rel="stylesheet" type="text/css" href="switch.css">
     <link rel="stylesheet" type="text/css" href="led.css">
     <script src="hakit.js"></script>
+    <script src="hakit_signal.js"></script>
   </head>
 
-  <body onload="hakit_connect();">
+  <body onload="hakit_signal_init();">
     <table>
       <tr>
 	<td id="brow">...</td>
