@@ -28,7 +28,7 @@ OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sy
 	gpio.c serial.c proc.c mod_init.c \
 	usb_io.c usb_device.c
 CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c mod_load.c prop.c \
-	mime.c http.c eventq.c ws.c ws_utils.c ws_events.c
+	mime.c http.c eventq.c ws.c ws_utils.c ws_events.c history.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 

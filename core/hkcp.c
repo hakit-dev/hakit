@@ -22,6 +22,7 @@
 #include "tcpio.h"
 #include "udpio.h"
 #include "command.h"
+#include "history.h"
 #include "hkcp.h"
 
 
@@ -41,6 +42,7 @@ static void hkcp_udp_send(hkcp_t *hkcp, buf_t *buf, int reply);
 static void hkcp_advertise(hkcp_t *hkcp);
 static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tcp_sock);
 static int hkcp_node_connect(hkcp_node_t *node);
+static hkcp_source_t *hkcp_source_retrieve(hkcp_t *hkcp, char *name);
 static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *node);
 
 
@@ -461,13 +463,22 @@ void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_sink_func_t func, void *us
 
 int hkcp_sink_register(hkcp_t *hkcp, char *name)
 {
-	hkcp_sink_t *sink = hkcp_sink_retrieve(hkcp, name);
+	hkcp_sink_t *sink;
 
-	if (sink == NULL) {
-		sink = hkcp_sink_alloc(hkcp);
-		sink->ep.name = strdup(name);
+	/* Ensure there is no name conflict against sink and source namespaces */
+	if (hkcp_source_retrieve(hkcp, name) != NULL) {
+		log_str("ERROR: Cannot register sink '%s': a source is already registered with this name\n", name);
+		return -1;
 	}
 
+	if (hkcp_sink_retrieve(hkcp, name)) {
+		log_str("ERROR: Cannot register source '%s': a sink is already registered with this name\n", name);
+		return -1;
+	}
+
+	/* Allocate new sink */
+	sink = hkcp_sink_alloc(hkcp);
+	sink->ep.name = strdup(name);
 	log_debug(2, "hkcp_sink_register sink='%s' (%d elements)", name, hkcp->sinks.nmemb);
 
 	buf_set_str(&sink->ep.value, "");
@@ -475,7 +486,11 @@ int hkcp_sink_register(hkcp_t *hkcp, char *name)
 
 	hk_tab_init(&sink->handlers, sizeof(hkcp_sink_handler_t));
 
+	/* Trigger advertising */
 	hkcp_advertise(hkcp);
+
+	/* Declare new sink in history */
+	history_signal_declare(-(sink->ep.id+1), name);
 
 	return sink->ep.id;
 }
@@ -554,6 +569,8 @@ static char *hkcp_sink_update_(hkcp_sink_t *sink, char *value)
 			}
 		}
 	}
+
+	history_feed(-(sink->ep.id+1), value);
 
 	return sink->ep.name;
 }
@@ -675,13 +692,22 @@ static void hkcp_source_set_widget_name(hkcp_source_t *source, char *widget_name
 
 int hkcp_source_register(hkcp_t *hkcp, char *name, int event)
 {
-	hkcp_source_t *source = hkcp_source_retrieve(hkcp, name);
+	hkcp_source_t *source;
 
-	if (source == NULL) {
-		source = hkcp_source_alloc(hkcp);
-		source->ep.name = strdup(name);
+	/* Ensure there is no name conflict against sink and source namespaces */
+	if (hkcp_sink_retrieve(hkcp, name)) {
+		log_str("ERROR: Cannot register source '%s': a sink is already registered with this name\n", name);
+		return -1;
 	}
 
+	if (hkcp_source_retrieve(hkcp, name) != NULL) {
+		log_str("ERROR: Cannot register sink '%s': a source is already registered with this name\n", name);
+		return -1;
+	}
+
+	/* Allocate new source */
+	source = hkcp_source_alloc(hkcp);
+	source->ep.name = strdup(name);
 	log_debug(2, "hkcp_source_register name='%s' (%d elements)", name, hkcp->sources.nmemb);
 
 	hkcp_source_set_widget_name(source, NULL);
@@ -691,7 +717,11 @@ int hkcp_source_register(hkcp_t *hkcp, char *name, int event)
 		source->ep.flag |= HKCP_FLAG_EVENT;
 	}
 
+	/* Trigger advertising */
 	hkcp_advertise(hkcp);
+
+	/* Declare new source in history */
+	history_signal_declare(source->ep.id+1, name);
 
 	return source->ep.id;
 }
@@ -856,6 +886,8 @@ char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
 
 	buf_set_str(&source->ep.value, value);
 	hkcp_source_send(source);
+
+	history_feed(source->ep.id+1, value);
 
 	return source->ep.name;
 }
@@ -1267,6 +1299,9 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 		}
 		buf_append_str(out_buf, "\n");
 	}
+	else if (strcmp(argv[0], "history") == 0) {
+		history_dump(stdout);
+	}
 	else {
 		buf_append_str(out_buf, "ERROR: Unknown command: ");
 		buf_append_str(out_buf, argv[0]);
@@ -1466,6 +1501,9 @@ int hkcp_init(hkcp_t *hkcp, int port)
 		hkcp->ninterfaces = netif_show_interfaces();
 		sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) hkcp_check_interfaces, hkcp);
 	}
+
+	/* Init history logging */
+	history_init();
 
 	ret = 0;
 
