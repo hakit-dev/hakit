@@ -1299,9 +1299,6 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 		}
 		buf_append_str(out_buf, "\n");
 	}
-	else if (strcmp(argv[0], "history") == 0) {
-		history_dump(stdout);
-	}
 	else {
 		buf_append_str(out_buf, "ERROR: Unknown command: ");
 		buf_append_str(out_buf, argv[0]);

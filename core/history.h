@@ -17,6 +17,4 @@ extern void history_signal_declare(int id, char *name);
 
 extern void history_feed(int id, char *value);
 
-extern void history_dump(FILE *f);
-
 #endif /* __HAKIT_HISTORY_H__ */

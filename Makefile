@@ -15,7 +15,7 @@ OUTDIR := out/$(ARCH)
 ARCH_LIB = $(OUTDIR)/libhakit.a
 ARCH_LIBS = $(ARCH_LIB)
 
-BINS = hakit
+BINS = hakit hakit-history
 ifdef BUILD_TEST
 BINS += hakit-test-proc hakit-test-comm hakit-test-usb
 endif
@@ -82,6 +82,7 @@ $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit: $(OUTDIR)/hakit.o $(OBJS)
+$(OUTDIR)/hakit-history: $(OUTDIR)/hakit-history.o
 
 clean::
 	make -C classes clean
