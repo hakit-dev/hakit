@@ -355,7 +355,7 @@ static void hkcp_sink_advertise(hkcp_t *hkcp, int reply)
 	int i;
 
 	// Nothing to do in local mode
-	if (hkcp->udp_srv.chan.fd > 0) {
+	if (hkcp->udp_srv.chan.fd <= 0) {
 		return;
 	}
 
@@ -600,7 +600,7 @@ static void hkcp_source_advertise(hkcp_t *hkcp, int reply)
 	int i;
 
 	// Nothing to do in local mode
-	if (hkcp->udp_srv.chan.fd > 0) {
+	if (hkcp->udp_srv.chan.fd <= 0) {
 		return;
 	}
 
@@ -902,7 +902,7 @@ static void hkcp_udp_send(hkcp_t *hkcp, buf_t *buf, int reply)
 	int i;
 
 	// Nothing to do in local mode
-	if (hkcp->udp_srv.chan.fd > 0) {
+	if (hkcp->udp_srv.chan.fd <= 0) {
 		return;
 	}
 
