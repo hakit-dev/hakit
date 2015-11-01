@@ -22,7 +22,6 @@
 #include "tcpio.h"
 #include "udpio.h"
 #include "command.h"
-#include "history.h"
 #include "hkcp.h"
 
 
@@ -489,9 +488,6 @@ int hkcp_sink_register(hkcp_t *hkcp, char *name)
 	/* Trigger advertising */
 	hkcp_advertise(hkcp);
 
-	/* Declare new sink in history */
-	history_signal_declare(-(sink->ep.id+1), name);
-
 	return sink->ep.id;
 }
 
@@ -569,8 +565,6 @@ static char *hkcp_sink_update_(hkcp_sink_t *sink, char *value)
 			}
 		}
 	}
-
-	history_feed(-(sink->ep.id+1), value);
 
 	return sink->ep.name;
 }
@@ -719,9 +713,6 @@ int hkcp_source_register(hkcp_t *hkcp, char *name, int event)
 
 	/* Trigger advertising */
 	hkcp_advertise(hkcp);
-
-	/* Declare new source in history */
-	history_signal_declare(source->ep.id+1, name);
 
 	return source->ep.id;
 }
@@ -886,8 +877,6 @@ char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
 
 	buf_set_str(&source->ep.value, value);
 	hkcp_source_send(source);
-
-	history_feed(source->ep.id+1, value);
 
 	return source->ep.name;
 }
@@ -1498,9 +1487,6 @@ int hkcp_init(hkcp_t *hkcp, int port)
 		hkcp->ninterfaces = netif_show_interfaces();
 		sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) hkcp_check_interfaces, hkcp);
 	}
-
-	/* Init history logging */
-	history_init();
 
 	ret = 0;
 

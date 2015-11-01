@@ -15,7 +15,7 @@ OUTDIR := out/$(ARCH)
 ARCH_LIB = $(OUTDIR)/libhakit.a
 ARCH_LIBS = $(ARCH_LIB)
 
-BINS = hakit hakit-history
+BINS = hakit
 ifdef BUILD_TEST
 BINS += hakit-test-proc hakit-test-comm hakit-test-usb
 endif
@@ -28,7 +28,7 @@ OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sy
 	gpio.c serial.c proc.c mod_init.c \
 	usb_io.c usb_device.c
 CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c mod_load.c prop.c \
-	mime.c http.c eventq.c ws.c ws_utils.c ws_events.c history.c
+	mime.c http.c eventq.c ws.c ws_utils.c ws_events.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
@@ -82,7 +82,6 @@ $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit: $(OUTDIR)/hakit.o $(OBJS)
-$(OUTDIR)/hakit-history: $(OUTDIR)/hakit-history.o
 
 clean::
 	make -C classes clean

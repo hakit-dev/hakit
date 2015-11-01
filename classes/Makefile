@@ -1,4 +1,4 @@
-CLASSES := sink source and or \
+CLASSES := sink source and or history \
 	timer-pulse timer-on timer-off \
 	link-serial
 

@@ -37,27 +37,10 @@
 
 #define BUCKET_MAXSIZE 10000
 #define BUCKET_FLUSH_TIMEOUT 10000
-#define NBUCKETS 10
 
 
 static const char *history_filename_prefix = "/tmp/hakit-history";
 
-
-typedef struct {
-	long long t0;
-	buf_t buf;
-	char *fname;
-	int fpos;
-} bucket_t;
-
-typedef struct {
-	buf_t hdr;
-	bucket_t buckets[NBUCKETS];
-	int ibucket;
-	long long t;
-	int current_id;
-	sys_tag_t timeout_tag;
-} history_t;
 
 static history_t history;
 
@@ -153,35 +136,35 @@ static int history_bucket_flush_timeout(history_t *h)
 }
 
 
-void history_signal_declare(int id, char *name)
+void history_signal_declare(history_t *h, int id, char *name)
 {
 	/* Dump new signal to history log */
-	history_append_value(&history.hdr, 0x00, id);
-	buf_append(&history.hdr, (unsigned char *) name, strlen(name)+1);
+	history_append_value(&h->hdr, 0x00, id);
+	buf_append(&h->hdr, (unsigned char *) name, strlen(name)+1);
 	log_debug(2, "history_signal_declare %d '%s'", id, name);
 
-	history.current_id = id;
+	h->current_id = id;
 }
 
 
-void history_init(void)
+void history_init(history_t *h)
 {
 	int i;
 
-	buf_init(&history.hdr);
+	buf_init(&h->hdr);
 
 	for (i = 0; i < NBUCKETS; i++) {
-		bucket_t *bucket = &history.buckets[i];
+		bucket_t *bucket = &h->buckets[i];
 		bucket->t0 = 0;
 		buf_init(&bucket->buf);
 	}
 
-	history.ibucket = 0;
-	history.timeout_tag = 0;
+	h->ibucket = 0;
+	h->timeout_tag = 0;
 
-	history_bucket_start(&history);
+	history_bucket_start(h);
 
-	sys_quit_handler((sys_func_t) history_bucket_flush_timeout, &history);
+	sys_quit_handler((sys_func_t) history_bucket_flush_timeout, h);
 }
 
 
@@ -208,7 +191,7 @@ static void history_select(history_t *h, int id)
 }
 
 
-static void history_feed_str(history_t *h, int id, char *str)
+static void history_feed_str(history_t *h, char *str)
 {
 	bucket_t *bucket = &h->buckets[h->ibucket];
 
@@ -217,7 +200,7 @@ static void history_feed_str(history_t *h, int id, char *str)
 }
 
 
-static void history_feed_int(history_t *h, int id, long long value)
+static void history_feed_int(history_t *h, long long value)
 {
 	bucket_t *bucket = &h->buckets[h->ibucket];
 
@@ -230,38 +213,38 @@ static void history_feed_int(history_t *h, int id, long long value)
 }
 
 
-void history_feed(int id, char *value)
+void history_feed(history_t *h, int id, char *value)
 {
 	char *s = value;
 
-	if (history.timeout_tag) {
-		sys_remove(history.timeout_tag);
-		history.timeout_tag = 0;
+	if (h->timeout_tag) {
+		sys_remove(h->timeout_tag);
+		h->timeout_tag = 0;
 	}
 
-	history_select(&history, id);
+	history_select(h, id);
 
 	while ((*s >= '0') && (*s <= '9')) {
 		s++;
 	}
 
 	if (*s == '\0') {
-		history_feed_int(&history, id, strtoll(value, NULL, 10));
+		history_feed_int(h, strtoll(value, NULL, 10));
 	}
 	else {
-		history_feed_str(&history, id, value);
+		history_feed_str(h, value);
 	}
 
-	if (history.buckets[history.ibucket].buf.len >= BUCKET_MAXSIZE) {
-		history_bucket_flush(&history);
+	if (history.buckets[h->ibucket].buf.len >= BUCKET_MAXSIZE) {
+		history_bucket_flush(h);
 
-		history.ibucket++;
-		if (history.ibucket >= NBUCKETS) {
-			history.ibucket = 0;
+		h->ibucket++;
+		if (h->ibucket >= NBUCKETS) {
+			h->ibucket = 0;
 		}
-		history_bucket_start(&history);
+		history_bucket_start(h);
 	}
 	else {
-		history.timeout_tag = sys_timeout(BUCKET_FLUSH_TIMEOUT, (sys_func_t) history_bucket_flush_timeout, &history);
+		h->timeout_tag = sys_timeout(BUCKET_FLUSH_TIMEOUT, (sys_func_t) history_bucket_flush_timeout, h);
 	}
 }
