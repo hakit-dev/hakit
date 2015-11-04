@@ -108,7 +108,7 @@ endif
 #
 ifdef CROSS_COMPILE
 SDK_DIR = $(dir $(shell readlink -f $(dir $(shell $(CC) -print-file-name=libc.a))))
-ifeq ($(wildcard $(TARGET_DIR)include/linux),)
+ifeq ($(wildcard $(SDK_DIR)include/linux),)
 SDK_INCDIR = $(SDK_DIR)sys-include
 else
 SDK_INCDIR = $(SDK_DIR)include
