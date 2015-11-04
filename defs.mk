@@ -13,6 +13,10 @@ ifeq ($(APP_DIR),$(HAKIT_DIR))
 HAKIT_BUILD := 1
 endif
 
+ifdef TARGET
+include $(HAKIT_DIR)targets/$(TARGET).mk
+endif
+
 #
 # Check build tools dependencies
 #

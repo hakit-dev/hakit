@@ -9,8 +9,14 @@
 # directory for more details.
 #
 
+HAKIT_DIR := ..
+
 CHECK_PACKAGES = cmake
-include ../tools/check.mk
+include $(HAKIT_DIR)/tools/check.mk
+
+ifdef TARGET
+include $(HAKIT_DIR)/targets/$(TARGET).mk
+endif
 
 ARCH ?= $(shell arch)
 OUTDIR = out/$(ARCH)

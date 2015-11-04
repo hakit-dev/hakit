@@ -10,7 +10,7 @@
 PKGNAME := hakit
 
 ARCH ?= $(shell arch)
-OUTDIR := out/$(ARCH)
+OUTDIR = out/$(ARCH)
 
 ARCH_LIB = $(OUTDIR)/libhakit.a
 ARCH_LIBS = $(ARCH_LIB)
@@ -61,7 +61,7 @@ CFLAGS += -I$(LWS_SRC_DIR) -I$(LWS_DIR)
 
 .PHONY: lws
 lws:
-	make -C lws
+	make -C lws TARGET=$(TARGET)
 
 #
 # HAKit standard classes

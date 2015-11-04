@@ -11,7 +11,7 @@ CHECK_PACKAGES_deb += imagemagick
 CHECK_PACKAGES_rpm += ImageMagick
 
 ARCH ?= $(shell arch)
-OUTDIR := out/$(ARCH)
+OUTDIR = out/$(ARCH)
 
 include ../defs.mk
 
