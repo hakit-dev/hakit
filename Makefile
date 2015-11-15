@@ -10,6 +10,8 @@
 PKGNAME := hakit
 
 ARCH ?= $(shell arch)
+DISTRO ?= debian
+
 OUTDIR = out/$(ARCH)
 
 ARCH_LIB = $(OUTDIR)/libhakit.a
@@ -109,6 +111,6 @@ install:: all
 	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE) $(INSTALL_INIT)
 	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
 	$(CP) -a test/timer.hk $(INSTALL_SHARE)/test.hk
-	$(CP) -a $(INIT_SCRIPT) $(INSTALL_INIT)/hakit
+	$(CP) -a targets/$(DISTRO)/hakit.sh $(INSTALL_INIT)/hakit
 	make -C classes DESTDIR=$(INSTALL_DESTDIR) install
 	make -C ui DESTDIR=$(INSTALL_DESTDIR) install

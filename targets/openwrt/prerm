@@ -1,0 +1,4 @@
+#!/bin/sh
+/etc/init.d/hakit stop
+/etc/init.d/hakit disable
+

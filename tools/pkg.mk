@@ -40,21 +40,21 @@ rpm: check check_pkg_vars install
 deb: check check_pkg_vars install
 	$(MKDIR) $(DESTDIR)/DEBIAN
 	for file in preinst postinst prerm postrm; do \
-		[ -f $$file ] && install -m 755 $$file $(DESTDIR)/DEBIAN/; done; \
+		[ -f $(APP_DIR)targets/debian/$$file ] && install -m 755 $(APP_DIR)targets/debian/$$file $(DESTDIR)/DEBIAN/; done; \
 	sed -e 's/@NAME@/$(PKGNAME)/' \
 	    -e 's/@ARCH@/$(DEBARCH)/' \
 	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
-	    control.in > $(DESTDIR)/DEBIAN/control
+	    $(APP_DIR)control.in > $(DESTDIR)/DEBIAN/control
 	fakeroot dpkg-deb --build $(DESTDIR) $(PKGDIR)/$(DEBNAME)
 
 ipk: check check_pkg_vars install
 	$(MKDIR) $(DESTDIR)/DEBIAN
 	for file in preinst postinst prerm postrm; do \
-		[ -f $$file ] && install -m 755 $$file $(DESTDIR)/DEBIAN/; done; \
+		[ -f $(APP_DIR)targets/debian/$$file ] && install -m 755 $(APP_DIR)targets/openwrt/$$file $(DESTDIR)/DEBIAN/; done; \
 	sed -e 's/@NAME@/$(PKGNAME)/' \
 	    -e 's/@ARCH@/$(ARCH)/' \
 	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
-	    control.in > $(DESTDIR)/DEBIAN/control
+	    $(APP_DIR)control.in > $(DESTDIR)/DEBIAN/control
 	fakeroot $(HAKIT_DIR)tools/opkg-build $(DESTDIR) $(PKGDIR)
 
 endif

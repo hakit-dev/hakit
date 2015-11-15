@@ -9,7 +9,8 @@
 # directory for more details.
 #
 ARCH = ar71xx
-DISTRO := openwrt
+DISTRO = openwrt
+
 export CROSS_COMPILE := mips-openwrt-linux-
 
 export STAGING_DIR := $(shell readlink -f $(HAKIT_DIR)/..)/OpenWrt-SDK-ar71xx-for-linux-i486-gcc-4.6-linaro_uClibc-0.9.33.2/staging_dir

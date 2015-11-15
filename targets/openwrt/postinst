@@ -1,0 +1,6 @@
+#!/bin/sh
+
+NAME=hakit
+
+/etc/init.d/$NAME enable
+/etc/init.d/$NAME start
