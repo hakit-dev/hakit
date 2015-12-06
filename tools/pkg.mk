@@ -50,7 +50,7 @@ deb: check check_pkg_vars install
 ipk: check check_pkg_vars install
 	$(MKDIR) $(DESTDIR)/DEBIAN
 	for file in preinst postinst prerm postrm; do \
-		[ -f $(APP_DIR)targets/debian/$$file ] && install -m 755 $(APP_DIR)targets/openwrt/$$file $(DESTDIR)/DEBIAN/; done; \
+		[ -f $(APP_DIR)targets/openwrt/$$file ] && install -m 755 $(APP_DIR)targets/openwrt/$$file $(DESTDIR)/DEBIAN/; done; \
 	sed -e 's/@NAME@/$(PKGNAME)/' \
 	    -e 's/@ARCH@/$(ARCH)/' \
 	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
