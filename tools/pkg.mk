@@ -4,15 +4,30 @@
 
 VERSION ?= "0"
 
-RPMARCH ?= $(shell arch)
+ifeq ($(ARCH),)
+DEBARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH)
+RPMARCH = $(shell arch)
+else
 
-DEBARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+ifeq ($(ARCH),x86_64)
+DEBARCH = amd64
+else
+DEBARCH = $(ARCH)
+endif
+
+ifeq ($(ARCH),all)
+RPMARCH = noarch
+else
+RPMARCH = $(ARCH)
+endif
+
+endif
+
 DEBNAME = $(PKGNAME)_$(VERSION)-$(BUILDDATE)_$(DEBARCH).deb
 
-ifdef OUTDIR
+OUTDIR ?= out
 DESTDIR ?= $(OUTDIR)/root
 PKGDIR ?= $(OUTDIR)
-endif
 
 ifdef PKGNAME
 check_pkg_vars:
@@ -52,7 +67,7 @@ ipk: check check_pkg_vars install
 	for file in preinst postinst prerm postrm; do \
 		[ -f $(APP_DIR)targets/openwrt/$$file ] && install -m 755 $(APP_DIR)targets/openwrt/$$file $(DESTDIR)/DEBIAN/; done; \
 	sed -e 's/@NAME@/$(PKGNAME)/' \
-	    -e 's/@ARCH@/$(ARCH)/' \
+	    -e 's/@ARCH@/$(DEBARCH)/' \
 	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
 	    $(APP_DIR)control.in > $(DESTDIR)/DEBIAN/control
 	fakeroot $(HAKIT_DIR)tools/opkg-build $(DESTDIR) $(PKGDIR)
