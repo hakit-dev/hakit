@@ -29,6 +29,11 @@ include $(HAKIT_DIR)tools/check.mk
 CFLAGS  = -Wall -O2 -fPIC -I$(HAKIT_DIR)include
 LDFLAGS =
 
+ifdef CROSS_ROOT_PATH
+CFLAGS += -I$(CROSS_ROOT_PATH)/usr/include
+LDFLAGS += -L$(CROSS_ROOT_PATH)/usr/lib
+endif
+
 ifdef HAKIT_BUILD
 VPATH = os:core
 CFLAGS  += -I. -Ios
@@ -122,7 +127,7 @@ endif
 #
 LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
 LWS_LIB_DIR = $(LWS_DIR)/lib
-LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
+LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets -lcrypto -lssl
 
 #
 # Standard rules

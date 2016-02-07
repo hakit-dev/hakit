@@ -9,6 +9,7 @@
 #
 
 set(CROSS_PATH $ENV{CROSS_PATH})
+set(CROSS_ROOT_PATH $ENV{CROSS_ROOT_PATH})
 set(CROSS_COMPILE $ENV{CROSS_COMPILE})
 
 # Target operating system name.
@@ -20,6 +21,9 @@ set(CMAKE_CXX_COMPILER "${CROSS_PATH}/bin/$ENV{CROSS_COMPILE}g++")
 
 # Where to look for the target environment. (More paths can be added here)
 set(CMAKE_FIND_ROOT_PATH "${CROSS_PATH}")
+if(CROSS_ROOT_PATH)
+list(APPEND CMAKE_FIND_ROOT_PATH "${CROSS_ROOT_PATH}")
+endif(CROSS_ROOT_PATH)
 
 # Adjust the default behavior of the FIND_XXX() commands:
 # search programs in the host environment only.
