@@ -35,7 +35,7 @@ struct ws_s {
 };
 
 
-extern ws_t *ws_new(int port);
+extern ws_t *ws_new(int port, char *ssl_dir);
 extern void ws_destroy(ws_t *ws);
 
 /* HTTP server configuration */

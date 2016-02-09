@@ -23,6 +23,8 @@
 #define HAKIT_HKCP_PORT 5678   // Default HAKit communication port
 #define HAKIT_HTTP_PORT 5680   // Default HAKit HTTP port
 
+#define HAKIT_SHARE_DIR "/usr/share/hakit/"
+
 static hkcp_t hk_hkcp;
 static ws_t *hk_ws = NULL;
 
@@ -38,7 +40,7 @@ static void comm_ws_send(ws_t *ws, char *name, char *value)
 }
 
 
-int comm_init(void)
+int comm_init(int use_ssl)
 {
 	char *path;
 
@@ -48,8 +50,18 @@ int comm_init(void)
 		return ret;
 	}
 
+	/* Search for SSL cert directory */
+	path = env_devdir("ssl");
+	if (path != NULL) {
+		log_debug(2, "Running from development environment!");
+	}
+	else {
+		path = HAKIT_SHARE_DIR "ssl";
+	}
+	log_debug(2, "SSL Certficate directory: %s", path);
+
 	/* Init HTTP/WebSocket server */
-	hk_ws = ws_new(opt_no_hkcp ? 0:HAKIT_HTTP_PORT);
+	hk_ws = ws_new(opt_no_hkcp ? 0:HAKIT_HTTP_PORT, path);
 	if (hk_ws == NULL) {
 		return -1;
 	}
@@ -62,11 +74,10 @@ int comm_init(void)
 
 	path = env_devdir("ui");
 	if (path != NULL) {
-		log_debug(2, "Running from development environment!");
 		ws_add_document_root(hk_ws, path);
 	}
 	else {
-		ws_add_document_root(hk_ws, "/usr/share/hakit/ui");
+		ws_add_document_root(hk_ws, HAKIT_SHARE_DIR "ui");
 	}
 
 	ws_set_command_handler(hk_ws, (ws_command_handler_t) hkcp_command, &hk_hkcp);

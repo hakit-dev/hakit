@@ -518,7 +518,7 @@ static struct libwebsocket_protocols ws_protocols[] = {
  * HTTP/WebSocket server init
  */
 
-ws_t *ws_new(int port)
+ws_t *ws_new(int port, char *ssl_dir)
 {
 	ws_t *ws = NULL;
 	struct lws_context_creation_info info;
@@ -535,11 +535,17 @@ ws_t *ws_new(int port)
 	info.protocols = ws_protocols;
 	//info.extensions = libwebsocket_get_internal_extensions();
 
-	/* TODO: Setup SSL info */
-//	if (use_ssl) {
-//		info.ssl_cert_filepath = cert_path;
-//		info.ssl_private_key_filepath = key_path;
-//	}
+	/* Setup SSL info */
+	if (ssl_dir != NULL) {
+		int ssl_dir_len = ssl_dir ? strlen(ssl_dir) : 0;
+		char path[ssl_dir_len+32];
+
+		snprintf(path, sizeof(path), "%s/cert.pem", ssl_dir);
+		info.ssl_cert_filepath = strdup(path);
+
+		snprintf(path, sizeof(path), "%s/privkey.pem", ssl_dir);
+		info.ssl_private_key_filepath = strdup(path);
+	}
 
 	info.gid = -1;
 	info.uid = -1;
@@ -561,6 +567,14 @@ ws_t *ws_new(int port)
 
 	/* Init table of websocket sessions */
 	hk_tab_init(&ws->sessions, sizeof(void *));
+
+	/* Free SSL info */
+	if (info.ssl_cert_filepath != NULL) {
+		free(info.ssl_cert_filepath);
+	}
+	if (info.ssl_private_key_filepath != NULL) {
+		free(info.ssl_private_key_filepath);
+	}
 
 	return ws;
 }

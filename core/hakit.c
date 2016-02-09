@@ -35,6 +35,7 @@
 const char *options_summary = "HAKit " HAKIT_VERSION " (" ARCH ")";
 static int opt_monitor = 0;
 static char *opt_class_path = NULL;
+static int opt_no_ssl = 0;
 
 const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
@@ -43,6 +44,7 @@ const options_entry_t options_entries[] = {
 	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
 	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable HKCP monitor mode" },
 	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
+	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
 	{ NULL }
 };
 
@@ -113,7 +115,7 @@ int main(int argc, char *argv[])
 	sys_init();
 
 	/* Init communication engine */
-	if (comm_init()) {
+	if (comm_init(opt_no_ssl ? 0:1)) {
 		return 2;
 	}
 

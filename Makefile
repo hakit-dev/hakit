@@ -114,3 +114,4 @@ install:: all
 	$(CP) -a targets/$(DISTRO)/hakit.sh $(INSTALL_INIT)/hakit
 	make -C classes DESTDIR=$(INSTALL_DESTDIR) install
 	make -C ui DESTDIR=$(INSTALL_DESTDIR) install
+	make -C ssl DESTDIR=$(INSTALL_DESTDIR) install
