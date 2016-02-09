@@ -34,7 +34,7 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
+all:: $(OUTDIR) ssl lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
 
 #
@@ -54,6 +54,13 @@ ifeq ($(shell grep -q bRequestType $(SDK_INCDIR)/linux/usbdevice_fs.h && echo t)
 	echo "#define OLD_USBDEVICE_FS" >> $@
 endif
 
+
+#
+# SSL certificate
+#
+.PHONY: ssl
+ssl:
+	make -C ssl
 
 #
 # WebSockets
