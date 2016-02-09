@@ -521,6 +521,9 @@ static struct libwebsocket_protocols ws_protocols[] = {
 ws_t *ws_new(int port, char *ssl_dir)
 {
 	ws_t *ws = NULL;
+	int ssl_dir_len = ssl_dir ? strlen(ssl_dir) : 0;
+	char cert_path[ssl_dir_len+16];
+	char key_path[ssl_dir_len+16];
 	struct lws_context_creation_info info;
 
 	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
@@ -537,14 +540,11 @@ ws_t *ws_new(int port, char *ssl_dir)
 
 	/* Setup SSL info */
 	if (ssl_dir != NULL) {
-		int ssl_dir_len = ssl_dir ? strlen(ssl_dir) : 0;
-		char path[ssl_dir_len+32];
+		snprintf(cert_path, sizeof(cert_path), "%s/cert.pem", ssl_dir);
+		info.ssl_cert_filepath = cert_path;
 
-		snprintf(path, sizeof(path), "%s/cert.pem", ssl_dir);
-		info.ssl_cert_filepath = strdup(path);
-
-		snprintf(path, sizeof(path), "%s/privkey.pem", ssl_dir);
-		info.ssl_private_key_filepath = strdup(path);
+		snprintf(key_path, sizeof(key_path), "%s/privkey.pem", ssl_dir);
+		info.ssl_private_key_filepath = key_path;
 	}
 
 	info.gid = -1;
@@ -567,14 +567,6 @@ ws_t *ws_new(int port, char *ssl_dir)
 
 	/* Init table of websocket sessions */
 	hk_tab_init(&ws->sessions, sizeof(void *));
-
-	/* Free SSL info */
-	if (info.ssl_cert_filepath != NULL) {
-		free(info.ssl_cert_filepath);
-	}
-	if (info.ssl_private_key_filepath != NULL) {
-		free(info.ssl_private_key_filepath);
-	}
 
 	return ws;
 }
