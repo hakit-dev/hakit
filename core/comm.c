@@ -45,7 +45,7 @@ int comm_init(int use_ssl)
 	char *path;
 
 	/* Init HKCP gears */
-	int ret = hkcp_init(&hk_hkcp, HAKIT_HKCP_PORT);
+	int ret = hkcp_init(&hk_hkcp, opt_no_hkcp ? 0:HAKIT_HKCP_PORT);
 	if (ret != 0) {
 		return ret;
 	}
@@ -61,7 +61,7 @@ int comm_init(int use_ssl)
 	log_debug(2, "SSL Certficate directory: %s", path);
 
 	/* Init HTTP/WebSocket server */
-	hk_ws = ws_new(opt_no_hkcp ? 0:HAKIT_HTTP_PORT, path);
+	hk_ws = ws_new(HAKIT_HTTP_PORT, use_ssl ? path : NULL);
 	if (hk_ws == NULL) {
 		return -1;
 	}
