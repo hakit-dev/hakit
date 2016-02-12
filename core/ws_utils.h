@@ -12,6 +12,6 @@
 
 #include <libwebsockets.h>
 
-extern void ws_dump_handshake_info(struct libwebsocket *wsi);
+extern void ws_dump_handshake_info(struct lws *wsi);
 
 #endif /* __HAKIT_WS_UTILS_H__ */

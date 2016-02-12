@@ -15,7 +15,7 @@
 #include <libwebsockets.h>
 #include "ws.h"
 
-extern void ws_events_init(struct libwebsocket_protocols *protocol);
+extern void ws_events_init(struct lws_protocols *protocol);
 
 extern void ws_events_send(ws_t *ws, char *str);
 

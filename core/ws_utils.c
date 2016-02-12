@@ -9,7 +9,7 @@
 
 #include "ws_utils.h"
 
-void ws_dump_handshake_info(struct libwebsocket *wsi)
+void ws_dump_handshake_info(struct lws *wsi)
 {
 	int n = 0;
 	char buf[256];

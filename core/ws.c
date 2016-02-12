@@ -37,13 +37,13 @@ struct per_session_data__http {
 };
 
 
-static int ws_callback_poll(struct libwebsocket_context *context, struct pollfd *pollfd)
+static int ws_callback_poll(struct lws_context *context, struct pollfd *pollfd)
 {
 	int ret;
 
 	log_debug(3, "ws_callback_poll: %d %02X", pollfd->fd, pollfd->revents);
 
-	ret = libwebsocket_service_fd(context, pollfd);
+	ret = lws_service_fd(context, pollfd);
 	if (ret < 0) {
 		log_debug(3, "  => %d", ret);
 	}
@@ -96,12 +96,11 @@ static char *search_file(ws_t *ws, char *uri, size_t uri_len)
 }
 
 
-static int ws_http_request(struct libwebsocket_context *context,
-			   struct libwebsocket *wsi,
+static int ws_http_request(ws_t *ws,
+			   struct lws *wsi,
 			   struct per_session_data__http *pss,
 			   char *uri, size_t len)
 {
-	ws_t *ws = libwebsocket_context_user(context);
 	char *file_path = NULL;
 	int content_length = 0;
 	const char *mimetype = NULL;
@@ -116,7 +115,7 @@ static int ws_http_request(struct libwebsocket_context *context,
 	ws_dump_handshake_info(wsi);
 
 	if (len < 1) {
-		libwebsockets_return_http_status(context, wsi, HTTP_STATUS_BAD_REQUEST, NULL);
+		lws_return_http_status(wsi, HTTP_STATUS_BAD_REQUEST, NULL);
 		goto try_to_reuse;
 	}
 
@@ -151,7 +150,7 @@ static int ws_http_request(struct libwebsocket_context *context,
 		file_path = search_file(ws, uri, len);
 		if (file_path == NULL) {
 			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
-			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
+			lws_return_http_status(wsi, HTTP_STATUS_NOT_FOUND, NULL);
 			goto failed;
 		}
 
@@ -159,7 +158,7 @@ static int ws_http_request(struct libwebsocket_context *context,
 		mimetype = get_mimetype(file_path);
 		if (mimetype == NULL) {
 			log_str("HTTP ERROR: Unknown mimetype for '%s'", file_path);
-			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
+			lws_return_http_status(wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
 			goto failed;
 		}
 
@@ -167,7 +166,7 @@ static int ws_http_request(struct libwebsocket_context *context,
 		pss->f = fopen(file_path, "r");
 		if (pss->f == NULL) {
 			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
-			libwebsockets_return_http_status(context, wsi, HTTP_STATUS_NOT_FOUND, NULL);
+			lws_return_http_status(wsi, HTTP_STATUS_NOT_FOUND, NULL);
 			goto failed;
 		}
 
@@ -189,29 +188,27 @@ static int ws_http_request(struct libwebsocket_context *context,
 	p = pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING;
 	end = p + sizeof(pss->tx_buffer) - LWS_SEND_BUFFER_PRE_PADDING;
 
-	if (lws_add_http_header_status(context, wsi, HTTP_STATUS_OK, &p, end)) {
+	if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &p, end)) {
 		goto done;
 	}
-	if (lws_add_http_header_by_token(context, wsi,
-					 WSI_TOKEN_HTTP_SERVER,
+	if (lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_SERVER,
 					 (unsigned char *) SERVER_NAME, strlen(SERVER_NAME),
 					 &p, end)) {
 		goto done;
 	}
 	if (mimetype != NULL) {
-		if (lws_add_http_header_by_token(context, wsi,
-						 WSI_TOKEN_HTTP_CONTENT_TYPE,
+		if (lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_CONTENT_TYPE,
 						 (unsigned char *) mimetype, strlen(mimetype),
 						 &p, end)) {
 			goto done;
 		}
 	}
 	if (content_length > 0) {
-		if (lws_add_http_header_content_length(context, wsi, content_length, &p, end)) {
+		if (lws_add_http_header_content_length(wsi, content_length, &p, end)) {
 			goto done;
 		}
 	}
-	if (lws_finalize_http_header(context, wsi, &p, end)) {
+	if (lws_finalize_http_header(wsi, &p, end)) {
 		goto done;
 	}
 
@@ -225,17 +222,17 @@ static int ws_http_request(struct libwebsocket_context *context,
 	 * which also means you can't send body too in one step,
 	 * this is mandated by changes in HTTP2
 	 */
-	if (libwebsocket_write(wsi,
-			       pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING,
-			       p - (pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING),
-			       LWS_WRITE_HTTP_HEADERS) < 0) {
+	if (lws_write(wsi,
+		      pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING,
+		      p - (pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING),
+		      LWS_WRITE_HTTP_HEADERS) < 0) {
 		goto failed;
 	}
 
 	/*
 	 * book us a LWS_CALLBACK_HTTP_WRITEABLE callback
 	 */
-	libwebsocket_callback_on_writable(context, wsi);
+	lws_callback_on_writable(wsi);
 
 	ret = 0;
 	goto done;
@@ -265,8 +262,8 @@ done:
 }
 
 
-static int ws_http_body(struct libwebsocket_context *context,
-			struct libwebsocket *wsi,
+static int ws_http_body(ws_t *ws,
+			struct lws *wsi,
 			void *in, size_t len)
 {
 	log_debug(2, "ws_http_body: %d bytes", (int) len);
@@ -276,12 +273,12 @@ static int ws_http_body(struct libwebsocket_context *context,
 }
 
 
-static int ws_http_body_completion(struct libwebsocket_context *context,
-					    struct libwebsocket *wsi)
+static int ws_http_body_completion(ws_t *ws,
+				   struct lws *wsi)
 {
 	log_debug(2, "ws_http_body_completion");
 
-	libwebsockets_return_http_status(context, wsi, HTTP_STATUS_OK, NULL);
+	lws_return_http_status(wsi, HTTP_STATUS_OK, NULL);
 	if (lws_http_transaction_completed(wsi)) {
 		return -1;
 	}
@@ -289,8 +286,8 @@ static int ws_http_body_completion(struct libwebsocket_context *context,
 }
 
 
-static int ws_http_file_completion(struct libwebsocket_context *context,
-					    struct libwebsocket *wsi)
+static int ws_http_file_completion(ws_t *ws,
+				   struct lws *wsi)
 {
 	log_debug(2, "ws_http_file_completion");
 
@@ -301,9 +298,9 @@ static int ws_http_file_completion(struct libwebsocket_context *context,
 }
 
 
-static int ws_http_writeable(struct libwebsocket_context *context,
-				      struct libwebsocket *wsi,
-				      struct per_session_data__http *pss)
+static int ws_http_writeable(ws_t *ws,
+			     struct lws *wsi,
+			     struct per_session_data__http *pss)
 {
 	int n, m;
 
@@ -359,9 +356,9 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 		 * is handled by the library itself if you sent a
 		 * content-length header
 		 */
-		m = libwebsocket_write(wsi,
-				       pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING,
-				       n, LWS_WRITE_HTTP);
+		m = lws_write(wsi,
+			      pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING,
+			      n, LWS_WRITE_HTTP);
 		if (m < 0) {
 			/* write failed, close conn */
 			goto bail;
@@ -379,7 +376,7 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 
 		if (m) {
 			/* while still active, extend timeout */
-			libwebsocket_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);
+			lws_set_timeout(wsi, PENDING_TIMEOUT_HTTP_CONTENT, 5);
 		}
 
 		/* if we have indigestion, let him clear it before eating more */
@@ -390,13 +387,13 @@ static int ws_http_writeable(struct libwebsocket_context *context,
 	} while (!lws_send_pipe_choked(wsi));
 
 later:
-	libwebsocket_callback_on_writable(context, wsi);
+	lws_callback_on_writable(wsi);
 	return 0;
 
 flush_bail:
 	/* true if still partial pending */
 	if (lws_partial_buffered(wsi)) {
-		libwebsocket_callback_on_writable(context, wsi);
+		lws_callback_on_writable(wsi);
 		return 0;
 	}
 
@@ -424,35 +421,36 @@ bail:
 }
 
 
-static int ws_http_callback(struct libwebsocket_context *context,
-			    struct libwebsocket *wsi,
-			    enum libwebsocket_callback_reasons reason, void *user,
+static int ws_http_callback(struct lws *wsi,
+			    enum lws_callback_reasons reason, void *user,
 			    void *in, size_t len)
 {
+	struct lws_context *context = lws_get_context(wsi);
+	ws_t *ws = lws_context_user(context);
 	struct per_session_data__http *pss = (struct per_session_data__http *) user;
-	struct libwebsocket_pollargs *pa = (struct libwebsocket_pollargs *) in;
+	struct lws_pollargs *pa = (struct lws_pollargs *) in;
 	int ret = 0;
 
 	switch (reason) {
 	case LWS_CALLBACK_HTTP:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP");
-		ret = ws_http_request(context, wsi, pss, in, len);
+		ret = ws_http_request(ws, wsi, pss, in, len);
 		break;
 	case LWS_CALLBACK_HTTP_BODY:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_BODY");
-		ret = ws_http_body(context, wsi, in, len);
+		ret = ws_http_body(ws, wsi, in, len);
 		break;
 	case LWS_CALLBACK_HTTP_BODY_COMPLETION:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_BODY_COMPLETION");
-		ret = ws_http_body_completion(context, wsi);
+		ret = ws_http_body_completion(ws, wsi);
 		break;
 	case LWS_CALLBACK_HTTP_FILE_COMPLETION:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_FILE_COMPLETION");
-		ret = ws_http_file_completion(context, wsi);
+		ret = ws_http_file_completion(ws, wsi);
 		break;
 	case LWS_CALLBACK_HTTP_WRITEABLE:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_WRITEABLE");
-		ret = ws_http_writeable(context, wsi, pss);
+		ret = ws_http_writeable(ws, wsi, pss);
 		break;
 	case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_FILTER_NETWORK_CONNECTION");
@@ -488,6 +486,9 @@ static int ws_http_callback(struct libwebsocket_context *context,
 		log_debug(3, "ws_http_callback LWS_CALLBACK_CHANGE_MODE_POLL_FD %d %02X", pa->fd, pa->events);
 		sys_io_poll(pa->fd, pa->events, (sys_poll_func_t) ws_callback_poll, context);
 		break;
+	case LWS_CALLBACK_PROTOCOL_INIT:
+		log_debug(3, "ws_http_callback LWS_CALLBACK_PROTOCOL_INIT");
+		break;
 	default:
 		log_debug(3, "ws_http_callback reason=%d", reason);
 		break;
@@ -501,7 +502,7 @@ static int ws_http_callback(struct libwebsocket_context *context,
  * Table of available protocols
  */
 
-static struct libwebsocket_protocols ws_protocols[] = {
+static struct lws_protocols ws_protocols[] = {
 	/* first protocol must always be HTTP handler */
 	{
 		.name = "http-only",
@@ -536,7 +537,7 @@ ws_t *ws_new(int port, char *ssl_dir)
 	memset(&info, 0, sizeof(info));
 	info.port = port;
 	info.protocols = ws_protocols;
-	//info.extensions = libwebsocket_get_internal_extensions();
+	//info.extensions = lws_get_internal_extensions();
 
 	/* Setup SSL info */
 	if (ssl_dir != NULL) {
@@ -552,7 +553,7 @@ ws_t *ws_new(int port, char *ssl_dir)
 	info.user = ws;
 
 	/* Create libwebsockets context */
-	ws->context = libwebsocket_create_context(&info);
+	ws->context = lws_create_context(&info);
 	if (ws->context == NULL) {
 		log_str("ERROR: libwebsocket init failed");
 		free(ws);
@@ -586,7 +587,7 @@ void ws_destroy(ws_t *ws)
 
 	/* Destroy libwebsockets context */
 	if (ws->context != NULL) {
-		libwebsocket_context_destroy((struct libwebsocket_context *) ws->context);
+		lws_context_destroy((struct lws_context *) ws->context);
 	}
 
 	memset(ws, 0, sizeof(ws_t));

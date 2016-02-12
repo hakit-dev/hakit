@@ -27,7 +27,7 @@ struct per_session_data__events {
 };
 
 
-static struct libwebsocket_protocols *ws_events_protocol = NULL;
+static struct lws_protocols *ws_events_protocol = NULL;
 
 
 static void ws_events_command(struct per_session_data__events *pss, int argc, char **argv)
@@ -41,12 +41,12 @@ static void ws_events_command(struct per_session_data__events *pss, int argc, ch
 }
 
 
-static int ws_events_callback(struct libwebsocket_context *context,
-			      struct libwebsocket *wsi,
-			      enum libwebsocket_callback_reasons reason, void *user,
+static int ws_events_callback(struct lws *wsi,
+			      enum lws_callback_reasons reason, void *user,
 			      void *in, size_t len)
 {
-	ws_t *ws = libwebsocket_context_user(context);
+	struct lws_context *context = lws_get_context(wsi);
+	ws_t *ws = lws_context_user(context);
 	struct per_session_data__events *pss = user;
 	int i;
 
@@ -65,7 +65,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 			log_debug(2, "ws_events_callback LWS_CALLBACK_SERVER_WRITEABLE [%04X]: %d bytes", pss->id, i);
 			buf_grow(&pss->out_buf, LWS_SEND_BUFFER_POST_PADDING);
 
-			int ret = libwebsocket_write(wsi, pss->out_buf.base+LWS_SEND_BUFFER_PRE_PADDING, i, LWS_WRITE_TEXT);
+			int ret = lws_write(wsi, pss->out_buf.base+LWS_SEND_BUFFER_PRE_PADDING, i, LWS_WRITE_TEXT);
 
 			pss->out_buf.len = 0;
 
@@ -92,7 +92,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 		command_recv(pss->cmd, in, len);
 
 		/* Trig response write */
-		libwebsocket_callback_on_writable(context, wsi);
+		lws_callback_on_writable(wsi);
 		break;
 
 	case LWS_CALLBACK_CLOSED:
@@ -132,7 +132,7 @@ static int ws_events_callback(struct libwebsocket_context *context,
 }
 
 
-void ws_events_init(struct libwebsocket_protocols *protocol)
+void ws_events_init(struct lws_protocols *protocol)
 {
 	ws_events_protocol = protocol;
 
@@ -163,5 +163,5 @@ void ws_events_send(ws_t *ws, char *str)
 
 	ws_session_foreach(ws, (hk_tab_foreach_func) ws_events_send_session, str);
 
-	libwebsocket_callback_on_writable_all_protocol(ws_events_protocol);
+	lws_callback_on_writable_all_protocol(ws->context, ws_events_protocol);
 }
