@@ -41,6 +41,7 @@ $(OUTDIR):
 	mkdir -p $(OUTDIR)
 
 $(LIB):
+	git submodule update --init
 	(cd $(OUTDIR) && cmake ../../$(SRC_DIR) $(CMAKE_FLAGS))
 	make -C $(OUTDIR)
 
