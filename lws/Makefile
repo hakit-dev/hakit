@@ -21,14 +21,9 @@ endif
 ARCH ?= $(shell arch)
 OUTDIR = out/$(ARCH)
 
-GIT_URL = git://git.libwebsockets.org/libwebsockets
-#LWS_VERSION = v1.4-chrome43-firefox-36
-LWS_VERSION = master
-
 SRC_DIR = libwebsockets
 LIB_DIR = $(OUTDIR)/lib
 
-INC = $(SRC_DIR)/lib/libwebsockets.h
 LIB = $(LIB_DIR)/libwebsockets.a
 
 ifdef CROSS_COMPILE
@@ -45,14 +40,9 @@ all:: $(OUTDIR) $(LIB)
 $(OUTDIR):
 	mkdir -p $(OUTDIR)
 
-$(INC):
-	git clone $(GIT_URL)
-	(cd $(SRC_DIR) && git checkout $(LWS_VERSION))
-
-$(LIB): $(INC)
+$(LIB):
 	(cd $(OUTDIR) && cmake ../../$(SRC_DIR) $(CMAKE_FLAGS))
 	make -C $(OUTDIR)
-	$(RM) $(LIB_DIR)/*.so
 
 clean::
 	rm -rf $(OUTDIR) *~
