@@ -34,8 +34,14 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: $(OUTDIR) ssl lws $(ARCH_LIBS) $(ARCH_BINS) classes
+all:: submodules $(OUTDIR) ssl lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
+#
+# GIT submodules
+#
+.PHONY: submodules
+submodules:
+	git submodule update --init
 
 #
 # Linux USB API probing
