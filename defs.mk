@@ -13,6 +13,8 @@ ifeq ($(APP_DIR),$(HAKIT_DIR))
 HAKIT_BUILD := 1
 endif
 
+-include $(HAKIT_DIR)config.mk
+
 ifdef TARGET
 include $(HAKIT_DIR)targets/$(TARGET).mk
 endif
@@ -28,11 +30,6 @@ include $(HAKIT_DIR)tools/check.mk
 
 CFLAGS  = -Wall -O2 -fPIC -I$(HAKIT_DIR)include
 LDFLAGS =
-
-ifdef CROSS_ROOT_PATH
-CFLAGS += -I$(CROSS_ROOT_PATH)/usr/include
-LDFLAGS += -L$(CROSS_ROOT_PATH)/usr/lib
-endif
 
 ifdef HAKIT_BUILD
 VPATH = os:core
@@ -127,7 +124,28 @@ endif
 #
 LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
 LWS_LIB_DIR = $(LWS_DIR)/lib
-LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets -lcrypto -lssl
+LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
+
+#
+# MQTT
+#
+#ifeq ($(WITH_MOSQUITTO),yes) 
+MQTT_DIR = $(HAKIT_DIR)mqtt/mosquitto/lib
+LDFLAGS += -L$(MQTT_DIR) -lmosquitto
+#endif
+
+#
+# OpenSSL
+#
+LDFLAGS += -lcrypto -lssl
+
+#
+# Standard cross-compile SDK path
+#
+ifdef CROSS_ROOT_PATH
+STD_CFLAGS += -I$(CROSS_ROOT_PATH)/usr/include
+STD_LDFLAGS += -L$(CROSS_ROOT_PATH)/usr/lib
+endif
 
 #
 # Standard rules
@@ -136,9 +154,9 @@ LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets -lcrypto -lssl
 -include $(wildcard $(OUTDIR)/*.d)
 
 $(OUTDIR)/%.o: %.c
-	$(CC) -o $@ -c $< $(CFLAGS)
+	$(CC) -o $@ -c $< $(CFLAGS) $(STD_CFLAGS)
 	$(eval  D := $(@:%.o=%.d))
-	$(CC) -MM $(CFLAGS) $< -o $(D)
+	$(CC) -MM $(CFLAGS) $(STD_CFLAGS) $< -o $(D)
 	@mv -f $(D) $(D).tmp
 	@sed -e 's|^$*.o:|$(OUTDIR)/$*.o:|g' $(D).tmp >$(D)
 	@fmt -1 $(D).tmp | grep '\.[ch]$$' | sed -e 's/^ *//' -e 's/$$/:/' >>$(D)
@@ -152,7 +170,7 @@ $(ARCH_LIBS):
 	$(RANLIB) $@
 
 $(ARCH_BINS):
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) -o $@ $^ $(LDFLAGS) $(STD_LDFLAGS)
 
 %.ico: %.png
 	convert $< -bordercolor white -border 0 \

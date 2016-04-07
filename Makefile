@@ -29,12 +29,12 @@ include defs.mk
 OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c mod_init.c \
 	usb_io.c usb_device.c
-CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c mod_load.c prop.c \
+CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c mqtt.c comm.c mod.c mod_load.c prop.c \
 	mime.c http.c eventq.c ws.c ws_utils.c ws_events.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: submodules $(OUTDIR) ssl lws $(ARCH_LIBS) $(ARCH_BINS) classes
+all:: submodules $(OUTDIR) ssl lws mqtt $(ARCH_LIBS) $(ARCH_BINS) classes
 
 #
 # GIT submodules
@@ -77,6 +77,15 @@ CFLAGS += -I$(LWS_SRC_DIR) -I$(LWS_DIR)
 .PHONY: lws
 lws:
 	make -C lws TARGET=$(TARGET)
+
+#
+# MQTT
+#
+CFLAGS += -I$(MQTT_DIR)
+
+.PHONY: mqtt
+mqtt:
+	make -C mqtt TARGET=$(TARGET)
 
 #
 # HAKit standard classes

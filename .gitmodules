@@ -1,6 +1,6 @@
 [submodule "lws/libwebsockets"]
 	path = lws/libwebsockets
 	url = git://git.libwebsockets.org/libwebsockets
-[submodule "mqtt/org.eclipse.mosquitto"]
-	path = mqtt/org.eclipse.mosquitto
-	url = https://git.eclipse.org/r/mosquitto/org.eclipse.mosquitto
+[submodule "mqtt/mosquitto"]
+	path = mqtt/mosquitto
+	url = https://github.com/eclipse/mosquitto

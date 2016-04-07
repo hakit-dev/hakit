@@ -20,22 +20,27 @@ endif
 ARCH ?= $(shell arch)
 OUTDIR = out/$(ARCH)
 
-SRC_DIR = org.eclipse.mosquitto
+SRC_DIR = mosquitto
 LIB_DIR = $(SRC_DIR)/lib
+ARCH_MARKER = $(SRC_DIR)/.arch-$(ARCH)
 
-USE_CMAKE = 1
+#USE_CMAKE = 1
 
 ifdef USE_CMAKE
-LIB_NAME = libmosquitto.so
-LIB = $(OUTDIR)/lib/$(LIB_NAME)
-ifdef CROSS_COMPILE
-CMAKE_FLAGS = -DCMAKE_TOOLCHAIN_FILE=../../cross-openwrt.cmake
-endif
-CMAKE_FLAGS += -DWITH_SRV=OFF
+  LIB_NAME = libmosquitto.so
+  LIB = $(OUTDIR)/lib/$(LIB_NAME)
+  ifdef CROSS_COMPILE
+    CMAKE_FLAGS = -DCMAKE_TOOLCHAIN_FILE=../../cross-openwrt.cmake
+  endif
+  CMAKE_FLAGS += -DWITH_SRV=OFF
 else
-LIB_NAME = libmosquitto.a
-LIB = $(OUTDIR)/$(LIB_NAME)
-MAKE_FLAGS += WITH_SRV=no WITH_UUID=no WITH_DOCS=no DIRS=lib
+  LIB_NAME = libmosquitto.a
+  LIB = $(OUTDIR)/$(LIB_NAME)
+  MAKE_FLAGS += WITH_SRV=no WITH_UUID=no WITH_DOCS=no WITH_THREADING=no DIRS=lib
+  ifdef TARGET
+    MAKE_FLAGS += CROSS_COMPILE=$(CROSS_PATH)/bin/$(CROSS_COMPILE) CC=gcc
+    MAKE_FLAGS += LIB_CFLAGS="-I. -I.. -I$(CROSS_ROOT_PATH)/usr/include"
+  endif
 endif
 
 all:: $(LIB)
@@ -46,8 +51,13 @@ $(LIB):
 	(cd $(OUTDIR) && cmake ../../$(SRC_DIR) $(CMAKE_FLAGS))
 	make -C $(OUTDIR) libmosquitto
 else
-$(LIB_DIR)/$(LIB_NAME):
+$(LIB_DIR)/$(LIB_NAME): $(ARCH_MARKER)
 	make -C $(LIB_DIR) $(MAKE_FLAGS) $(LIB_NAME)
+
+$(ARCH_MARKER):
+	make -C $(LIB_DIR) reallyclean
+	rm -f $(SRC_DIR)/.arch-*
+	touch $@
 
 $(LIB): $(LIB_DIR)/$(LIB_NAME)
 	mkdir -p $(OUTDIR)
@@ -56,7 +66,7 @@ endif
 
 clean::
 	make -C $(SRC_DIR) reallyclean
-	rm -rf $(OUTDIR) *~
+	rm -rf $(OUTDIR) $(SRC_DIR)/.arch-* *~
 
 mrproper::
 	rm -rf $(SRC_DIR) $(OUTDIR)
