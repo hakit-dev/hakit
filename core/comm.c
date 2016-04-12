@@ -12,7 +12,6 @@
 #include <string.h>
 
 #include "env.h"
-#include "options.h"
 #include "log.h"
 #include "ws.h"
 #include "ws_events.h"
@@ -40,12 +39,12 @@ static void comm_ws_send(ws_t *ws, char *name, char *value)
 }
 
 
-int comm_init(int use_ssl)
+int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 {
 	char *path;
 
 	/* Init HKCP gears */
-	int ret = hkcp_init(&hk_hkcp, opt_no_hkcp ? 0:HAKIT_HKCP_PORT);
+	int ret = hkcp_init(&hk_hkcp, use_hkcp ? HAKIT_HKCP_PORT:0, hkcp_hosts);
 	if (ret != 0) {
 		return ret;
 	}

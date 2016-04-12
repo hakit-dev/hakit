@@ -35,6 +35,8 @@
 const char *options_summary = "HAKit " HAKIT_VERSION " (" ARCH ")";
 static int opt_monitor = 0;
 static char *opt_class_path = NULL;
+static char *opt_hosts = NULL;
+static int opt_no_hkcp = 0;
 static int opt_no_ssl = 0;
 
 const options_entry_t options_entries[] = {
@@ -95,7 +97,7 @@ int main(int argc, char *argv[])
 {
 	char *app;
 
-	if (options_parse(&argc, argv, NULL) != 0) {
+	if (options_parse(&argc, argv) != 0) {
 		exit(1);
 	}
 
@@ -115,7 +117,7 @@ int main(int argc, char *argv[])
 	sys_init();
 
 	/* Init communication engine */
-	if (comm_init(opt_no_ssl ? 0:1)) {
+	if (comm_init(opt_no_ssl ? 0:1, opt_no_hkcp ? 0:1, opt_hosts)) {
 		return 2;
 	}
 

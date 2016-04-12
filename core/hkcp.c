@@ -1431,9 +1431,9 @@ static int hkcp_check_interfaces(hkcp_t *hkcp)
 }
 
 
-static void hkcp_init_hosts(hkcp_t *hkcp)
+static void hkcp_init_hosts(hkcp_t *hkcp, char *hosts)
 {
-	char *s1 = opt_hosts;
+	char *s1 = hosts;
 
 	while ((s1 != NULL) && (*s1 != '\0')) {
 		char *s2 = s1;
@@ -1452,7 +1452,7 @@ static void hkcp_init_hosts(hkcp_t *hkcp)
 }
 
 
-int hkcp_init(hkcp_t *hkcp, int port)
+int hkcp_init(hkcp_t *hkcp, int port, char *hosts)
 {
 	int ret = -1;
 
@@ -1480,7 +1480,7 @@ int hkcp_init(hkcp_t *hkcp, int port)
 	}
 
 	/* Feed list of explicit host addresses */
-	hkcp_init_hosts(hkcp);
+	hkcp_init_hosts(hkcp, hosts);
 
 	/* Init network interface check */
 	if (port > 0) {

@@ -14,6 +14,8 @@
 extern "C" {
 #endif
 
+#define OPTIONS_DEFAULT_CONF "/etc/hakit.conf"
+
 #define OPTIONS_TYPE_NONE 0
 #define OPTIONS_TYPE_INT 1
 #define OPTIONS_TYPE_STRING 2
@@ -35,10 +37,8 @@ extern const options_entry_t options_entries[];
 
 extern int opt_debug;
 extern int opt_daemon;
-extern int opt_no_hkcp;
-extern char *opt_hosts;
 
-extern int options_parse(int *_argc, char *argv[], char *parameter_string);
+extern int options_parse(int *_argc, char *argv[]);
 extern void options_usage(void);
 
 #ifdef __cplusplus

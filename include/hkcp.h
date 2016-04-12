@@ -110,7 +110,7 @@ struct hkcp_s {
 	hkcp_sink_handler_t monitor;
 };
 
-extern int hkcp_init(hkcp_t *hkcp, int port);
+extern int hkcp_init(hkcp_t *hkcp, int port, char *hosts);
 extern void hkcp_monitor(hkcp_t *hkcp, hkcp_sink_func_t func, void *user_data);
 extern void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf);
 
