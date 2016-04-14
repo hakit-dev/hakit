@@ -10,12 +10,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
+#include <malloc.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
 #include <net/if.h>
 #include <ifaddrs.h>
 
 #include "log.h"
 #include "iputils.h"
 #include "netif.h"
+
+
+#define HWADDR_SIZE 6
 
 
 int netif_foreach_interface(void *user_data, int (*func)(void *user_data, struct ifaddrs *current))
@@ -89,14 +95,21 @@ static int netif_show_interfaces_addr(udp_check_interfaces_ctx_t *ctx, struct if
 	unsigned long addr_ = ntohl(addr->sin_addr.s_addr);
 	struct sockaddr_in *bcast = (struct sockaddr_in *) current->ifa_broadaddr;
 	unsigned long bcast_ = ntohl(bcast->sin_addr.s_addr);
+	char *hwaddr;
 
 	if (ctx->count == 0) {
 		log_str("Available interfaces:");
 	}
 
-	log_str("  %s: %lu.%lu.%lu.%lu (%lu.%lu.%lu.%lu)", current->ifa_name,
+	hwaddr = netif_get_hwaddr(current->ifa_name);
+
+	log_str("  %s: HWaddr=%s addr=%lu.%lu.%lu.%lu Bcast=%lu.%lu.%lu.%lu", current->ifa_name, hwaddr,
 		(addr_ >> 24) & 0xFF, (addr_ >> 16) & 0xFF, (addr_ >> 8) & 0xFF, addr_ & 0xFF,
 		(bcast_ >> 24) & 0xFF, (bcast_ >> 16) & 0xFF, (bcast_ >> 8) & 0xFF, bcast_ & 0xFF);
+
+	if (hwaddr != NULL) {
+		free(hwaddr);
+	}
 
 	ctx->count++;
 
@@ -117,4 +130,46 @@ int netif_show_interfaces(void)
 	}
 
 	return ctx.count;
+}
+
+
+char *netif_get_hwaddr(char *if_name)
+{
+	int sock;
+	struct ifreq ifr;
+	char *str = NULL;
+
+	/* Open a work socket */
+	sock = socket(PF_INET, SOCK_DGRAM, 0);
+	if (sock < 0) {
+		log_str("Cannot create socket: %s", strerror(errno));
+		return NULL;
+	}
+
+	strcpy(ifr.ifr_name, if_name);
+
+	if (ioctl(sock, SIOCGIFHWADDR, &ifr) >= 0) {
+		int size = HWADDR_SIZE*3;
+		int len = 0;
+		int i;
+
+		str = malloc(size);
+
+		for (i = 0; i < HWADDR_SIZE; i++) {
+			len += snprintf(str+len, size-len, "%02x:", ifr.ifr_hwaddr.sa_data[i] & 0xFF);
+		}
+
+		if (len > 0) {
+			len--;
+		}
+		str[len] = '\0';
+	}
+	else {
+		log_str("Cannot get hardware address for %s: %s", if_name, strerror(errno));
+	}
+
+	/* Close the work socket */
+	close(sock);
+
+	return str;
 }

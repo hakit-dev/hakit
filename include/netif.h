@@ -18,4 +18,6 @@ extern int netif_foreach_interface(void *user_data, netif_func_t func);
 extern int netif_check_interfaces(void);
 extern int netif_show_interfaces(void);
 
+extern char *netif_get_hwaddr(char *if_name);
+
 #endif /* __HAKIT_NETIF_H__ */
