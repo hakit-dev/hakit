@@ -118,11 +118,12 @@ extern int hkcp_sink_register(hkcp_t *hkcp, char *name);
 extern void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_sink_func_t func, void *user_data);
 extern void hkcp_sink_set_local(hkcp_t *hkcp, int id);
 extern void hkcp_sink_set_widget(hkcp_t *hkcp, int id, char *widget_name);
-extern char *hkcp_sink_update(hkcp_t *hkcp, int id, char *value);
+extern void hkcp_sink_update(hkcp_t *hkcp, char *name, char *value);
 
 extern int hkcp_source_register(hkcp_t *hkcp, char *name, int event);
 extern void hkcp_source_set_local(hkcp_t *hkcp, int id);
 extern void hkcp_source_set_widget(hkcp_t *hkcp, int id, char *widget_name);
+extern int hkcp_source_is_event(hkcp_t *hkcp, int id);
 extern char *hkcp_source_update(hkcp_t *hkcp, int id, char *value);
 
 #endif /* __HAKIT_HKCP_H__ */

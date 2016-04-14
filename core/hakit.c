@@ -19,6 +19,7 @@
 #include "env.h"
 #include "log.h"
 #include "sys.h"
+#include "mqtt.h"
 #include "comm.h"
 #include "mod.h"
 #include "mod_init.h"
@@ -42,11 +43,16 @@ static int opt_no_ssl = 0;
 const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
 	{ "daemon",  'D', 0, OPTIONS_TYPE_NONE,   &opt_daemon,  "Run in background as a daemon" },
+	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
 	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable HKCP monitor mode" },
-	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
-	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
+	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL for HTTP and MQTT" },
+	{ "mqtt-user",      'u', 0, OPTIONS_TYPE_STRING, &mqtt_user,      "MQTT user and password", "USER:PASSWORD" },
+	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &mqtt_host,      "MQTT broker host name", "HOST" },
+	{ "mqtt-port",      'p', 0, OPTIONS_TYPE_INT,    &mqtt_port,      "MQTT broker port number", "PORT" },
+	{ "mqtt-keepalive", 'k', 0, OPTIONS_TYPE_INT,    &mqtt_keepalive, "MQTT keepalive delay", "SECONDS" },
+	{ "mqtt-qos",       'q', 0, OPTIONS_TYPE_INT,    &mqtt_qos,       "MQTT QoS level (0,1,2)", "LEVEL" },
 	{ NULL }
 };
 
@@ -117,7 +123,8 @@ int main(int argc, char *argv[])
 	sys_init();
 
 	/* Init communication engine */
-	if (comm_init(opt_no_ssl ? 0:1, opt_no_hkcp ? 0:1, opt_hosts)) {
+	if (comm_init(opt_no_ssl ? 0:1,
+		      opt_no_hkcp ? 0:1, opt_hosts)) {
 		return 2;
 	}
 

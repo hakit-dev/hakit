@@ -570,16 +570,17 @@ static char *hkcp_sink_update_(hkcp_sink_t *sink, char *value)
 }
 
 
-char *hkcp_sink_update(hkcp_t *hkcp, int id, char *value)
+void hkcp_sink_update(hkcp_t *hkcp, char *name, char *value)
 {
-	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
+	hkcp_sink_t *sink = hkcp_sink_retrieve(hkcp, name);
 
-	if ((sink == NULL) || (sink->ep.name == NULL)) {
-		log_str("PANIC: Attempting to update unknown sink #%d\n", id);
-		return NULL;
+	if (sink != NULL) {
+		log_debug(2, "hkcp_sink_update %s='%s'", name, value);
+		hkcp_sink_update_(sink, value);
 	}
-
-	return hkcp_sink_update_(sink, value);
+	else {
+		log_str("WARNING: Attempting to update unkown sink '%s'", name);
+	}
 }
 
 
@@ -879,6 +880,19 @@ char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
 	hkcp_source_send(source);
 
 	return source->ep.name;
+}
+
+
+int hkcp_source_is_event(hkcp_t *hkcp, int id)
+{
+	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
+
+	if (source == NULL) {
+		log_str("PANIC: Attempting to get flag on unknown source #%d\n", id);
+		return 0;
+	}
+
+	return (source->ep.flag & HKCP_FLAG_EVENT) ? 1:0;
 }
 
 
