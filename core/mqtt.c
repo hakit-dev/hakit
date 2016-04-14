@@ -44,25 +44,34 @@ static void mqtt_on_disconnect(struct mosquitto *mosq, void *obj, int rc)
 
 static void mqtt_on_publish(struct mosquitto *mosq, void *obj, int mid)
 {
-	log_debug(2, "MQTT published: mid=%d", mid);
+	log_debug(2, "MQTT published: (mid=%d)", mid);
 }
 
 
 static void mqtt_on_message(struct mosquitto *mosq, void *obj, const struct mosquitto_message *msg)
 {
-	log_debug(2, "MQTT message: ");
+	mqtt_t *mqtt = obj;
+	char value[msg->payloadlen+1];
+
+	memcpy(value, msg->payload, msg->payloadlen);
+	value[msg->payloadlen] = '\0';
+
+	log_debug(2, "MQTT message: %s='%s'", msg->topic, value);
+
+	if (mqtt->update_func != NULL) {
+		mqtt->update_func(mqtt->user_data, msg->topic, value);
+	}
 }
 
 
 static void mqtt_on_subscribe(struct mosquitto *mosq, void *obj, int mid, int qos_count, const int *granted_qos)
 {
-	log_debug(2, "MQTT subscribed: mid=%d", mid);
+	log_debug(2, "MQTT subscribed: (mid=%d)", mid);
 }
 
 
 static void mqtt_on_log(struct mosquitto *mosq, void *obj, int level, const char *str)
 {
-	//mqtt_t *mqtt = obj;
 	char *tag;
 
 	switch (level) {
