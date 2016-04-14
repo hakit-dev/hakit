@@ -123,6 +123,10 @@ static int ws_events_callback(struct lws *wsi,
 //		return -1;
 		break;
 
+	case LWS_CALLBACK_PROTOCOL_INIT:
+		log_debug(2, "ws_events_callback LWS_CALLBACK_PROTOCOL_INIT");
+		break;
+
 	default:
 		log_debug(2, "ws_events_callback: reason=%d", reason);
 		break;
