@@ -84,6 +84,7 @@ int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
 	      mqtt_update_func_t update_func, void *user_data)
 {
 	int major, minor, revision;
+	int port;
 	char id[128] = "hakit/";
 	int ret;
 
@@ -119,31 +120,60 @@ int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
 
 	// Setup SSL
 	if (ssl_dir != NULL) {
-		if (mqtt_port == 0) {
-			mqtt_port = MQTT_SSL_PORT;
-		}
+		port = MQTT_SSL_PORT;
 
 		//TODO: mosquitto_tls_set();
 	}
 	else {
-		if (mqtt_port == 0) {
-			mqtt_port = MQTT_PORT;
+		port = MQTT_PORT;
+	}
+
+	// Parse broker specification
+	char *str = strdup(mqtt_host);
+	char *host = strchr(str, '@');
+	char *user = NULL;
+	char *password = NULL;
+
+	if (host != NULL) {
+		*(host++) = '\0';
+
+		user = str;
+
+		password = strchr(user, ':');
+		if (password != NULL) {
+			*(password++) = '\0';
 		}
+	}
+	else {
+		host = str;
+	}
+
+	char *p = strchr(host, ':');
+	if (p != NULL) {
+		*(p++) = '\0';
+		port = atoi(p);
 	}
 
 	// Setup MQTT user and password
 	if (mqtt_user != NULL) {
-		char *password = strchr(mqtt_user, ':');
+		user = mqtt_user;
 
-		if (password != NULL) {
-			*(password++) = '\0';
+		char *p = strchr(user, ':');
+		if (p != NULL) {
+			*(p++) = '\0';
+			password = p;
 		}
+	}
 
-		mosquitto_username_pw_set(mqtt->mosq, mqtt_user, password);
+	if (user != NULL) {
+		mosquitto_username_pw_set(mqtt->mosq, user, password);
 	}
 
 	// Connect to broker
-	ret = mosquitto_connect_async(mqtt->mosq, mqtt_host, mqtt_port, mqtt_keepalive);
+	ret = mosquitto_connect_async(mqtt->mosq, host, port, mqtt_keepalive);
+
+	free(str);
+
 	if (ret != MOSQ_ERR_SUCCESS) {
 		log_str("ERROR: Failed to connect to MQTT broker: %s", mosquitto_strerror(ret));
 		goto failed;
