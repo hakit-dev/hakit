@@ -12,14 +12,24 @@
 #ifndef __HAKIT_MQTT_H__
 #define __HAKIT_MQTT_H__
 
+#include <mqueue.h>
+#include "sys.h"
 #include "mosquitto.h"
 
 typedef void (*mqtt_update_func_t)(void *user_data, char *name, char *value);
+
+typedef enum {
+	MQTT_ST_DISCONNECTED=0,
+	MQTT_ST_CONNECTED
+} mqtt_state_t;
 
 typedef struct {
 	struct mosquitto *mosq;
 	mqtt_update_func_t update_func;
 	void *user_data;
+	mqtt_state_t state;
+	mqd_t mq;
+	sys_tag_t mq_tag;
 } mqtt_t;
 
 extern char *mqtt_user;

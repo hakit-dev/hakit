@@ -46,6 +46,13 @@ static void comm_ws_send(ws_t *ws, char *name, char *value)
 }
 
 
+static void comm_mqtt_update(comm_t *comm, char *name, char *value)
+{
+	log_debug(2, "comm_mqtt_update %s='%s'", name, value);
+	hkcp_sink_update(&comm->hkcp, name, value);
+}
+
+
 int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 {
 	char *path = NULL;
@@ -72,7 +79,7 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 
 	/* Init MQTT gears */
 	if (mqtt_host != NULL) {
-		if (mqtt_init(&comm.mqtt, path, (mqtt_update_func_t) hkcp_sink_update, &comm.hkcp)) {
+		if (mqtt_init(&comm.mqtt, path, (mqtt_update_func_t) comm_mqtt_update, &comm.hkcp)) {
 			return -1;
 		}
 	}

@@ -131,7 +131,7 @@ LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 #
 #ifeq ($(WITH_MOSQUITTO),yes) 
 MQTT_DIR = $(HAKIT_DIR)mqtt/mosquitto/lib
-LDFLAGS += -L$(MQTT_DIR) -lmosquitto -lpthread
+LDFLAGS += -L$(MQTT_DIR) -lmosquitto -lpthread -lrt
 #endif
 
 #
