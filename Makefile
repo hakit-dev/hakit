@@ -34,8 +34,11 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: $(OUTDIR) ssl lws $(ARCH_LIBS) $(ARCH_BINS) classes
+all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
+ifneq ($(WITHOUT_SSL),yes)
+all:: ssl
+endif
 
 #
 # Linux USB API probing
@@ -121,4 +124,6 @@ install:: all
 	$(CP) -a targets/$(DISTRO)/hakit.sh $(INSTALL_INIT)/hakit
 	make -C classes DESTDIR=$(INSTALL_DESTDIR) install
 	make -C ui DESTDIR=$(INSTALL_DESTDIR) install
+ifneq ($(WITHOUT_SSL),yes)
 	make -C ssl DESTDIR=$(INSTALL_DESTDIR) install
+endif

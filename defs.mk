@@ -13,6 +13,8 @@ ifeq ($(APP_DIR),$(HAKIT_DIR))
 HAKIT_BUILD := 1
 endif
 
+-include $(HAKIT_DIR)/config.mk
+
 ifdef TARGET
 include $(HAKIT_DIR)targets/$(TARGET).mk
 endif
@@ -127,7 +129,11 @@ endif
 #
 LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
 LWS_LIB_DIR = $(LWS_DIR)/lib
-LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets -lcrypto -lssl
+LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
+ifneq ($(WITHOUT_SSL),yes)
+CFLAGS += -DWITH_SSL
+LDFLAGS += -lcrypto -lssl
+endif
 
 #
 # Standard rules
