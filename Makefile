@@ -41,24 +41,6 @@ all:: ssl
 endif
 
 #
-# Linux USB API probing
-#
-os/usb_io.c include/usb_io.h: $(OUTDIR)/linux_usb.h
-$(OUTDIR)/linux_usb.h:
-	echo "// SDK include directory: $(SDK_INCDIR)" > $@
-ifneq ($(wildcard $(SDK_INCDIR)/linux/usb/ch9.h),)  # kernel >= 2.6.22
-	echo "#include <linux/usb/ch9.h>" >> $@
-else ifneq ($(wildcard $(SDK_INCDIR)/linux/usb_ch9.h),)  # kernel >= 2.6.20
-	echo "#include <linux/usb_ch9.h>" >> $@
-else
-	echo "#include <linux/usb.h>" >> $@
-endif
-ifeq ($(shell grep -q bRequestType $(SDK_INCDIR)/linux/usbdevice_fs.h && echo t),)
-	echo "#define OLD_USBDEVICE_FS" >> $@
-endif
-
-
-#
 # SSL certificate
 #
 .PHONY: ssl

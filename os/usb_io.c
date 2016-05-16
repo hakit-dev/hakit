@@ -15,6 +15,18 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <sys/ioctl.h>
+#include <linux/version.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)
+#  include <linux/usb/ch9.h>
+#else
+#  include <linux/usb_ch9.h>
+#  if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
+#    include <linux/usb.h>
+#  endif
+#endif
+
+
 
 #include "log.h"
 #include "usb_io.h"
@@ -216,7 +228,7 @@ int _usb_control_msg_(int fd, unsigned char requesttype, unsigned char request,
 	struct usbdevfs_ctrltransfer ctrl;
 	int ret;
 
-#ifdef OLD_USBDEVICE_FS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
 	ctrl.requesttype = requesttype;
 	ctrl.request = request;
 	ctrl.value = value;
