@@ -85,8 +85,6 @@ endif
 
 SHORT_VERSION := $($(HAKIT_DIR)tools/gitversion.sh --short)
 
-BUILDDATE = $(shell date +%y%m%d)
-
 VERSION_FILE := $(OUTDIR)/.version
 PREV_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null || echo 'X')
 ifneq ($(VERSION),$(PREV_VERSION))
