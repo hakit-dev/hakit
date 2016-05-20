@@ -32,8 +32,13 @@ CFLAGS  = -Wall -O2 -fPIC -I$(HAKIT_DIR)include
 LDFLAGS =
 
 ifdef CROSS_ROOT_PATH
+ifneq ($(wildcard $(CROSS_ROOT_PATH)/usr),)
 CFLAGS += -I$(CROSS_ROOT_PATH)/usr/include
 LDFLAGS += -L$(CROSS_ROOT_PATH)/usr/lib
+else
+CFLAGS += -I$(CROSS_ROOT_PATH)/include
+LDFLAGS += -L$(CROSS_ROOT_PATH)/lib
+endif
 endif
 
 ifdef HAKIT_BUILD
@@ -49,6 +54,8 @@ endif
 
 ifdef CROSS_PATH
 CROSS_PREFIX = $(CROSS_PATH)/bin/$(CROSS_COMPILE)
+else
+CROSS_PREFIX = $(CROSS_COMPILE)
 endif
 
 CC = $(CROSS_PREFIX)gcc
@@ -116,7 +123,7 @@ LWS_LIB_DIR = $(LWS_DIR)/lib
 LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 ifneq ($(WITHOUT_SSL),yes)
 CFLAGS += -DWITH_SSL
-LDFLAGS += -lcrypto -lssl
+LDFLAGS += -lssl -lcrypto
 endif
 
 #
