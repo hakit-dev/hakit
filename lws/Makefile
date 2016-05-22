@@ -30,7 +30,6 @@ LIB = $(LIB_DIR)/libwebsockets.a
 
 ifeq ($(TARGET),rpi)
 CMAKE_FLAGS = -DCMAKE_TOOLCHAIN_FILE=../../cross-rpi.cmake
-CMAKE_FLAGS += -DOPENSSL_ROOT_DIR="/usr/arm-linux-gnueabihf"
 else ifeq ($(DISTRO),openwrt)
 CMAKE_FLAGS = -DCMAKE_TOOLCHAIN_FILE=../../cross-openwrt.cmake
 #CMAKE_FLAGS += -DOPENSSL_ROOT_DIR="$(STAGING_DIR)/target-mips_r2_uClibc-0.9.33.2/usr"
