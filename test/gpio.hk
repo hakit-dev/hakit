@@ -1,7 +1,8 @@
 [objects]
-button: gpio input=17
-led: gpio output=18
-button_w: source local
+button: gpio input=!17
+led: gpio output=!18
+blink: timer-clock period=200
 
 [nets]
-button.out led.in button_w.in
+button.out blink.enable
+blink.out led.in
