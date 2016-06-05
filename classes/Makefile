@@ -1,4 +1,4 @@
-CLASSES := sink source and or history \
+CLASSES := sink source and or not history \
 	timer-pulse timer-on timer-off timer-clock \
 	gpio link-serial
 
