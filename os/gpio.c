@@ -73,7 +73,6 @@ static int gpio_entry_set_value(gpio_entry_t *entry, int value)
 {
 	char buf[32];
 	int len;
-	int i;
 
 	len = snprintf(buf, sizeof(buf), "%d\n", value);
 
@@ -84,7 +83,6 @@ static int gpio_entry_set_value(gpio_entry_t *entry, int value)
 		return -1;
 	}
 
-
 	/* Return integer value from buffer */
 	return atoi(buf);
 }
@@ -92,7 +90,7 @@ static int gpio_entry_set_value(gpio_entry_t *entry, int value)
 
 static int gpio_entry_get_value(gpio_entry_t *entry)
 {
-	char buf[32];
+	char buf[8];
 	int len;
 	int i;
 
@@ -243,8 +241,9 @@ int gpio_get_value(int n)
 }
 
 
-static int gpio_input_event(gpio_entry_t *entry, struct pollfd *pollfd)
+static int gpio_input_event(void *_n, struct pollfd *pollfd)
 {
+	gpio_entry_t *entry = gpio_entry((int) _n);
 	int value;
 
 	log_debug(3, "gpio_input_event gpio=%d", entry->n);
@@ -283,7 +282,7 @@ int gpio_set_input(int n, gpio_input_func_t func, void *user_data)
 	}
 
 	/* Hook event handler */
-	entry->tag = sys_io_poll(entry->fd, POLLPRI, (sys_poll_func_t) gpio_input_event, entry);
+	entry->tag = sys_io_poll(entry->fd, POLLPRI, (sys_poll_func_t) gpio_input_event, (void *) n);
 
 	entry->dir = GPIO_INPUT;
 	entry->func = func;
