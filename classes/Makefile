@@ -1,6 +1,6 @@
 CLASSES := sink source and or history \
 	timer-pulse timer-on timer-off \
-	link-serial
+	gpio link-serial
 
 all::
 	for dir in $(CLASSES); do \

@@ -1,0 +1,7 @@
+[objects]
+button: gpio input=17
+led: gpio output=18
+button_w: source local
+
+[nets]
+button.out led.in button_w.in

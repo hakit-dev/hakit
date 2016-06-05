@@ -27,7 +27,7 @@ NAME=hakit
 DAEMON="/usr/bin/$NAME"
 DAEMON_ARGS=""
 PIDFILE=/var/run/$NAME.pid
-CONF=/etc/$NAME.conf
+CONF=/etc/default/$NAME
 
 # Exit if the package is not installed
 [ -x "$DAEMON" ] || exit 0
