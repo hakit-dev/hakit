@@ -243,7 +243,7 @@ int gpio_get_value(int n)
 
 static int gpio_input_event(void *_n, struct pollfd *pollfd)
 {
-	gpio_entry_t *entry = gpio_entry((int) _n);
+	gpio_entry_t *entry = gpio_entry((unsigned long) _n);
 	int value;
 
 	log_debug(3, "gpio_input_event gpio=%d", entry->n);
@@ -282,7 +282,7 @@ int gpio_set_input(int n, gpio_input_func_t func, void *user_data)
 	}
 
 	/* Hook event handler */
-	entry->tag = sys_io_poll(entry->fd, POLLPRI, (sys_poll_func_t) gpio_input_event, (void *) n);
+	entry->tag = sys_io_poll(entry->fd, POLLPRI, (sys_poll_func_t) gpio_input_event, (void *) (unsigned long) n);
 
 	entry->dir = GPIO_INPUT;
 	entry->func = func;
