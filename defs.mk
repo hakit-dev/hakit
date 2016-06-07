@@ -142,7 +142,7 @@ $(OUTDIR)/%.o: %.c
 	@$(RM) $(D).tmp
 
 $(OUTDIR)/%.so:
-	$(CC) -o $@ $^ -shared -nostartfiles
+	$(CC) -o $@ $^ -shared -nostartfiles $(LDFLAGS)
 
 $(ARCH_LIBS):
 	$(AR) rv $@ $^
