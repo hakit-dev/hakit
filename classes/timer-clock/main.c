@@ -38,6 +38,36 @@ typedef struct {
 } ctx_t;
 
 
+static int duty_handler(ctx_t *ctx)
+{
+	ctx->duty_tag = 0;
+	ctx->output->state = 0;
+	hk_pad_update_int(ctx->output, 0);
+	return 0;
+}
+
+
+static int period_handler(ctx_t *ctx)
+{
+	ctx->output->state = 1;
+	hk_pad_update_int(ctx->output, 1);
+
+	ctx->duty_tag = sys_timeout(ctx->delay, (sys_func_t) duty_handler, ctx);
+
+	return 1;
+}
+
+
+static void enable(ctx_t *ctx)
+{
+	if (ctx->period_tag == 0) {
+		ctx->period_tag = sys_timeout(ctx->period, (sys_func_t) period_handler, ctx);
+	}
+
+	period_handler(ctx);
+}
+
+
 static int _new(hk_obj_t *obj)
 {
 	int period;
@@ -91,23 +121,14 @@ static int _new(hk_obj_t *obj)
 }
 
 
-static int duty_handler(ctx_t *ctx)
+static void _start(hk_obj_t *obj)
 {
-	ctx->duty_tag = 0;
-	ctx->output->state = 0;
-	hk_pad_update_int(ctx->output, 0);
-	return 0;
-}
+	ctx_t *ctx = obj->ctx;
 
-
-static int period_handler(ctx_t *ctx)
-{
-	ctx->output->state = 1;
-	hk_pad_update_int(ctx->output, 1);
-
-	ctx->duty_tag = sys_timeout(ctx->delay, (sys_func_t) duty_handler, ctx);
-
-	return 1;
+	/* Enable clock if enabled by default */
+	if (hk_prop_get(&obj->props, "enable") != NULL) {
+		enable(ctx);
+	}
 }
 
 
@@ -129,11 +150,7 @@ static void _input(hk_pad_t *pad, char *value)
 	}
 
 	if (pad->state) {
-		if (ctx->period_tag == 0) {
-			ctx->period_tag = sys_timeout(ctx->period, (sys_func_t) period_handler, ctx);
-		}
-
-		period_handler(ctx);
+		enable(ctx);
 	}
 	else {
 		duty_handler(ctx);
@@ -145,5 +162,6 @@ hk_class_t _class = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
+	.start = _start,
 	.input = _input,
 };
