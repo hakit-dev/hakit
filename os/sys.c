@@ -19,6 +19,7 @@
 #include <sys/wait.h>
 
 #include "types.h"
+#include "options.h"
 #include "log.h"
 #include "sys.h"
 
@@ -454,7 +455,12 @@ static void sys_sigchld(int sig)
 
 int sys_init(void)
 {
-	signal(SIGHUP, sys_quit_signal);
+	if (opt_daemon) {
+		signal(SIGHUP, SIG_IGN);
+	}
+	else {
+		signal(SIGHUP, sys_quit_signal);
+	}
 	signal(SIGINT, sys_quit_signal);
 	signal(SIGQUIT, sys_quit_signal);
 	signal(SIGTERM, sys_quit_signal);
