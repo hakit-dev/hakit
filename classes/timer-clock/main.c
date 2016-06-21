@@ -71,7 +71,7 @@ static void enable(ctx_t *ctx)
 static int _new(hk_obj_t *obj)
 {
 	int period;
-	int duty;
+	int delay;
 	ctx_t *ctx;
 	char *str;
 
@@ -91,14 +91,33 @@ static int _new(hk_obj_t *obj)
 	/*  Get duty value in % */
 	str = hk_prop_get(&obj->props, "duty");
 	if (str != NULL) {
-		duty = atoi(str);
-		if ((duty <= 0) || (duty >= 100)) {
-			log_str("ERROR: Illegal duty value for object '%s': Must be 1..99 %%.", obj->name);
-			return -1;
+		char *percent = strchr(str, '%');
+
+		if (percent != NULL) {
+			*percent = '\0';
+			int duty = atoi(str);
+			if ((duty <= 0) || (duty >= 100)) {
+				log_str("ERROR: Illegal duty percent value for object '%s': Must be 1..99 %%.", obj->name);
+				return -1;
+			}
+			delay = (period * duty) / 100;
+		}
+		else {
+			delay = atoi(str);
 		}
 	}
 	else {
-		duty = 50;
+		delay = period / 2;
+	}
+
+	/* Clamp minimum delay value to 1 ms */
+	if (delay < 1) {
+		delay = 1;
+	}
+
+	/* Clamp maximum delay value to (period-1) ms */
+	if (delay >= period) {
+		delay = period - 1;
 	}
 
 	/* Create object context */
@@ -113,9 +132,9 @@ static int _new(hk_obj_t *obj)
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 
 	ctx->period = period;
-	ctx->delay = (period * duty) / 100;
+	ctx->delay = delay;
 
-	log_debug(1, CLASS_NAME "(%s): period=%dms duty=%dms (%d%%).", obj->name, period, ctx->delay, duty);
+	log_debug(1, CLASS_NAME "(%s): period=%dms duty=%dms", obj->name, period, ctx->delay);
 
 	return 0;
 }
