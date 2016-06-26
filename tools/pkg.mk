@@ -57,7 +57,9 @@ rpm: check check_pkg_vars install
 deb: check check_pkg_vars install
 	$(MKDIR) $(DESTDIR)/DEBIAN
 	for file in preinst postinst prerm postrm; do \
-		[ -f $(APP_DIR)targets/debian/$$file ] && install -m 755 $(APP_DIR)targets/debian/$$file $(DESTDIR)/DEBIAN/; done; \
+		[ -f $(APP_DIR)$$file ] && install -m 755 $(APP_DIR)$$file $(DESTDIR)/DEBIAN/; \
+		[ -f $(APP_DIR)targets/debian/$$file ] && install -m 755 $(APP_DIR)targets/debian/$$file $(DESTDIR)/DEBIAN/; \
+	done; \
 	sed -e 's/@NAME@/$(PKGNAME)/' \
 	    -e 's/@ARCH@/$(DEBARCH)/' \
 	    -e 's/@VERSION@/$(VERSION)-$(PKGRELEASE)/' \
@@ -67,7 +69,9 @@ deb: check check_pkg_vars install
 ipk: check check_pkg_vars install
 	$(MKDIR) $(DESTDIR)/DEBIAN
 	for file in preinst postinst prerm postrm; do \
-		[ -f $(APP_DIR)targets/openwrt/$$file ] && install -m 755 $(APP_DIR)targets/openwrt/$$file $(DESTDIR)/DEBIAN/; done; \
+		[ -f $(APP_DIR)$$file ] && install -m 755 $(APP_DIR)$$file $(DESTDIR)/DEBIAN/; \
+		[ -f $(APP_DIR)targets/openwrt/$$file ] && install -m 755 $(APP_DIR)targets/openwrt/$$file $(DESTDIR)/DEBIAN/; \
+	done; \
 	sed -e 's/@NAME@/$(PKGNAME)/' \
 	    -e 's/@ARCH@/$(DEBARCH)/' \
 	    -e 's/@VERSION@/$(VERSION)-$(PKGRELEASE)/' \
