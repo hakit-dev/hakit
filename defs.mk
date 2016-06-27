@@ -30,6 +30,7 @@ include $(HAKIT_DIR)tools/check.mk
 
 CFLAGS  = -Wall -O2 -fPIC -I$(HAKIT_DIR)include
 LDFLAGS =
+SOFLAGS =
 
 ifdef CROSS_ROOT_PATH
 ifneq ($(wildcard $(CROSS_ROOT_PATH)/usr),)
@@ -121,6 +122,10 @@ endif
 LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
 LWS_LIB_DIR = $(LWS_DIR)/lib
 LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
+
+#
+# SSL
+#
 ifneq ($(WITHOUT_SSL),yes)
 CFLAGS += -DWITH_SSL
 LDFLAGS += -lssl -lcrypto
@@ -142,7 +147,7 @@ $(OUTDIR)/%.o: %.c
 	@$(RM) $(D).tmp
 
 $(OUTDIR)/%.so:
-	$(CC) -o $@ $^ -shared -nostartfiles $(LDFLAGS)
+	$(CC) -o $@ $^ -shared -nostartfiles $(SOFLAGS)
 
 $(ARCH_LIBS):
 	$(AR) rv $@ $^
