@@ -15,6 +15,7 @@
 #include <malloc.h>
 
 #include "log.h"
+#include "sys.h"
 #include "mod.h"
 #include "gpio.h"
 
@@ -28,14 +29,43 @@ typedef struct {
 	int port;
 	int input;
 	hk_pad_t *pad;
+	int value;
+	int debounce_delay;
+	sys_tag_t debounce_tag;
 } ctx_t;
+
+
+static int input_update(ctx_t *ctx)
+{
+	ctx->debounce_tag = 0;
+
+	if (ctx->pad->state != ctx->value) {
+		ctx->pad->state = ctx->value;
+		hk_pad_update_int(ctx->pad, ctx->value);
+	}
+
+	return 0;
+}
 
 
 static void input_changed(ctx_t *ctx, int n, int value)
 {
 	log_debug(2, "%s: gpio[%d] = %d", ctx->obj->name, n, value);
-	ctx->pad->state = value;
-	hk_pad_update_int(ctx->pad, ctx->pad->state);
+
+	ctx->value = value;
+
+	/* Update pad event after debounce delay */
+	if (ctx->debounce_tag != 0) {
+		sys_remove(ctx->debounce_tag);
+		ctx->debounce_tag = 0;
+	}
+
+	if (ctx->debounce_delay > 0) {
+		ctx->debounce_tag = sys_timeout(ctx->debounce_delay, (sys_func_t) input_update, ctx);
+	}
+	else {
+		input_update(ctx);
+	}
 }
 
 
@@ -64,6 +94,7 @@ static int _new(hk_obj_t *obj)
 	ctx->obj = obj;
 	obj->ctx = ctx;
 
+	/* Get GPIO port configuration */
 	if (*str == '!') {
 		str++;
 		active_low = 1;
@@ -71,7 +102,12 @@ static int _new(hk_obj_t *obj)
 
 	ctx->port = atoi(str);
 	ctx->input = input;
+	ctx->value = -1;
 
+	/* Get debounce delay */
+	ctx->debounce_delay = hk_prop_get_int(&obj->props, "debounce");
+
+	/* Setup GPIO port */
 	gpio_export(ctx->port);
 	gpio_set_active_low(ctx->port, active_low);
 
@@ -93,8 +129,8 @@ static void _start(hk_obj_t *obj)
 	ctx_t *ctx = obj->ctx;
 
 	if (ctx->input) {
-		int value = gpio_get_value(ctx->port);
-		input_changed(ctx, ctx->port, value);
+		ctx->value = gpio_get_value(ctx->port);
+		input_update(ctx);
 	}
 }
 
