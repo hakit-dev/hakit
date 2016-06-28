@@ -213,7 +213,7 @@ static void options_conf_parse(char *conf_file)
 			}
 			else {
 				kw[len] = '\0';
-				log_str("WARNING: %s:%d: Unkown keyword '%s'", conf_file, lineno, kw);
+				log_str("WARNING: %s:%d: Unknown keyword '%s'", conf_file, lineno, kw);
 			}
 		}
 

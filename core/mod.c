@@ -99,6 +99,23 @@ hk_pad_t *hk_pad_find(hk_obj_t *obj, char *name)
 }
 
 
+static void hk_pad_update_input(hk_pad_t *pad, char *value)
+{
+	if (pad->lock) {
+		log_str("WARNING: Attempting to update locked input %s.%s",
+			pad->obj->name, pad->name);
+	}
+	else {
+		if (pad->obj->class->input != NULL) {
+			log_debug(2, "  -> %s.%s", pad->obj->name, pad->name, value);
+			pad->lock = 1;
+			pad->obj->class->input(pad, value);
+			pad->lock = 0;
+		}
+	}
+}
+
+
 void hk_pad_update_str(hk_pad_t *pad, char *value)
 {
 	hk_net_t *net = pad->net;
@@ -118,18 +135,8 @@ void hk_pad_update_str(hk_pad_t *pad, char *value)
 		hk_pad_t *pad2 = HK_TAB_VALUE(net->pads, hk_pad_t *, i);
 
 		/* Consider all input pads bound to the net */
-		if ((pad2 != pad) && (pad2->dir == HK_PAD_IN)) {
-			if (pad2->lock) {
-				log_str("WARNING: Update from %s:%s: attempting to update locked input %s.%s",
-					pad->obj->name, pad->name,
-					pad2->obj->name, pad2->name);
-			}
-			else {
-				if (pad2->obj->class->input != NULL) {
-					log_debug(2, "  -> %s.%s", pad2->obj->name, pad2->name, value);
-					pad2->obj->class->input(pad2, value);
-				}
-			}
+		if ((pad2 != pad) && (pad2->dir != HK_PAD_OUT)) {
+			hk_pad_update_input(pad2, value);
 		}
 	}
 
@@ -294,13 +301,32 @@ hk_obj_t *hk_obj_create(hk_class_t *class, char *name, int argc, char **argv)
 }
 
 
+static int hk_obj_preset(hk_obj_t *obj, char *name, char *value)
+{
+	hk_pad_t *pad = hk_pad_find(obj, name);
+
+	if ((pad != NULL) && (pad->dir != HK_PAD_OUT)) {
+		log_debug(2, "hk_obj_preset %s.%s='%s'", obj->name, name, value);
+		hk_pad_update_input(pad, value);
+	}
+
+	return 1;
+}
+
+
 void hk_obj_start_all(void)
 {
 	int i;
 
 	for (i = 0; i < objs.nmemb; i++) {
 		hk_obj_t *obj = HK_OBJ_ENTRY(i);
+
+		/* Configure input presets */
+		hk_prop_foreach(&obj->props, (hk_prop_foreach_func) hk_obj_preset, (void *) obj);
+
+		/* Invoke start handler */
 		if (obj->class->start != NULL) {
+			log_debug(2, "Starting object '%s'", obj->name);
 			obj->class->start(obj);
 		}
 	}

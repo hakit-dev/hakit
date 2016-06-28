@@ -11,7 +11,6 @@
 #define __HAKIT_USB_IO_H__
 
 #include <linux/usbdevice_fs.h>
-#include "linux_usb.h"
 
 extern struct usbdevfs_urb *_usb_urb_submit_(int fd, int ep, int urbtype,
 					     unsigned char *buf, int size);

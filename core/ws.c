@@ -522,9 +522,11 @@ static struct lws_protocols ws_protocols[] = {
 ws_t *ws_new(int port, char *ssl_dir)
 {
 	ws_t *ws = NULL;
+#ifdef WITH_SSL
 	int ssl_dir_len = ssl_dir ? strlen(ssl_dir) : 0;
 	char cert_path[ssl_dir_len+16];
 	char key_path[ssl_dir_len+16];
+#endif
 	struct lws_context_creation_info info;
 
 	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
@@ -540,6 +542,7 @@ ws_t *ws_new(int port, char *ssl_dir)
 	//info.extensions = lws_get_internal_extensions();
 
 	/* Setup SSL info */
+#ifdef WITH_SSL
 	if (ssl_dir != NULL) {
 		snprintf(cert_path, sizeof(cert_path), "%s/cert.pem", ssl_dir);
 		info.ssl_cert_filepath = cert_path;
@@ -547,6 +550,7 @@ ws_t *ws_new(int port, char *ssl_dir)
 		snprintf(key_path, sizeof(key_path), "%s/privkey.pem", ssl_dir);
 		info.ssl_private_key_filepath = key_path;
 	}
+#endif
 
 	info.gid = -1;
 	info.uid = -1;

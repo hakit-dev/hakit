@@ -23,7 +23,9 @@ endif
 
 endif
 
-DEBNAME = $(PKGNAME)_$(VERSION)-$(BUILDDATE)_$(DEBARCH).deb
+PKGRELEASE ?= $(shell date +%y%m%d)
+
+DEBNAME = $(PKGNAME)_$(VERSION)-$(PKGRELEASE)_$(DEBARCH).deb
 
 OUTDIR ?= out
 DESTDIR ?= $(OUTDIR)/root
@@ -45,7 +47,7 @@ rpm: check check_pkg_vars install
 	$(MKDIR) $(PKGDIR)/BUILD
 	sed -e 's/@NAME@/$(PKGNAME)/' \
 	    -e 's/@VERSION@/$(VERSION)/' \
-	    -e 's/@RELEASE@/$(BUILDDATE)/' \
+	    -e 's/@RELEASE@/$(PKGRELEASE)/' \
 	    spec.in > $(PKGDIR)/RPM.spec
 	find $(DESTDIR) -type f | sed 's|^$(DESTDIR)||' > $(PKGDIR)/BUILD/RPM.files
 	echo "%_topdir $(PWD)/$(PKGDIR)" > $(HOME)/.rpmmacros
@@ -55,20 +57,24 @@ rpm: check check_pkg_vars install
 deb: check check_pkg_vars install
 	$(MKDIR) $(DESTDIR)/DEBIAN
 	for file in preinst postinst prerm postrm; do \
-		[ -f $(APP_DIR)targets/debian/$$file ] && install -m 755 $(APP_DIR)targets/debian/$$file $(DESTDIR)/DEBIAN/; done; \
+		[ -f $(APP_DIR)$$file ] && install -m 755 $(APP_DIR)$$file $(DESTDIR)/DEBIAN/; \
+		[ -f $(APP_DIR)targets/debian/$$file ] && install -m 755 $(APP_DIR)targets/debian/$$file $(DESTDIR)/DEBIAN/; \
+	done; \
 	sed -e 's/@NAME@/$(PKGNAME)/' \
 	    -e 's/@ARCH@/$(DEBARCH)/' \
-	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
+	    -e 's/@VERSION@/$(VERSION)-$(PKGRELEASE)/' \
 	    $(APP_DIR)control.in > $(DESTDIR)/DEBIAN/control
 	fakeroot dpkg-deb --build $(DESTDIR) $(PKGDIR)/$(DEBNAME)
 
 ipk: check check_pkg_vars install
 	$(MKDIR) $(DESTDIR)/DEBIAN
 	for file in preinst postinst prerm postrm; do \
-		[ -f $(APP_DIR)targets/openwrt/$$file ] && install -m 755 $(APP_DIR)targets/openwrt/$$file $(DESTDIR)/DEBIAN/; done; \
+		[ -f $(APP_DIR)$$file ] && install -m 755 $(APP_DIR)$$file $(DESTDIR)/DEBIAN/; \
+		[ -f $(APP_DIR)targets/openwrt/$$file ] && install -m 755 $(APP_DIR)targets/openwrt/$$file $(DESTDIR)/DEBIAN/; \
+	done; \
 	sed -e 's/@NAME@/$(PKGNAME)/' \
 	    -e 's/@ARCH@/$(DEBARCH)/' \
-	    -e 's/@VERSION@/$(VERSION)-$(BUILDDATE)/' \
+	    -e 's/@VERSION@/$(VERSION)-$(PKGRELEASE)/' \
 	    $(APP_DIR)control.in > $(DESTDIR)/DEBIAN/control
 	fakeroot $(HAKIT_DIR)tools/opkg-build $(DESTDIR) $(PKGDIR)
 

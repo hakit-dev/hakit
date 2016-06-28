@@ -47,12 +47,17 @@ const options_entry_t options_entries[] = {
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
 	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable HKCP monitor mode" },
-	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL for HTTP and MQTT" },
+	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
+#ifdef WITH_SSL
+	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
+#endif
+#ifdef WITH_MQTT
 	{ "mqtt-user",      'u', 0, OPTIONS_TYPE_STRING, &mqtt_user,      "MQTT user and password", "USER[:PASSWORD]" },
 	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &mqtt_host,      "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
 	{ "mqtt-port",      'p', 0, OPTIONS_TYPE_INT,    &mqtt_port,      "MQTT broker port number", "PORT" },
 	{ "mqtt-keepalive", 'k', 0, OPTIONS_TYPE_INT,    &mqtt_keepalive, "MQTT keepalive delay", "SECONDS" },
 	{ "mqtt-qos",       'q', 0, OPTIONS_TYPE_INT,    &mqtt_qos,       "MQTT QoS level (0,1,2)", "LEVEL" },
+#endif
 	{ NULL }
 };
 

@@ -30,6 +30,17 @@ include $(HAKIT_DIR)tools/check.mk
 
 CFLAGS  = -Wall -O2 -fPIC -I$(HAKIT_DIR)include
 LDFLAGS =
+SOFLAGS =
+
+ifdef CROSS_ROOT_PATH
+ifneq ($(wildcard $(CROSS_ROOT_PATH)/usr),)
+CFLAGS += -I$(CROSS_ROOT_PATH)/usr/include
+LDFLAGS += -L$(CROSS_ROOT_PATH)/usr/lib
+else
+CFLAGS += -I$(CROSS_ROOT_PATH)/include
+LDFLAGS += -L$(CROSS_ROOT_PATH)/lib
+endif
+endif
 
 ifdef HAKIT_BUILD
 VPATH = os:core
@@ -44,6 +55,8 @@ endif
 
 ifdef CROSS_PATH
 CROSS_PREFIX = $(CROSS_PATH)/bin/$(CROSS_COMPILE)
+else
+CROSS_PREFIX = $(CROSS_COMPILE)
 endif
 
 CC = $(CROSS_PREFIX)gcc
@@ -80,8 +93,6 @@ endif
 
 SHORT_VERSION := $($(HAKIT_DIR)tools/gitversion.sh --short)
 
-BUILDDATE = $(shell date +%y%m%d)
-
 VERSION_FILE := $(OUTDIR)/.version
 PREV_VERSION := $(shell cat $(VERSION_FILE) 2>/dev/null || echo 'X')
 ifneq ($(VERSION),$(PREV_VERSION))
@@ -106,20 +117,6 @@ else
 endif
 
 #
-# SDK
-#
-ifdef CROSS_COMPILE
-SDK_DIR = $(dir $(shell readlink -f $(dir $(shell $(CC) -print-file-name=libc.a))))
-ifeq ($(wildcard $(SDK_DIR)include/linux),)
-SDK_INCDIR = $(SDK_DIR)sys-include
-else
-SDK_INCDIR = $(SDK_DIR)include
-endif
-else
-SDK_INCDIR = /usr/include
-endif
-
-#
 # WebSockets
 #
 LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
@@ -129,15 +126,19 @@ LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 #
 # MQTT
 #
-#ifeq ($(WITH_MOSQUITTO),yes) 
+ifneq ($(WITHOUT_MQTT),yes) 
 MQTT_DIR = $(HAKIT_DIR)mqtt/mosquitto/lib
+CFLAGS += -DWITH_MQTT
 LDFLAGS += -L$(MQTT_DIR) -lmosquitto -lpthread -lrt
-#endif
+endif
 
 #
 # OpenSSL
 #
-LDFLAGS += -lcrypto -lssl
+ifneq ($(WITHOUT_SSL),yes)
+CFLAGS += -DWITH_SSL
+LDFLAGS += -lssl -lcrypto
+endif
 
 #
 # Standard cross-compile SDK path
@@ -163,7 +164,7 @@ $(OUTDIR)/%.o: %.c
 	@$(RM) $(D).tmp
 
 $(OUTDIR)/%.so:
-	$(CC) -o $@ $^ -shared -nostartfiles
+	$(CC) -o $@ $^ -shared -nostartfiles $(SOFLAGS)
 
 $(ARCH_LIBS):
 	$(AR) rv $@ $^

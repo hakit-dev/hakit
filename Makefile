@@ -34,7 +34,7 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c mqtt.c comm.
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: submodules $(OUTDIR) ssl lws mqtt $(ARCH_LIBS) $(ARCH_BINS) classes
+all:: submodules $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
 #
 # GIT submodules
@@ -43,23 +43,13 @@ all:: submodules $(OUTDIR) ssl lws mqtt $(ARCH_LIBS) $(ARCH_BINS) classes
 submodules:
 	git submodule update --init
 
-#
-# Linux USB API probing
-#
-os/usb_io.c include/usb_io.h: $(OUTDIR)/linux_usb.h
-$(OUTDIR)/linux_usb.h:
-	echo "// SDK include directory: $(SDK_INCDIR)" > $@
-ifneq ($(wildcard $(SDK_INCDIR)/linux/usb/ch9.h),)  # kernel >= 2.6.22
-	echo "#include <linux/usb/ch9.h>" >> $@
-else ifneq ($(wildcard $(SDK_INCDIR)/linux/usb_ch9.h),)  # kernel >= 2.6.20
-	echo "#include <linux/usb_ch9.h>" >> $@
-else
-	echo "#include <linux/usb.h>" >> $@
-endif
-ifeq ($(shell grep -q bRequestType $(SDK_INCDIR)/linux/usbdevice_fs.h && echo t),)
-	echo "#define OLD_USBDEVICE_FS" >> $@
+ifneq ($(WITHOUT_SSL),yes)
+all:: ssl
 endif
 
+ifneq ($(WITHOUT_MQTT),yes)
+all:: mqtt
+endif
 
 #
 # SSL certificate
@@ -136,4 +126,6 @@ install:: all
 	$(CP) -a targets/$(DISTRO)/hakit.sh $(INSTALL_INIT)/hakit
 	make -C classes DESTDIR=$(INSTALL_DESTDIR) install
 	make -C ui DESTDIR=$(INSTALL_DESTDIR) install
+ifneq ($(WITHOUT_SSL),yes)
 	make -C ssl DESTDIR=$(INSTALL_DESTDIR) install
+endif
