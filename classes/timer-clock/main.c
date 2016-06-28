@@ -140,17 +140,6 @@ static int _new(hk_obj_t *obj)
 }
 
 
-static void _start(hk_obj_t *obj)
-{
-	ctx_t *ctx = obj->ctx;
-
-	/* Enable clock if enabled by default */
-	if (hk_prop_get(&obj->props, "enable") != NULL) {
-		enable(ctx);
-	}
-}
-
-
 static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
@@ -181,6 +170,5 @@ hk_class_t _class = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
-	.start = _start,
 	.input = _input,
 };
