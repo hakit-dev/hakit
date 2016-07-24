@@ -1,5 +1,6 @@
 CLASSES := sink source and or not history \
 	timer-pulse timer-on timer-off timer-clock \
+	proc \
 	gpio link-serial
 
 all::
