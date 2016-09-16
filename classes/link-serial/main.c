@@ -19,6 +19,7 @@
 #include "serial.h"
 #include "buf.h"
 #include "io.h"
+#include "str_argv.h"
 
 #include "version.h"
 
@@ -68,51 +69,56 @@ static hk_pad_t *find_pad(hk_tab_t *tab, char *key)
 }
 
 
-static void tty_recv_line(ctx_t *ctx, char *key)
+static void tty_recv_line(ctx_t *ctx, char *str)
 {
-	char *value;
-	hk_pad_t *pad;
+	int argc;
+	char **argv = NULL;
+	int i;
 
-	log_debug(2, "%s [RECV]: '%s'", ctx->tty_name, key);
+	log_debug(2, "%s [RECV]: '%s'", ctx->tty_name, str);
 
-	if (key == NULL) {
+	if (str == NULL) {
 		return;
 	}
 
 	/* Filter against RX prefix */
 	if (ctx->rx_prefix.str != NULL) {
-		if (strncmp(key, ctx->rx_prefix.str, ctx->rx_prefix.len) != 0) {
+		if (strncmp(str, ctx->rx_prefix.str, ctx->rx_prefix.len) != 0) {
 			return;
 		}
-		key += ctx->rx_prefix.len;
+		str += ctx->rx_prefix.len;
 	}
 
-	/* Extract key and value from device event */
-	value = key;
-	while (*value > ' ') {
-		value++;
-	}
-	if (*value != '\0') {
-		*(value++) = '\0';
-	}
-	while ((*value != '\0') && (*value <= ' ')) {
-		value++;
-	}
+	/* Extract key/value pairs from device event */
+	argc = str_argv(str, &argv);
 
-	/* No value provided => do nothing */
-	if (*value == '\0') {
-		return;
-	}
+	for (i = 0; i < argc; i++) {
+		char *key = argv[i];
+		char *value = key;
+		hk_pad_t *pad;
 
-	/* Find output pad corresponding to the key */
-	pad = find_pad(&ctx->outputs, key);
-	if (pad == NULL) {
-		log_str("%s [WARN]: Received update request for unknown output pad: %s", ctx->tty_name, key);
-		return;
-	}
+		while ((*value > ' ') && (*value != '=')) {
+			value++;
+		}
+		if (*value == '=') {
+			*(value++) = '\0';
+		}
 
-	/* Update output pad */
-	hk_pad_update_str(pad, value);
+		log_debug(2, "%s [RECV]:   => %s='%s'", ctx->tty_name, key, value);
+
+		/* No value provided => do nothing */
+		if (*value != '\0') {
+			/* Find output pad corresponding to the key */
+			pad = find_pad(&ctx->outputs, key);
+			if (pad != NULL) {
+				/* Update output pad */
+				hk_pad_update_str(pad, value);
+			}
+			else {
+				log_str("%s [WARN]: Received update request for unknown output pad: %s", ctx->tty_name, key);
+			}
+		}
+	}
 }
 
 
