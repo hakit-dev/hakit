@@ -10,13 +10,15 @@
  */
 
 const HAKIT_ST_IDLE = 0;
-const HAKIT_ST_READY = 1;
-const HAKIT_ST_GET = 2;
+const HAKIT_ST_VERSION = 1;
+const HAKIT_ST_READY = 2;
+const HAKIT_ST_GET = 3;
 
 var hakit_sock;
 var hakit_sock_state = HAKIT_ST_IDLE;
 var hakit_sock_timeout;
 var hakit_sock_failures = 0;
+var hakit_version = '';
 
 
 function get_appropriate_ws_url()
@@ -81,10 +83,7 @@ function hakit_recv_line(line)
 {
     //console.log("hakit_recv_line('"+line+"')");
 
-    if (line == ".") {
-	hakit_sock_state = HAKIT_ST_READY;
-    }
-    else if (line.substr(0,1) == "!") {
+    if (line.substr(0,1) == "!") {
 	var i = line.indexOf(" ");
 	if (i > 1) {
 	    var name = line.substr(1,i-1);
@@ -93,19 +92,34 @@ function hakit_recv_line(line)
 	}
     }
     else {
-	if (hakit_sock_state == HAKIT_ST_GET) {
-	    var fields = line.split(" ");
-	    var dir = fields[0];
-	    var widget = fields[1];
-	    var name = fields[2];
-
-	    var value = '';
-	    for (var i = 3; i < fields.length; i++) {
-		value += ' '+fields[i];
+	if (line == ".") {
+	    if (hakit_sock_state == HAKIT_ST_VERSION) {
+		hakit_connected(true);
+		hakit_send("get");
+		hakit_sock_state = HAKIT_ST_GET;
 	    }
-	    value = value.trim();
+	    else {
+		hakit_sock_state = HAKIT_ST_READY;
+	    }
+	}
+	else {
+	    if (hakit_sock_state == HAKIT_ST_VERSION) {
+		hakit_version = line;
+	    }
+	    else if (hakit_sock_state == HAKIT_ST_GET) {
+		var fields = line.split(" ");
+		var dir = fields[0];
+		var widget = fields[1];
+		var name = fields[2];
 
-	    hakit_updated(name, value, dir, widget);
+		var value = '';
+		for (var i = 3; i < fields.length; i++) {
+		    value += ' '+fields[i];
+		}
+		value = value.trim();
+
+		hakit_updated(name, value, dir, widget);
+	    }
 	}
     }
 }
@@ -129,9 +143,8 @@ function hakit_connect()
     try {
 	hakit_sock.onopen = function() {
 	    console.log("hakit_connect: connection established");
-	    hakit_sock_state = HAKIT_ST_READY;
-	    hakit_connected(true);
-	    hakit_get();
+	    hakit_sock_state = HAKIT_ST_VERSION;
+	    hakit_send("version");
 	} 
 
 	hakit_sock.onmessage = function got_packet(msg) {

@@ -121,6 +121,9 @@ function hakit_signal_clear()
 
 function hakit_signal_init()
 {
+    document.getElementById("ws_status_td").style.backgroundColor = "#ffff00";
+    document.getElementById("ws_status").textContent = "Connecting...";
+
     /* Get signal table element */
     hakit_signals = document.getElementById("signals");
     hakit_connect();
@@ -227,6 +230,7 @@ function hakit_connected(connected)
     if (connected) {
 	document.getElementById("ws_status_td").style.backgroundColor = "#40ff40";
 	document.getElementById("ws_status").textContent = "Connected";
+	document.getElementById("ws_version").textContent = hakit_version;
 	hakit_signal_clear();
     }
     else {

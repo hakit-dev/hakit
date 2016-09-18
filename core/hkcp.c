@@ -22,6 +22,7 @@
 #include "tcpio.h"
 #include "udpio.h"
 #include "command.h"
+#include "hakit_version.h"
 #include "hkcp.h"
 
 
@@ -1287,6 +1288,9 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 			buf_append_str(out_buf, argv[i]);
 		}
 		buf_append_str(out_buf, "\n");
+	}
+	else if (strcmp(argv[0], "version") == 0) {
+		buf_append_str(out_buf, HAKIT_VERSION " " ARCH "\n");
 	}
 	else {
 		buf_append_str(out_buf, "ERROR: Unknown command: ");
