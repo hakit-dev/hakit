@@ -49,32 +49,15 @@ void log_printf(const char *fmt, ...)
 
 void log_tstamp(void)
 {
-	static struct timeval t0 = {0,0};
 	struct timeval t;
 	char str[32];
 	int len;
 
 	gettimeofday(&t, NULL);
 
-	len = strftime(str, sizeof(str), "%d-%b-%Y %H:%M:%S ", localtime(&t.tv_sec));
+	len = strftime(str, sizeof(str), "[%Y-%m-%d %H:%M:%S", localtime(&t.tv_sec));
+	len += snprintf(str+len, sizeof(str)-len, ".%04ld] ", t.tv_usec/100);
 	log_put(str, len);
-
-	if (opt_debug > 0) {
-		int dt_sec, dt_usec;
-
-		if (t0.tv_sec == 0) {
-			t0 = t;
-		}
-
-		dt_sec = t.tv_sec - t0.tv_sec;
-		dt_usec = t.tv_usec - t0.tv_usec;
-		if (dt_usec < 0) {
-			dt_usec += 1000000;
-			dt_sec--;
-		}
-
-		log_printf("%d.%06d ", dt_sec, dt_usec);
-	}
 }
 
 
