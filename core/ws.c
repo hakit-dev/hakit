@@ -14,6 +14,7 @@
 #include <dirent.h>
 
 #include "hakit_version.h"
+#include "options.h"
 #include "log.h"
 #include "sys.h"
 #include "tab.h"
@@ -460,15 +461,32 @@ static int ws_http_callback(struct lws *wsi,
 		log_debug(3, "ws_http_callback LWS_CALLBACK_FILTER_HTTP_CONNECTION");
 		/* if we returned non-zero from here, we kill the connection */
 		break;
+	case LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED:
+		log_debug(3, "ws_http_callback LWS_CALLBACK_SERVER_NEW_CLIENT_INSTANTIATED");
+		break;
+
+	case LWS_CALLBACK_PROTOCOL_INIT:
+		log_debug(3, "ws_http_callback LWS_CALLBACK_PROTOCOL_INIT");
+		break;
+	case LWS_CALLBACK_PROTOCOL_DESTROY:
+		log_debug(3, "ws_http_callback LWS_CALLBACK_PROTOCOL_DESTROY");
+		break;
+	case LWS_CALLBACK_WSI_CREATE:
+		log_debug(3, "ws_http_callback LWS_CALLBACK_WSI_CREATE");
+		break;
+	case LWS_CALLBACK_WSI_DESTROY:
+		log_debug(3, "ws_http_callback LWS_CALLBACK_WSI_DESTROY");
+		break;
+
 	case LWS_CALLBACK_LOCK_POLL:
-		log_debug(3, "ws_http_callback LWS_CALLBACK_LOCK_POLL %d", pa->fd);
+		//log_debug(3, "ws_http_callback LWS_CALLBACK_LOCK_POLL");
 		/*
 		 * lock mutex to protect pollfd state
 		 * called before any other POLL related callback
 		 */
 		break;
 	case LWS_CALLBACK_UNLOCK_POLL:
-		log_debug(3, "ws_http_callback LWS_CALLBACK_UNLOCK_POLL %d", pa->fd);
+		//log_debug(3, "ws_http_callback LWS_CALLBACK_UNLOCK_POLL");
 		/*
 		 * unlock mutex to protect pollfd state when
 		 * called after any other POLL related callback
@@ -486,9 +504,7 @@ static int ws_http_callback(struct lws *wsi,
 		log_debug(3, "ws_http_callback LWS_CALLBACK_CHANGE_MODE_POLL_FD %d %02X", pa->fd, pa->events);
 		sys_io_poll(pa->fd, pa->events, (sys_poll_func_t) ws_callback_poll, context);
 		break;
-	case LWS_CALLBACK_PROTOCOL_INIT:
-		log_debug(3, "ws_http_callback LWS_CALLBACK_PROTOCOL_INIT");
-		break;
+
 	default:
 		log_debug(3, "ws_http_callback reason=%d", reason);
 		break;
@@ -519,6 +535,31 @@ static struct lws_protocols ws_protocols[] = {
  * HTTP/WebSocket server init
  */
 
+static void ws_log(int level, const char *line)
+{
+	static const char *slevel[] = {
+		"ERROR  ", "WARN   ", "NOTICE ", "INFO   ",
+		"DEBUG  ", "PARSER ", "HEADER ", "EXT    ",
+		"CLIENT ", "LATENCY",
+	};
+	int ilevel = 0;
+	char *tag = "";
+
+	for (ilevel = 0; ilevel < LLL_COUNT; ilevel++) {
+		if (level & (1 << ilevel)) {
+			break;
+		}
+	}
+
+	if (ilevel < ARRAY_SIZE(slevel)) {
+		tag = (char *) slevel[ilevel];
+	}
+
+	log_tstamp();
+	log_printf("LWS %s : %s", tag, line);
+}
+
+
 ws_t *ws_new(int port, char *ssl_dir)
 {
 	ws_t *ws = NULL;
@@ -528,9 +569,15 @@ ws_t *ws_new(int port, char *ssl_dir)
 	char key_path[ssl_dir_len+16];
 #endif
 	struct lws_context_creation_info info;
+	int log_level = LLL_ERR | LLL_WARN | LLL_NOTICE | LLL_INFO;
 
-	lwsl_notice(SERVER_NAME " " HAKIT_VERSION);
+	// Setup LWS logging
+	if (opt_debug >= 3) {
+		log_level |= LLL_DEBUG | LLL_CLIENT;
+	}
+	lws_set_log_level(log_level, ws_log);
 
+	// Create new context descriptor
 	ws = malloc(sizeof(ws_t));
 	memset(ws, 0, sizeof(ws_t));
 
