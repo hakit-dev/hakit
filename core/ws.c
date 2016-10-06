@@ -596,6 +596,10 @@ ws_t *ws_new(int port, char *ssl_dir)
 
 		snprintf(key_path, sizeof(key_path), "%s/privkey.pem", ssl_dir);
 		info.ssl_private_key_filepath = key_path;
+
+		log_debug(2, "SSL info: cert='%s' key='%s'", cert_path, key_path);
+
+		info.options |= LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS;
 	}
 #endif
 
