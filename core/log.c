@@ -56,7 +56,7 @@ void log_tstamp(void)
 	gettimeofday(&t, NULL);
 
 	len = strftime(str, sizeof(str), "[%Y-%m-%d %H:%M:%S", localtime(&t.tv_sec));
-	len += snprintf(str+len, sizeof(str)-len, ".%04ld] ", t.tv_usec/100);
+	len += snprintf(str+len, sizeof(str)-len, ".%03ld] ", t.tv_usec/1000);
 	log_put(str, len);
 }
 
