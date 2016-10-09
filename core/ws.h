@@ -12,8 +12,8 @@
 
 #include "buf.h"
 #include "tab.h"
+#include "ws_client.h"
 
-typedef struct ws_s ws_t;
 typedef void (*ws_alias_handler_t)(void *user_data, char *uri, buf_t *rsp);
 typedef void (*ws_command_handler_t)(void *user_data, int argc, char **argv, buf_t *out_buf);
 
@@ -24,7 +24,7 @@ typedef struct {
 	void *user_data;
 } ws_alias_t;
 
-struct ws_s {
+typedef struct {
 	void *context;
 	hk_tab_t document_roots; // Table of (char *)
 	hk_tab_t aliases;       // Table of (ws_alias_t)
@@ -32,10 +32,15 @@ struct ws_s {
 	ws_command_handler_t command_handler;
 	void *command_user_data;
 	int salt;
-};
+} ws_server_t;
+
+typedef struct {
+	ws_client_t client;
+	ws_server_t server;
+} ws_t;
 
 
-extern ws_t *ws_new(int port, char *ssl_dir);
+extern ws_t *ws_new(int port, int use_ssl, char *ssl_dir);
 extern void ws_destroy(ws_t *ws);
 
 /* HTTP server configuration */
@@ -51,5 +56,8 @@ typedef int (*ws_session_foreach_func)(void * user_data, void *pss);
 extern int ws_session_add(ws_t *ws, void *pss);
 extern void ws_session_remove(ws_t *ws, void *pss);
 extern void ws_session_foreach(ws_t *ws, ws_session_foreach_func func, void *user_data);
+
+/* HTTP client */
+extern int ws_client(ws_t *ws, char *uri);
 
 #endif /* __HAKIT_WS_H__ */

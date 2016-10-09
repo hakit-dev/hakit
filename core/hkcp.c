@@ -46,6 +46,8 @@ static hkcp_source_t *hkcp_source_retrieve(hkcp_t *hkcp, char *name);
 static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *node);
 
 
+extern void comm_wget(char *uri, buf_t *buf);
+
 
 /*
  * Nodes
@@ -1291,6 +1293,9 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 	}
 	else if (strcmp(argv[0], "version") == 0) {
 		buf_append_str(out_buf, HAKIT_VERSION " " ARCH "\n");
+	}
+	else if (strcmp(argv[0], "wget") == 0) {
+		comm_wget(argv[1], out_buf);
 	}
 	else {
 		buf_append_str(out_buf, "ERROR: Unknown command: ");

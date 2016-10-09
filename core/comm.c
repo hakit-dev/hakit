@@ -15,6 +15,7 @@
 #include "log.h"
 #include "ws.h"
 #include "ws_events.h"
+#include "ws_client.h"
 #include "hkcp.h"
 #include "comm.h"
 
@@ -41,7 +42,7 @@ static void comm_ws_send(ws_t *ws, char *name, char *value)
 
 int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 {
-	char *path;
+	char *path = NULL;
 
 	/* Init HKCP gears */
 	int ret = hkcp_init(&hk_hkcp, use_hkcp ? HAKIT_HKCP_PORT:0, hkcp_hosts);
@@ -50,17 +51,16 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 	}
 
 	/* Search for SSL cert directory */
-	path = env_devdir("ssl");
-	if (path != NULL) {
-		log_debug(2, "Running from development environment!");
+	if (use_ssl) {
+		path = env_devdir("ssl");
+		if (path == NULL) {
+			path = HAKIT_SHARE_DIR "ssl";
+		}
+		log_debug(2, "SSL Certficate directory: %s", path);
 	}
-	else {
-		path = HAKIT_SHARE_DIR "ssl";
-	}
-	log_debug(2, "SSL Certficate directory: %s", path);
 
 	/* Init HTTP/WebSocket server */
-	hk_ws = ws_new(HAKIT_HTTP_PORT, use_ssl ? path : NULL);
+	hk_ws = ws_new(HAKIT_HTTP_PORT, use_ssl, path);
 	if (hk_ws == NULL) {
 		return -1;
 	}
@@ -73,6 +73,7 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 
 	path = env_devdir("ui");
 	if (path != NULL) {
+		log_debug(2, "Running from development environment!");
 		ws_add_document_root(hk_ws, path);
 	}
 	else {
@@ -167,4 +168,21 @@ void comm_source_update_int(int id, int value)
 	char str[32];
 	snprintf(str, sizeof(str), "%d", value);
 	comm_source_update_str(id, str);
+}
+
+
+static void comm_wget_received(void *ctx, char *buf, int len)
+{
+	log_debug(2, "comm_wget_received len=%d", len);
+}
+
+
+void comm_wget(char *uri, buf_t *buf)
+{
+	if (uri == NULL) {
+		printf("Usage: wget <uri>\n");
+		return;
+	}
+
+	ws_client_get(&hk_ws->client, uri, comm_wget_received, NULL);
 }

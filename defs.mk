@@ -28,7 +28,7 @@ include $(HAKIT_DIR)tools/check.mk
 # Compile/link options
 #
 
-CFLAGS  = -Wall -O2 -fPIC -I$(HAKIT_DIR)include
+CFLAGS  = -Wall -O0 -g -fPIC -I$(HAKIT_DIR)include
 LDFLAGS =
 SOFLAGS =
 

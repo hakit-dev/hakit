@@ -9,7 +9,40 @@
  * directory for more details.
  */
 
+#include <stdio.h>
+#include <poll.h>
+#include <libwebsockets.h>
+
+#include "log.h"
+#include "sys.h"
 #include "ws_utils.h"
+
+
+static int ws_callback_poll(struct lws_context *context, struct pollfd *pollfd)
+{
+	int ret;
+
+	log_debug(3, "ws_callback_poll: %d %02X", pollfd->fd, pollfd->revents);
+
+	ret = lws_service_fd(context, pollfd);
+	if (ret < 0) {
+		log_debug(3, "  => %d", ret);
+	}
+	return 1;
+}
+
+
+void ws_poll(struct lws_context *context, struct lws_pollargs *pa)
+{
+	sys_io_poll(pa->fd, pa->events, (sys_poll_func_t) ws_callback_poll, context);
+}
+
+
+void ws_poll_remove(struct lws_pollargs *pa)
+{
+	sys_remove_fd(pa->fd);
+}
+
 
 void ws_dump_handshake_info(struct lws *wsi)
 {
