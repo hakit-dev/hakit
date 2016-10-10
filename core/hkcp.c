@@ -15,7 +15,6 @@
 #include <errno.h>
 
 #include "log.h"
-#include "options.h"
 #include "buf.h"
 #include "iputils.h"
 #include "netif.h"
@@ -44,9 +43,6 @@ static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tc
 static int hkcp_node_connect(hkcp_node_t *node);
 static hkcp_source_t *hkcp_source_retrieve(hkcp_t *hkcp, char *name);
 static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *node);
-
-
-extern void comm_wget(char *uri, buf_t *buf);
 
 
 /*
@@ -1294,9 +1290,6 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 	else if (strcmp(argv[0], "version") == 0) {
 		buf_append_str(out_buf, HAKIT_VERSION " " ARCH "\n");
 	}
-	else if (strcmp(argv[0], "wget") == 0) {
-		comm_wget(argv[1], out_buf);
-	}
 	else {
 		buf_append_str(out_buf, "ERROR: Unknown command: ");
 		buf_append_str(out_buf, argv[0]);
@@ -1320,27 +1313,6 @@ static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tc
 		io_channel_write(&tcp_sock->chan, (char *) out_buf.base, out_buf.len);
 
 		buf_cleanup(&out_buf);
-	}
-}
-
-
-static void hkcp_command_stdin(hkcp_t *hkcp, int argc, char **argv)
-{
-	buf_t out_buf;
-
-	if (argc > 0) {
-		buf_init(&out_buf);
-
-		hkcp_command(hkcp, argc, argv, &out_buf);
-		if (fwrite(out_buf.base, 1, out_buf.len, stdout) < 0) {
-			log_str("PANIC: Failed to write stdout: %s", strerror(errno));
-		}
-
-		buf_cleanup(&out_buf);
-	}
-	else {
-		/* Quit if hangup from stdin */
-		sys_quit();
 	}
 }
 
@@ -1481,11 +1453,6 @@ int hkcp_init(hkcp_t *hkcp, int port, char *hosts)
 		if (tcp_srv_init(&hkcp->tcp_srv, port, hkcp_tcp_event, hkcp)) {
 			goto DONE;
 		}
-	}
-
-	if (!opt_daemon) {
-		command_t *cmd = command_new((command_handler_t) hkcp_command_stdin, hkcp);
-		io_channel_setup(&hkcp->chan_stdin, fileno(stdin), (io_func_t) command_recv, cmd);
 	}
 
 	/* Feed list of explicit host addresses */

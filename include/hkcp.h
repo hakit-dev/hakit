@@ -106,7 +106,6 @@ struct hkcp_s {
 	hk_tab_t sinks;       // Table of (hkcp_sink_t)
 	hk_tab_t sources;     // Table of (hkcp_source_t)
 	sys_tag_t advertise_tag;
-	io_channel_t chan_stdin;
 	hkcp_sink_handler_t monitor;
 };
 

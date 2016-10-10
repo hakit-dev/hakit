@@ -284,5 +284,5 @@ int ws_client_get(ws_client_t *client, char *uri, ws_client_func_t *func, void *
 	wsi = lws_client_connect_via_info(&i);
 	log_debug(3, "ws_client => wsi=%p", wsi);
 
-	return 0;
+	return (wsi != NULL) ? 0:-1;
 }
