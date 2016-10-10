@@ -25,7 +25,7 @@ struct per_session_data__client {
 };
 
 
-static void ws_http_client_read(struct lws *wsi, struct per_session_data__client *pss)
+static int ws_http_client_read(struct lws *wsi, struct per_session_data__client *pss)
 {
 	char buffer[4096 + LWS_PRE];
 	char *px = buffer + LWS_PRE;
@@ -42,7 +42,7 @@ static void ws_http_client_read(struct lws *wsi, struct per_session_data__client
 	ret = lws_http_client_read(wsi, &px, &lenx);
 	if (ret < 0) {
 		log_debug(2, "ws_http_client_read => CLOSED", ret);
-		//TODO: Free the pss that was allocated when initiating client connection
+		ret = 1;
 	}
 	else {
 		log_debug(3, "ws_http_client_read: partial len=%d", lenx);
@@ -63,7 +63,11 @@ static void ws_http_client_read(struct lws *wsi, struct per_session_data__client
 
 			buf_cleanup(&pss->buf);
 		}
+
+		ret = 0;
 	}
+
+	return ret;
 }
 
 
@@ -81,6 +85,11 @@ static int ws_client_callback(struct lws *wsi,
 	switch (reason) {
 	case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_CONNECTION_ERROR: %s", (char *) in);
+		// Callback error
+		if (pss->func != NULL) {
+			pss->func(pss->user_data, NULL, 0);
+		}
+		ret = 1;
 		break;
 	case LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH");
@@ -91,14 +100,13 @@ static int ws_client_callback(struct lws *wsi,
 	case LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP");
 		pss->completed = 0;
-		buf_init(&pss->buf);
 		break;
 	case LWS_CALLBACK_CLOSED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_CLOSED_CLIENT_HTTP");
 		break;
 	case LWS_CALLBACK_RECEIVE_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_RECEIVE_CLIENT_HTTP");
-		ws_http_client_read(wsi, pss);
+		ret = ws_http_client_read(wsi, pss);
 		break;
 	case LWS_CALLBACK_COMPLETED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_COMPLETED_CLIENT_HTTP");
@@ -119,7 +127,10 @@ static int ws_client_callback(struct lws *wsi,
 		break;
 	case LWS_CALLBACK_WSI_DESTROY:
 		log_debug(3, "ws_htclienttp_callback LWS_CALLBACK_WSI_DESTROY");
-		//FIXME: client wsi never destroyed after connection close ???
+		// Free the pss that was allocated when initiating client connection
+		buf_cleanup(&pss->buf);
+		memset(pss, 0, sizeof(struct per_session_data__client));
+		free(pss);
 		break;
 
 	case LWS_CALLBACK_LOCK_POLL:
@@ -252,6 +263,7 @@ int ws_client_get(ws_client_t *client, char *uri, ws_client_func_t *func, void *
 
 	pss = malloc(sizeof(struct per_session_data__client));
 	memset(pss, 0, sizeof(struct per_session_data__client));
+	buf_init(&pss->buf);
 	pss->func = func;
 	pss->user_data = user_data;
 
@@ -270,7 +282,7 @@ int ws_client_get(ws_client_t *client, char *uri, ws_client_func_t *func, void *
 	log_debug(2, "ws_client addr='%s' port=%d ssl=%d", i.address, i.port, use_ssl);
 
 	wsi = lws_client_connect_via_info(&i);
-	log_debug(2, "ws_client => wsi=%p", wsi);
+	log_debug(3, "ws_client => wsi=%p", wsi);
 
 	return 0;
 }
