@@ -19,6 +19,7 @@
 #include "ws_events.h"
 #include "ws_client.h"
 #include "hkcp.h"
+#include "eventq.h"
 #include "command.h"
 #include "comm.h"
 
@@ -62,6 +63,24 @@ static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 				// HTTP/HTTPS get operation. This command is for debug/testing purpose only.
 				// Result will be displayed to the debug log
 				ws_client_get(&comm_ws->client, argv[1], comm_wget_recv, NULL);
+			}
+			else {
+				log_str("ERROR: Usage: %s <uri>", argv[0]);
+			}
+		}
+		else if (strcmp(argv[0], "eventq") == 0) {
+			if (argc > 1) {
+				int argi = 1;
+
+				// HTTP/HTTPS event push. This command is for debug/testing purpose only.
+				// Result will be displayed to the debug log
+				if (argc > 2) {
+					eventq_init(argv[argi++]);
+				}
+				eventq_push(argv[argi]);
+			}
+			else {
+				log_str("ERROR: Usage: %s [<uri>] <event>", argv[0]);
 			}
 		}
 		else {
