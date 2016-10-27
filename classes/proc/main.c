@@ -37,6 +37,7 @@ typedef struct {
 	proc_mode_t mode;
 	hk_pad_t *pad_enable;
 	hk_pad_t *pad_in;
+	hk_pad_t *pad_run;
 	hk_pad_t *pad_out;
 	hk_pad_t *pad_status;
 	hk_proc_t *proc;
@@ -82,6 +83,7 @@ static int _new(hk_obj_t *obj)
 	/* Create input/output pads */
 	ctx->pad_enable = hk_pad_create(obj, HK_PAD_IN, "enable");
 	ctx->pad_in = hk_pad_create(obj, HK_PAD_IN, "in");
+	ctx->pad_run = hk_pad_create(obj, HK_PAD_OUT, "run");
 	ctx->pad_out = hk_pad_create(obj, HK_PAD_OUT, "out");
 	ctx->pad_status = hk_pad_create(obj, HK_PAD_OUT, "status");
 
@@ -112,6 +114,7 @@ static void _term(ctx_t *ctx, int status)
 {
 	log_debug(1, "%s: terminated with status=%d", ctx->obj->name, status);
 	ctx->proc = NULL;
+	hk_pad_update_int(ctx->pad_run, 0);
 	hk_pad_update_int(ctx->pad_status, status);
 }
 
@@ -127,6 +130,9 @@ static void _enable(ctx_t *ctx, int value)
 				ctx->proc = hk_proc_start(ctx->cmd_argc, ctx->cmd_argv,
 							  (hk_proc_out_func_t) _stdout, NULL,
 							  (hk_proc_term_func_t) _term, ctx);
+				if (ctx->proc != NULL) {
+					hk_pad_update_int(ctx->pad_run, 1);
+				}
 			}
 		}
 		else {
