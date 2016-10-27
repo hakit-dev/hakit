@@ -602,10 +602,13 @@ static int ws_server_init(ws_t *ws, int port, char *ssl_dir)
 
 ws_t *ws_new(int port, int use_ssl, char *ssl_dir)
 {
-	int log_level = LLL_ERR | LLL_WARN | LLL_NOTICE | LLL_INFO;
+	int log_level = LLL_ERR | LLL_WARN | LLL_NOTICE;
 	ws_t *ws = NULL;
 
 	// Setup LWS logging
+	if (opt_debug >= 2) {
+		log_level |= LLL_INFO;
+	}
 	if (opt_debug >= 3) {
 		log_level |= LLL_DEBUG | LLL_HEADER | LLL_EXT | LLL_CLIENT | LLL_LATENCY;
 	}
