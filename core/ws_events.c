@@ -167,5 +167,5 @@ void ws_events_send(ws_t *ws, char *str)
 
 	ws_session_foreach(ws, (hk_tab_foreach_func) ws_events_send_session, str);
 
-	lws_callback_on_writable_all_protocol(ws->context, ws_events_protocol);
+	lws_callback_on_writable_all_protocol(ws->server.context, ws_events_protocol);
 }

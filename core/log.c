@@ -1,3 +1,14 @@
+/*
+ * HAKit - The Home Automation KIT - www.hakit.net
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * Info and Debug log management
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <time.h>
@@ -38,32 +49,15 @@ void log_printf(const char *fmt, ...)
 
 void log_tstamp(void)
 {
-	static struct timeval t0 = {0,0};
 	struct timeval t;
 	char str[32];
 	int len;
 
 	gettimeofday(&t, NULL);
 
-	len = strftime(str, sizeof(str), "%d-%b-%Y %H:%M:%S ", localtime(&t.tv_sec));
+	len = strftime(str, sizeof(str), "[%Y-%m-%d %H:%M:%S", localtime(&t.tv_sec));
+	len += snprintf(str+len, sizeof(str)-len, ".%03ld] ", t.tv_usec/1000);
 	log_put(str, len);
-
-	if (opt_debug > 0) {
-		int dt_sec, dt_usec;
-
-		if (t0.tv_sec == 0) {
-			t0 = t;
-		}
-
-		dt_sec = t.tv_sec - t0.tv_sec;
-		dt_usec = t.tv_usec - t0.tv_usec;
-		if (dt_usec < 0) {
-			dt_usec += 1000000;
-			dt_sec--;
-		}
-
-		log_printf("%d.%06d ", dt_sec, dt_usec);
-	}
 }
 
 

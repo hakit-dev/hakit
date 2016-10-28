@@ -26,7 +26,6 @@ DESC="HAKit daemon"
 NAME=hakit
 DAEMON="/usr/bin/$NAME"
 DAEMON_ARGS=""
-PIDFILE=/var/run/$NAME.pid
 CONF=/etc/default/$NAME
 
 # Exit if the package is not installed
@@ -50,9 +49,9 @@ do_start()
 	#   0 if daemon has been started
 	#   1 if daemon was already running
 	#   2 if daemon could not be started
-	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON --test > /dev/null \
+	start-stop-daemon --start --quiet --exec $DAEMON --test > /dev/null \
 		|| return 1
-	start-stop-daemon --start --quiet --pidfile $PIDFILE --exec $DAEMON -- --daemon --debug=$DEBUG $DAEMON_ARGS $APP \
+	start-stop-daemon --start --quiet --exec $DAEMON -- --daemon --debug=$DEBUG $DAEMON_ARGS $APP \
 		|| return 2
 	return 0;
 }
@@ -65,14 +64,16 @@ do_stop()
 	#   1 if daemon was already stopped
 	#   2 if daemon could not be stopped
 	#   other if a failure occurred
-	start-stop-daemon --stop --quiet --retry=TERM/30/KILL/5 --pidfile $PIDFILE --name $NAME
-	RETVAL="$?"
-	[ "$RETVAL" = 2 ] && return 2
-	sleep 1
-	start-stop-daemon --stop --quiet --oknodo --retry=0/30/KILL/5 --exec $DAEMON
-	[ "$?" = 2 ] && return 2
-	rm -f $PIDFILE
-	return "$RETVAL"
+	start-stop-daemon --stop --quiet --retry=TERM/5/KILL/5 --name $NAME
+	RETVAL=$?
+
+	if [ $RETVAL = 2 ]; then
+	    sleep 1
+	    start-stop-daemon --stop --quiet --retry=TERM/5/KILL/5 --exec $DAEMON
+	    RETVAL=$?
+	fi
+
+	return $RETVAL
 }
 
 

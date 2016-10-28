@@ -13,6 +13,7 @@
 #include <malloc.h>
 
 #include "log.h"
+#include "buf.h"
 #include "mod.h"
 
 
@@ -74,6 +75,7 @@ hk_pad_t *hk_pad_create(hk_obj_t *obj, hk_pad_dir_t dir, char *fmt, ...)
 	pad->obj = obj;
 	pad->dir = dir;
 	pad->name = strdup(name);
+	buf_init(&pad->value);
 
 	log_debug(2, "hk_pad_create %s.%s", obj->name, pad->name);
 
@@ -123,6 +125,8 @@ void hk_pad_update_str(hk_pad_t *pad, char *value)
 
 	log_debug(2, "hk_pad_update_str %s.%s='%s'", pad->obj->name, pad->name, value);
 
+	buf_set_str(&pad->value, value);
+
 	/* Do nothing if no net is connected to this pad */
 	if (net == NULL) {
 		return;
@@ -151,6 +155,31 @@ void hk_pad_update_int(hk_pad_t *pad, int value)
 
 	snprintf(str, sizeof(str), "%d", value);
 	hk_pad_update_str(pad, str);
+}
+
+
+char *hk_pad_get_value(char *name)
+{
+	char *pt;
+	hk_obj_t *obj;
+	char *value = NULL;
+
+	// Fully qualified pad name expected: <obj_name>.<pad_name>
+	pt = strchr(name, '.');
+	if (pt != NULL) {
+		*pt = '\0';
+		obj = hk_obj_find(name);
+		*pt = '.';
+
+		if (obj != NULL) {
+			hk_pad_t *pad = hk_pad_find(obj, pt+1);
+			if (pad != NULL) {
+				value = (char *) pad->value.base;
+			}
+		}
+	}
+
+	return value;
 }
 
 

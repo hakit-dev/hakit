@@ -15,13 +15,13 @@
 #include <errno.h>
 
 #include "log.h"
-#include "options.h"
 #include "buf.h"
 #include "iputils.h"
 #include "netif.h"
 #include "tcpio.h"
 #include "udpio.h"
 #include "command.h"
+#include "hakit_version.h"
 #include "hkcp.h"
 
 
@@ -43,7 +43,6 @@ static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tc
 static int hkcp_node_connect(hkcp_node_t *node);
 static hkcp_source_t *hkcp_source_retrieve(hkcp_t *hkcp, char *name);
 static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *node);
-
 
 
 /*
@@ -570,7 +569,20 @@ static char *hkcp_sink_update_(hkcp_sink_t *sink, char *value)
 }
 
 
-void hkcp_sink_update(hkcp_t *hkcp, char *name, char *value)
+char *hkcp_sink_update(hkcp_t *hkcp, int id, char *value)
+{
+	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
+
+	if ((sink == NULL) || (sink->ep.name == NULL)) {
+		log_str("PANIC: Attempting to update unknown sink #%d\n", id);
+		return NULL;
+	}
+
+	return hkcp_sink_update_(sink, value);
+}
+
+
+void hkcp_sink_update_by_name(hkcp_t *hkcp, char *name, char *value)
 {
 	hkcp_sink_t *sink = hkcp_sink_retrieve(hkcp, name);
 
@@ -1302,6 +1314,9 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 		}
 		buf_append_str(out_buf, "\n");
 	}
+	else if (strcmp(argv[0], "version") == 0) {
+		buf_append_str(out_buf, HAKIT_VERSION " " ARCH "\n");
+	}
 	else {
 		buf_append_str(out_buf, "ERROR: Unknown command: ");
 		buf_append_str(out_buf, argv[0]);
@@ -1325,27 +1340,6 @@ static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tc
 		io_channel_write(&tcp_sock->chan, (char *) out_buf.base, out_buf.len);
 
 		buf_cleanup(&out_buf);
-	}
-}
-
-
-static void hkcp_command_stdin(hkcp_t *hkcp, int argc, char **argv)
-{
-	buf_t out_buf;
-
-	if (argc > 0) {
-		buf_init(&out_buf);
-
-		hkcp_command(hkcp, argc, argv, &out_buf);
-		if (fwrite(out_buf.base, 1, out_buf.len, stdout) < 0) {
-			log_str("PANIC: Failed to write stdout: %s", strerror(errno));
-		}
-
-		buf_cleanup(&out_buf);
-	}
-	else {
-		/* Quit if hangup from stdin */
-		sys_quit();
 	}
 }
 
@@ -1486,11 +1480,6 @@ int hkcp_init(hkcp_t *hkcp, int port, char *hosts)
 		if (tcp_srv_init(&hkcp->tcp_srv, port, hkcp_tcp_event, hkcp)) {
 			goto DONE;
 		}
-	}
-
-	if (!opt_daemon) {
-		command_t *cmd = command_new((command_handler_t) hkcp_command_stdin, hkcp);
-		io_channel_setup(&hkcp->chan_stdin, fileno(stdin), (io_func_t) command_recv, cmd);
 	}
 
 	/* Feed list of explicit host addresses */

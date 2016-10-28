@@ -17,8 +17,7 @@
 #include "log.h"
 #include "sys.h"
 #include "buf.h"
-#include "tcpio.h"
-#include "http.h"
+#include "comm.h"
 #include "eventq.h"
 
 #define EVENTQ_DEPTH 16
@@ -48,21 +47,26 @@ static eventq_t eventq_buf[EVENTQ_DEPTH];
 static int eventq_index = 0;
 static char *eventq_url = NULL;
 static sys_tag_t eventq_timeout_tag = 0;
-static tcp_sock_t eventq_http_sock;
-static buf_t eventq_http_buf;
+static int eventq_flushing = 0;
 
 
 static int eventq_flush(void);
+
+
+static void eventq_timeout_stop(void)
+{
+	if (eventq_timeout_tag) {
+		sys_remove(eventq_timeout_tag);
+		eventq_timeout_tag = 0;
+	}
+}
 
 
 static void eventq_timeout_start(int delay)
 {
 	log_debug(2, "eventq_timeout_start %d", delay);
 
-	if (eventq_timeout_tag) {
-		sys_remove(eventq_timeout_tag);
-		eventq_timeout_tag = 0;
-	}
+	eventq_timeout_stop();
 
 	if (delay > 0) {
 		eventq_timeout_tag = sys_timeout(1000*delay, (sys_func_t) eventq_flush, NULL);
@@ -105,39 +109,29 @@ static int eventq_str(buf_t *out_buf, char *sep)
 }
 
 
-static void http_client_recv(unsigned char *rbuf, int rsize)
+static void eventq_http_recv(void *user_data, char *buf, int len)
 {
-	int roffset;
-	int content_size;
+	int ok = 0;
+	int delay = 10;
 	int i;
 
-	log_debug_data((unsigned char *) rbuf, rsize);
+	eventq_flushing = 0;
 
-	roffset = http_recv_header(&eventq_http_buf, rbuf, rsize, &content_size);
-	if (roffset > 0) {
-		int status = http_status(eventq_http_buf.base);
-		int ok = 0;
-		int delay = 10;
+	if (buf != NULL) {
+		log_debug(1, "eventq_http_recv len=%d", len);
 
-		if (status == 200) {
-			char *s = (char *) &rbuf[roffset];
-			char *s2 = strchr(s, '\n');
-			if (s2 != NULL) {
-				*(s2++) = '\0';
-			}
+		char *s2 = strchr(buf, '\n');
+		if (s2 != NULL) {
+			*(s2++) = '\0';
+		}
 
-			log_debug(1, "http_client_recv rsize=%d roffset=%d", rsize, roffset);
-			if (strcmp(s, "0 OK") == 0) {
-				log_str("Event queue: flush completed successfully");
-				ok = 1;
-				delay = 0;
-			}
-			else {
-				log_str("Event queue: flush failed (reply = '%s')", s);
-			}
+		if (strcmp(buf, "0 OK") == 0) {
+			log_str("Event queue: flush completed successfully");
+			ok = 1;
+			delay = 0;
 		}
 		else {
-			log_str("Event queue: flush failed (HTTP status = %d)");
+			log_str("Event queue: flush failed (reply = '%s')", buf);
 		}
 
 		for (i = 0; i < EVENTQ_DEPTH; i++) {
@@ -153,93 +147,15 @@ static void http_client_recv(unsigned char *rbuf, int rsize)
 				break;
 			}
 		}
-
-		if (delay > 0) {
-			log_str("Retrigering event queue flush in %d seconds", delay);
-			eventq_timeout_start(delay);
-		}
-	}
-}
-
-
-static void http_client_handler(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rsize)
-{
-	log_debug(1, "http_client_handler %d %d", io, rsize);
-
-	switch (io) {
-	case TCP_IO_CONNECT:
-		break;
-	case TCP_IO_DATA:
-		if (rsize > 0) {
-			http_client_recv((unsigned char *) rbuf, rsize);
-		}
-		break;
-	case TCP_IO_HUP:
-		tcp_sock_clear(tcp_sock);
-		break;
-	}
-}
-
-
-static int http_client_get(char *url)
-{
-	int ret = 0;
-	int port = 80;
-	char *location;
-	char *sport;
-
-	if (strncmp(url, "http://", 7) == 0) {
-		url += 7;
-	}
-
-	location = strchr(url, '/');
-	if (location != NULL) {
-		*location = '\0';
-	}
-
-	sport = strchr(url, ':');
-	if (sport != NULL) {
-		*sport = '\0';
-		port = atoi(sport+1);
-		*sport = ':';
-	}
-
-	tcp_sock_shutdown(&eventq_http_sock);
-	tcp_sock_clear(&eventq_http_sock);
-	buf_cleanup(&eventq_http_buf);
-
-	if (tcp_sock_connect(&eventq_http_sock, url, port, http_client_handler, NULL) > 0) {
-		buf_t req;
-
-		buf_init(&req);
-		buf_append_str(&req, "GET ");
-		if (location != NULL) {
-			*location = '/';
-			buf_append_str(&req, location);
-			*location = '\0';
-		}
-		else {
-			buf_append_str(&req, "/");
-		}
-		buf_append_str(&req, (char *) " HTTP/1.1\r\nHost: ");
-		buf_append_str(&req, url);
-		buf_append_str(&req, (char *) "\r\nConnection: Close\r\n\r\n");
-
-		log_debug_data(req.base, req.len);
-		tcp_sock_write(&eventq_http_sock, (char *) req.base, req.len);
-
-		buf_cleanup(&req);
 	}
 	else {
-		eventq_http_sock.chan.fd = -1;
-		ret = -1;
+		log_str("Event queue: flush failed (HTTP error)");
 	}
 
-	if (location != NULL) {
-		*location = '/';
+	if (delay > 0) {
+		log_str("Event queue: Retrigering flush in %d seconds", delay);
+		eventq_timeout_start(delay);
 	}
-
-	return ret;
 }
 
 
@@ -261,7 +177,9 @@ static int eventq_flush(void)
 		log_str("Event queue: flushing %d event%s", i, (i > 1) ? "s":"");
 
 		/* Send event to URL */
-		if (http_client_get((char *) out_buf.base) == 0) {
+		if (comm_wget((char *) out_buf.base, eventq_http_recv, NULL) == 0) {
+			eventq_flushing = 1;
+
 			for (i = 0; i < EVENTQ_DEPTH; i++) {
 				eventq_t *e = &eventq_buf[i];
 				if (e->state == EVENTQ_ST_NEW) {
@@ -270,7 +188,7 @@ static int eventq_flush(void)
 			}
 		}
 		else {
-			log_str("Failed to flush event queue: retrying in 120s ...");
+			log_str("Event queue: connection failure - retrying in 120s ...");
 			eventq_timeout_start(120);
 		}
 	}
@@ -285,9 +203,14 @@ void eventq_push(char *str)
 {
 	eventq_t *e;
 
+	if (eventq_url == NULL) {
+		log_str("ERROR: No eventq URL defined");
+		return;
+	}
+
 	log_debug(2, "eventq_push '%s'", str);
 
-	eventq_timeout_start(0);
+	eventq_timeout_stop();
 
 	e = &eventq_buf[eventq_index++];
 	e->t = time(NULL) & 0xFFFFFFFF;
@@ -307,7 +230,7 @@ void eventq_push(char *str)
 		e->str = NULL;
 	}
 
-	if (eventq_http_sock.chan.fd < 0) {
+	if (!eventq_flushing) {
 		eventq_timeout_start(1);
 	}
 }
@@ -316,14 +239,8 @@ void eventq_push(char *str)
 
 void eventq_init(char *url)
 {
-	memset(&eventq_buf, 0, sizeof(eventq_buf));
-	eventq_index = 0;
-
 	if (eventq_url != NULL) {
 		free(eventq_url);
 	}
 	eventq_url = strdup(url);
-
-	tcp_sock_clear(&eventq_http_sock);
-	buf_init(&eventq_http_buf);
 }

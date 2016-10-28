@@ -1,3 +1,14 @@
+/*
+ * HAKit - The Home Automation KIT
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * Subprocess management
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -13,17 +24,17 @@
 #include "proc.h"
 
 
-static hakit_proc_t *procs = NULL;
+static hk_proc_t *procs = NULL;
 static int nprocs = 0;
 
 
-static hakit_proc_t *proc_find_free(void)
+static hk_proc_t *hk_proc_find_free(void)
 {
 	int i;
 
 	/* Find a free entry in proc table */
 	for (i = 0; i < nprocs; i++) {
-		if (procs[i].state == HAKIT_PROC_ST_FREE) {
+		if (procs[i].state == HK_PROC_ST_FREE) {
 			return &procs[i];
 		}
 	}
@@ -32,30 +43,30 @@ static hakit_proc_t *proc_find_free(void)
 }
 
 
-static hakit_proc_t *proc_add(void)
+static hk_proc_t *hk_proc_add(void)
 {
 	/* Find a free entry in proc table */
-	hakit_proc_t *proc = proc_find_free();
+	hk_proc_t *proc = hk_proc_find_free();
 
 	/* If none found, allocate a new one */
 	if (proc == NULL) {
 		nprocs++;
-		procs = (hakit_proc_t *) realloc(procs, nprocs * sizeof(hakit_proc_t));
+		procs = (hk_proc_t *) realloc(procs, nprocs * sizeof(hk_proc_t));
 		proc = &procs[nprocs-1];
 	}
 
-	memset(proc, 0, sizeof(hakit_proc_t));
+	memset(proc, 0, sizeof(hk_proc_t));
 	return proc;
 }
 
 
-static void proc_remove(hakit_proc_t *proc)
+static void hk_proc_remove(hk_proc_t *proc)
 {
-	proc->state = HAKIT_PROC_ST_FREE;
+	proc->state = HK_PROC_ST_FREE;
 }
 
 
-static void proc_timeout_cancel(hakit_proc_t *proc)
+static void hk_proc_timeout_cancel(hk_proc_t *proc)
 {
 	if (proc->timeout_tag) {
 		sys_remove(proc->timeout_tag);
@@ -64,7 +75,7 @@ static void proc_timeout_cancel(hakit_proc_t *proc)
 }
 
 
-static void proc_term(hakit_proc_t *proc)
+static void hk_proc_term(hk_proc_t *proc)
 {
 	proc->cb_stdout = NULL;
 	proc->cb_stderr = NULL;
@@ -78,7 +89,7 @@ static void proc_term(hakit_proc_t *proc)
 		proc->sigchld_tag = 0;
 	}
 
-	proc_timeout_cancel(proc);
+	hk_proc_timeout_cancel(proc);
 
 	if (proc->stdin_fd > 0) {
 		close(proc->stdin_fd);
@@ -87,16 +98,16 @@ static void proc_term(hakit_proc_t *proc)
 }
 
 
-static int proc_hangup_timeout(hakit_proc_t *proc)
+static int hk_proc_hangup_timeout(hk_proc_t *proc)
 {
-	log_debug(2, "proc_hangup_timeout [%d]", proc->pid);
+	log_debug(2, "hk_proc_hangup_timeout [%d]", proc->pid);
 	proc->timeout_tag = 0;
-	proc_stop(proc);
+	hk_proc_stop(proc);
 	return 0;
 }
 
 
-static void proc_print_buf(hakit_proc_t *proc, char *tag, char *buf, int len)
+static void hk_proc_print_buf(hk_proc_t *proc, char *tag, char *buf, int len)
 {
 	int i = 0;
 
@@ -113,56 +124,56 @@ static void proc_print_buf(hakit_proc_t *proc, char *tag, char *buf, int len)
 }
 
 
-static void proc_stdout(hakit_proc_t *proc, char *buf, int len)
+static void hk_proc_stdout(hk_proc_t *proc, char *buf, int len)
 {
-	log_debug(2, "proc_stdout [%d] len=%d", proc->pid, len);
+	log_debug(2, "hk_proc_stdout [%d] len=%d", proc->pid, len);
 
 	if (len > 0) {
 		if (proc->cb_stdout != NULL) {
 			proc->cb_stdout(proc->user_data, buf, len);
 		}
 		else {
-			proc_print_buf(proc, "stdout", buf, len);
+			hk_proc_print_buf(proc, "stdout", buf, len);
 		}
 	}
 	else {
-		proc_timeout_cancel(proc);
-		proc->timeout_tag = sys_timeout(100, (sys_func_t) proc_hangup_timeout, proc);
+		hk_proc_timeout_cancel(proc);
+		proc->timeout_tag = sys_timeout(100, (sys_func_t) hk_proc_hangup_timeout, proc);
 	}
 }
 
 
-static void proc_stderr(hakit_proc_t *proc, char *buf, int len)
+static void hk_proc_stderr(hk_proc_t *proc, char *buf, int len)
 {
-	log_debug(2, "proc_stderr [%d] len=%d", proc->pid, len);
+	log_debug(2, "hk_proc_stderr [%d] len=%d", proc->pid, len);
 
 	if (len > 0) {
 		if (proc->cb_stderr != NULL) {
 			proc->cb_stderr(proc->user_data, buf, len);
 		}
 		else {
-			proc_print_buf(proc, "stderr", buf, len);
+			hk_proc_print_buf(proc, "stderr", buf, len);
 		}
 	}
 }
 
 
-static int proc_sigchld(hakit_proc_t *proc, pid_t pid, int status)
+static int hk_proc_sigchld(hk_proc_t *proc, pid_t pid, int status)
 {
-	log_debug(2, "proc_sigchld [%d] status=%d", pid, status);
+	log_debug(2, "hk_proc_sigchld [%d] status=%d", pid, status);
 
 	if (pid == proc->pid) {
 		proc->pid = 0;
 
 		/* Cancel kill timeout */
-		proc_timeout_cancel(proc);
+		hk_proc_timeout_cancel(proc);
 
 		if (proc->cb_term != NULL) {
 			proc->cb_term(proc->user_data, status);
 		}
 
-		proc_term(proc);
-		proc_remove(proc);
+		hk_proc_term(proc);
+		hk_proc_remove(proc);
 	}
 	else {
 		log_str("WARNING: Caught SIGCHLD from unknown process (pid=%d)", pid);
@@ -172,13 +183,13 @@ static int proc_sigchld(hakit_proc_t *proc, pid_t pid, int status)
 }
 
 
-hakit_proc_t *proc_start(int argc, char *argv[],
-			 proc_out_func_t cb_stdout,
-			 proc_out_func_t cb_stderr,
-			 proc_term_func_t cb_term,
+hk_proc_t *hk_proc_start(int argc, char *argv[],
+			 hk_proc_out_func_t cb_stdout,
+			 hk_proc_out_func_t cb_stderr,
+			 hk_proc_term_func_t cb_term,
 			 void *user_data)
 {
-	hakit_proc_t *proc = NULL;
+	hk_proc_t *proc = NULL;
 	int p_in[2] = {-1,-1};
 	int p_out[2] = {-1,-1};
 	int p_err[2] = {-1,-1};
@@ -189,7 +200,7 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 		return NULL;
 	}
 
-	log_debug(2, "proc_start %s ...", argv[0]);
+	log_debug(2, "hk_proc_start %s ...", argv[0]);
 
 	/* Check access to command */
 	if (access(argv[0], X_OK) == -1) {
@@ -266,7 +277,7 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 	default : /* Parent */
 		log_debug(2, "  => pid=%d", pid);
 
-		proc = proc_add();
+		proc = hk_proc_add();
 		proc->pid = pid;
 		close(p_in[0]);
 		proc->stdin_fd = p_in[1];
@@ -274,11 +285,11 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 		close(p_err[1]);
 
 		/* Hook stdio handler */
-		io_channel_setup(&proc->stdout, p_out[0], (io_func_t) proc_stdout, proc);
-		io_channel_setup(&proc->stderr, p_err[0], (io_func_t) proc_stderr, proc);
+		io_channel_setup(&proc->stdout, p_out[0], (io_func_t) hk_proc_stdout, proc);
+		io_channel_setup(&proc->stderr, p_err[0], (io_func_t) hk_proc_stderr, proc);
 
 		/* Hook sigchld handler */
-		proc->sigchld_tag = sys_child_watch(pid, (sys_child_func_t) proc_sigchld, proc);
+		proc->sigchld_tag = sys_child_watch(pid, (sys_child_func_t) hk_proc_sigchld, proc);
 
 		/* Enable close-on-exec mode on local pipe endpoints */
 		fcntl(proc->stdin_fd, F_SETFD, FD_CLOEXEC);
@@ -291,7 +302,7 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 		proc->cb_term = cb_term;
 		proc->user_data = user_data;
 
-		proc->state = HAKIT_PROC_ST_RUN;
+		proc->state = HK_PROC_ST_RUN;
 
 		break;
 	}
@@ -300,29 +311,29 @@ hakit_proc_t *proc_start(int argc, char *argv[],
 }
 
 
-static int proc_kill_timeout(hakit_proc_t * proc)
+static int hk_proc_kill_timeout(hk_proc_t * proc)
 {
 	proc->timeout_tag = 0;
 
 	log_str("WARNING: Process pid=%d takes too long to terminate - Killing it", proc->pid);
 	kill(proc->pid, SIGKILL);
 
-	proc_term(proc);
-	proc_remove(proc);
+	hk_proc_term(proc);
+	hk_proc_remove(proc);
 
 	return 0;
 }
 
 
-void proc_stop(hakit_proc_t * proc)
+void hk_proc_stop(hk_proc_t * proc)
 {
-	if (proc->state == HAKIT_PROC_ST_RUN) {
+	if (proc->state == HK_PROC_ST_RUN) {
 		log_debug(2, "Sending process pid=%d the TERM signal", proc->pid);
-		proc->state = HAKIT_PROC_ST_KILL;
+		proc->state = HK_PROC_ST_KILL;
 
 		if (kill(proc->pid, SIGTERM) == 0) {
 			/* Start kill timeout */
-			proc->timeout_tag = sys_timeout(1000, (sys_func_t) proc_kill_timeout, proc);
+			proc->timeout_tag = sys_timeout(1000, (sys_func_t) hk_proc_kill_timeout, proc);
 		}
 		else {
 			log_debug(2, "  => %s", strerror(errno));
@@ -331,14 +342,14 @@ void proc_stop(hakit_proc_t * proc)
 				proc->cb_term(proc->user_data, -1);
 			}
 
-			proc_term(proc);
-			proc_remove(proc);
+			hk_proc_term(proc);
+			hk_proc_remove(proc);
 		}
 	}
 }
 
 
-int proc_write(hakit_proc_t * proc, char *buf, int size)
+int hk_proc_write(hk_proc_t * proc, char *buf, int size)
 {
 	if (proc->stdin_fd < 0) {
 		log_str("WARNING: Writing to closed process input (pid=%d)", proc->pid);
@@ -349,7 +360,7 @@ int proc_write(hakit_proc_t * proc, char *buf, int size)
 }
 
 
-int proc_printf(hakit_proc_t * proc, char *fmt, ...)
+int hk_proc_printf(hk_proc_t * proc, char *fmt, ...)
 {
 	va_list ap;
 	char buf[1024];
@@ -363,5 +374,5 @@ int proc_printf(hakit_proc_t * proc, char *fmt, ...)
 		return size;
 	}
 
-	return proc_write(proc, buf, size);
+	return hk_proc_write(proc, buf, size);
 }

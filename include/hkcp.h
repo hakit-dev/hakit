@@ -106,7 +106,6 @@ struct hkcp_s {
 	hk_tab_t sinks;       // Table of (hkcp_sink_t)
 	hk_tab_t sources;     // Table of (hkcp_source_t)
 	sys_tag_t advertise_tag;
-	io_channel_t chan_stdin;
 	hkcp_sink_handler_t monitor;
 };
 
@@ -118,7 +117,8 @@ extern int hkcp_sink_register(hkcp_t *hkcp, char *name);
 extern void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_sink_func_t func, void *user_data);
 extern void hkcp_sink_set_local(hkcp_t *hkcp, int id);
 extern void hkcp_sink_set_widget(hkcp_t *hkcp, int id, char *widget_name);
-extern void hkcp_sink_update(hkcp_t *hkcp, char *name, char *value);
+extern char *hkcp_sink_update(hkcp_t *hkcp, int id, char *value);
+extern void hkcp_sink_update_by_name(hkcp_t *hkcp, char *name, char *value);
 
 extern int hkcp_source_register(hkcp_t *hkcp, char *name, int event);
 extern void hkcp_source_set_local(hkcp_t *hkcp, int id);

@@ -13,11 +13,16 @@
 #include <errno.h>
 
 #include "env.h"
+#include "options.h"
 #include "log.h"
+#include "io.h"
 #include "ws.h"
 #include "ws_events.h"
+#include "ws_client.h"
 #include "hkcp.h"
 #include "mqtt.h"
+#include "eventq.h"
+#include "command.h"
 #include "comm.h"
 
 
@@ -30,6 +35,7 @@ typedef struct {
 	hkcp_t hkcp;
 	mqtt_t mqtt;
 	ws_t *ws;
+	io_channel_t stdin;
 } comm_t;
 
 static comm_t comm;
@@ -49,7 +55,61 @@ static void comm_ws_send(ws_t *ws, char *name, char *value)
 static void comm_mqtt_update(comm_t *comm, char *name, char *value)
 {
 	log_debug(2, "comm_mqtt_update %s='%s'", name, value);
-	hkcp_sink_update(&comm->hkcp, name, value);
+	hkcp_sink_update_by_name(&comm->hkcp, name, value);
+}
+
+
+static void comm_wget_recv(void *user_data, char *buf, int len)
+{
+	fwrite(buf, 1, len, stdout);
+}
+
+
+static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
+{
+	buf_t out_buf;
+
+	if (argc > 0) {
+		buf_init(&out_buf);
+
+		if (strcmp(argv[0], "wget") == 0) {
+			if (argc > 1) {
+				// HTTP/HTTPS get operation. This command is for debug/testing purpose only.
+				// Result will be displayed to the debug log
+				ws_client_get(&comm.ws->client, argv[1], comm_wget_recv, NULL);
+			}
+			else {
+				log_str("ERROR: Usage: %s <uri>", argv[0]);
+			}
+		}
+		else if (strcmp(argv[0], "eventq") == 0) {
+			if (argc > 1) {
+				int argi = 1;
+
+				// HTTP/HTTPS event push. This command is for debug/testing purpose only.
+				// Result will be displayed to the debug log
+				if (argc > 2) {
+					eventq_init(argv[argi++]);
+				}
+				eventq_push(argv[argi]);
+			}
+			else {
+				log_str("ERROR: Usage: %s [<uri>] <event>", argv[0]);
+			}
+		}
+		else {
+			hkcp_command(&comm.hkcp, argc, argv, &out_buf);
+			if (fwrite(out_buf.base, 1, out_buf.len, stdout) < 0) {
+				log_str("PANIC: Failed to write stdout: %s", strerror(errno));
+			}
+		}
+
+		buf_cleanup(&out_buf);
+	}
+	else {
+		/* Quit if hangup from stdin */
+		sys_quit();
+	}
 }
 
 
@@ -68,10 +128,7 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 	/* Search for SSL cert directory */
 	if (use_ssl) {
 		path = env_devdir("ssl");
-		if (path != NULL) {
-			log_debug(2, "Running from development environment!");
-		}
-		else {
+		if (path == NULL) {
 			path = HAKIT_SHARE_DIR "ssl";
 		}
 		log_debug(2, "SSL Certficate directory: %s", path);
@@ -85,7 +142,7 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 	}
 
 	/* Init HTTP/WebSocket server */
-	comm.ws = ws_new(HAKIT_HTTP_PORT, path);
+	comm.ws = ws_new(HAKIT_HTTP_PORT, use_ssl, path);
 	if (comm.ws == NULL) {
 		return -1;
 	}
@@ -98,6 +155,7 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 
 	path = env_devdir("ui");
 	if (path != NULL) {
+		log_debug(2, "Running from development environment!");
 		ws_add_document_root(comm.ws, path);
 	}
 	else {
@@ -105,6 +163,12 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 	}
 
 	ws_set_command_handler(comm.ws, (ws_command_handler_t) hkcp_command, &comm.hkcp);
+
+	/* Setup stdin command handler if not running as a daemon */
+	if (!opt_daemon) {
+		command_t *cmd = command_new((command_handler_t) comm_command_stdin, &comm.hkcp);
+		io_channel_setup(&comm.stdin, fileno(stdin), (io_func_t) command_recv, cmd);
+	}
 
 	return 0;
 }
@@ -139,6 +203,24 @@ void comm_sink_set_local(int id)
 void comm_sink_set_widget(int id, char *widget_name)
 {
 	hkcp_sink_set_widget(&comm.hkcp, id, widget_name);
+}
+
+
+void comm_sink_update_str(int id, char *value)
+{
+	char *name = hkcp_sink_update(&comm.hkcp, id, value);
+
+	if (name != NULL) {
+		comm_ws_send(comm.ws, name, value);
+	}
+}
+
+
+void comm_sink_update_int(int id, int value)
+{
+	char str[32];
+	snprintf(str, sizeof(str), "%d", value);
+	comm_sink_update_str(id, str);
 }
 
 
@@ -178,4 +260,10 @@ void comm_source_update_int(int id, int value)
 	char str[32];
 	snprintf(str, sizeof(str), "%d", value);
 	comm_source_update_str(id, str);
+}
+
+
+int comm_wget(char *uri, comm_recv_func_t *func, void *user_data)
+{
+	return ws_client_get(&comm.ws->client, uri, func, user_data);
 }

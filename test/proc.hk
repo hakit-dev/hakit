@@ -1,0 +1,6 @@
+[objects]
+button: sink local widget=switch-push
+bell: proc cmd="/usr/bin/music123 -q /usr/share/sounds/freedesktop/stereo/complete.oga"
+
+[nets]
+button.out bell.enable

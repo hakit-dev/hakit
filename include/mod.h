@@ -10,6 +10,7 @@
 #ifndef __HAKIT_MOD_H__
 #define __HAKIT_MOD_H__
 
+#include "buf.h"
 #include "tab.h"
 #include "prop.h"
 
@@ -48,6 +49,7 @@ struct hk_pad_s {
 	hk_obj_t *obj;
 	hk_pad_dir_t dir;
 	char *name;
+	buf_t value;
 	hk_net_t *net;
 	int lock;
 	int state;
@@ -58,6 +60,8 @@ extern hk_pad_t *hk_pad_find(hk_obj_t *obj, char *name);
 
 extern void hk_pad_update_str(hk_pad_t *pad, char *value);
 extern void hk_pad_update_int(hk_pad_t *pad, int value);
+
+extern char *hk_pad_get_value(char *name);
 
 
 /**
