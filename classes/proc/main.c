@@ -127,9 +127,31 @@ static void _enable(ctx_t *ctx, int value)
 
 		if (value) {
 			if (ctx->proc == NULL) {
-				ctx->proc = hk_proc_start(ctx->cmd_argc, ctx->cmd_argv,
+				int argc = ctx->cmd_argc;
+				char *argv[argc+1];
+				int i;
+
+				for (i = 0; i < argc; i++) {
+					char *args = ctx->cmd_argv[i];
+					if (args[0] == '$') {
+						char *s = hk_pad_get_value(args+1);
+						if (s != NULL) {
+							args = s;
+						}
+						else {
+							log_str("WARNING: %s: Referencing unknown pad '%s' in command line argument $%d", ctx->obj->name, args+1, i);
+						}
+					}
+
+					argv[i] = args;
+				}
+
+				argv[i] = NULL;
+
+				ctx->proc = hk_proc_start(argc, argv,
 							  (hk_proc_out_func_t) _stdout, NULL,
 							  (hk_proc_term_func_t) _term, ctx);
+
 				if (ctx->proc != NULL) {
 					hk_pad_update_int(ctx->pad_run, 1);
 				}
