@@ -130,7 +130,8 @@ static void _start(hk_obj_t *obj)
 
 	if (ctx->input) {
 		ctx->value = gpio_get_value(ctx->port);
-		input_update(ctx);
+		ctx->pad->state = ctx->value;
+		hk_pad_update_int(ctx->pad, ctx->value);
 	}
 }
 
