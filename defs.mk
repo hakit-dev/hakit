@@ -28,9 +28,15 @@ include $(HAKIT_DIR)tools/check.mk
 # Compile/link options
 #
 
-CFLAGS  = -Wall -O0 -g -fPIC -I$(HAKIT_DIR)include
+CFLAGS  = -Wall -fPIC -I$(HAKIT_DIR)include
 LDFLAGS =
 SOFLAGS =
+
+ifdef DEBUG
+CFLAGS += -O0 -g
+else
+CFLAGS += -O2
+endif
 
 ifdef CROSS_ROOT_PATH
 ifneq ($(wildcard $(CROSS_ROOT_PATH)/usr),)
