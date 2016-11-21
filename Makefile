@@ -37,6 +37,10 @@ OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
 ifneq ($(WITHOUT_SSL),yes)
+ifndef TARGET
+CHECK_PACKAGES_deb += libssl-dev
+endif
+
 all:: ssl
 endif
 
