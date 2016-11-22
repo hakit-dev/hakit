@@ -24,6 +24,18 @@
 #include "hakit_version.h"
 
 
+static int is_dir(char *path)
+{
+	DIR *d = opendir(path);
+	if (d == NULL) {
+		return 0;
+	}
+
+	closedir(d);
+	return 1;
+}
+
+
 static int hk_mod_init_dir(char *dir)
 {
 	int dirlen = strlen(dir);
@@ -45,11 +57,9 @@ static int hk_mod_init_dir(char *dir)
 
 			/* Class should be stored in a directory */
 			snprintf(path, sizeof(path), "%s/%s", dir, name);
-			DIR *d = opendir(path);
-			if (d == NULL) {
+			if (!is_dir(path)) {
 				continue;
 			}
-			closedir(d);
 
 			/* Open device library */
 			snprintf(path, sizeof(path), "%s/%s/device/" ARCH "/%s.so", dir, name, name);
