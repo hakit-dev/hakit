@@ -94,6 +94,8 @@ static void run_as_daemon(void)
  	}
 
 	close(STDIN_FILENO);
+
+	log_str("Starting in daemon mode: pid=%d", getpid());
 }
 
 
