@@ -20,10 +20,10 @@
 #include "sys.h"
 #include "tab.h"
 #include "iputils.h"
+#include "netif_watch.h"
 #include "netif.h"
 
 
-#define INTERFACE_CHECK_DELAY 60000   // Check for available network interfaces once per minute
 #define HWADDR_SIZE 6
 
 
@@ -169,7 +169,7 @@ static void netif_show_interfaces(hk_tab_t *tab)
 }
 
 
-static int netif_check_interfaces(netif_env_t *ifs)
+static void netif_check_interfaces(netif_env_t *ifs)
 {
 	hk_tab_t tab;
 	int changed = 0;
@@ -197,27 +197,26 @@ static int netif_check_interfaces(netif_env_t *ifs)
 		netif_show_interfaces(&ifs->interfaces);
 
 		if (ifs->interfaces.nmemb > 0) {
-			if (ifs->change_callback != NULL) {
-				ifs->change_callback(ifs->user_data);
+			if (ifs->callback != NULL) {
+				ifs->callback(ifs->user_data);
 			}
 		}
 	}
 	else {
 		hk_tab_cleanup(&tab);
 	}
-
-	return 1;
 }
 
 
-int netif_init(netif_env_t *ifs, netif_change_callback_t cb, void *user_data)
+int netif_init(netif_env_t *ifs, netif_watch_callback_t change_callback, void *user_data)
 {
 	netif_collect_interfaces(&ifs->interfaces);
 	netif_show_interfaces(&ifs->interfaces);
 
-	ifs->check_tag = sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) netif_check_interfaces, ifs);
-	ifs->change_callback = cb;
+	ifs->callback = change_callback;
 	ifs->user_data = user_data;
+
+	netif_watch_init(&ifs->watch, (netif_watch_callback_t) netif_check_interfaces, ifs);
 
 	return 0;
 }

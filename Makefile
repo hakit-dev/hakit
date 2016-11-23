@@ -26,13 +26,16 @@ ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 include defs.mk
 
-OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c udpio.c tcpio.c uevent.c sysfs.c \
+OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c netif_watch.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c mod_init.c \
 	usb_io.c usb_device.c
 CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c mod_load.c prop.c \
 	mime.c eventq.c ws.c ws_utils.c ws_events.c ws_client.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
+
+# Enable _GNU_SOURCE option to enable Linux netlink definitions
+CFLAGS += -D_GNU_SOURCE
 
 all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
@@ -69,7 +72,6 @@ classes:
 	make -C classes
 
 LDFLAGS += -rdynamic -ldl
-#LDFLAGS += -lefence
 
 #
 # HAKit libs and bins

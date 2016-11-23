@@ -27,15 +27,15 @@ extern char *netif_get_hwaddr(char *if_name);
 /* Contextualized methods */
 /**************************/
 
-#include "sys.h"
 #include "tab.h"
+#include "netif_watch.h"
 
 typedef void (*netif_change_callback_t)(void *user_data);
 
 typedef struct {
 	hk_tab_t interfaces;
-	sys_tag_t check_tag;
-	netif_change_callback_t change_callback;
+	netif_watch_t watch;
+	netif_change_callback_t callback;
 	void *user_data;
 } netif_env_t;
 
