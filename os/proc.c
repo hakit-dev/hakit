@@ -183,7 +183,7 @@ static int hk_proc_sigchld(hk_proc_t *proc, pid_t pid, int status)
 }
 
 
-hk_proc_t *hk_proc_start(int argc, char *argv[],
+hk_proc_t *hk_proc_start(int argc, char *argv[], char *cwd,
 			 hk_proc_out_func_t cb_stdout,
 			 hk_proc_out_func_t cb_stderr,
 			 hk_proc_term_func_t cb_term,
@@ -201,12 +201,7 @@ hk_proc_t *hk_proc_start(int argc, char *argv[],
 	}
 
 	log_debug(2, "hk_proc_start %s ...", argv[0]);
-
-	/* Check access to command */
-	if (access(argv[0], X_OK) == -1) {
-		log_str("ERROR: Cannot access proc command '%s': %s", argv[0], strerror(errno));
-		return NULL;
-	}
+	log_debug(2, "hk_proc_start chdir = %s", cwd);
 
 	/* Create standard input pipe */
 	if (pipe(p_in) == -1) {
@@ -235,6 +230,23 @@ hk_proc_t *hk_proc_start(int argc, char *argv[],
 	pid = fork();
 	switch (pid) {
 	case 0: /* Child */
+		/* Change working directory, if provided */
+		if (cwd != NULL) {
+			if (chdir(cwd) == 0) {
+				log_debug(2, "hk_proc_start: chdir to '%s'", cwd);
+			}
+			else {
+				log_str("WARNING: Cannot chdir to '%s': %s", cwd, strerror(errno));
+			}
+		}
+
+		/* Check access to command */
+		if (access(argv[0], X_OK) == -1) {
+			log_str("ERROR: Cannot access proc command '%s': %s", argv[0], strerror(errno));
+			exit(254);
+		}
+
+		/* Redirect stdin to input pipe */
 		if (dup2(p_in[0], STDIN_FILENO) == -1) {
 			log_str("ERROR: Cannot dup2 proc stdin: %s", strerror(errno));
 			exit(254);
@@ -242,6 +254,7 @@ hk_proc_t *hk_proc_start(int argc, char *argv[],
 		close(p_in[0]);
 		close(p_in[1]);
 
+		/* Redirect stdout to output pipe */
 		if (dup2(p_out[1], STDOUT_FILENO) == -1) {
 			log_str("ERROR: Cannot dup2 proc stdout: %s", strerror(errno));
 			exit(254);
@@ -249,6 +262,7 @@ hk_proc_t *hk_proc_start(int argc, char *argv[],
 		close(p_out[0]);
 		close(p_out[1]);
 
+		/* Redirect stderr to error pipe */
 		if (dup2(p_err[1], STDERR_FILENO) == -1) {
 			log_str("ERROR: Cannot dup2 proc stderr: %s", strerror(errno));
 			exit(254);
@@ -260,7 +274,7 @@ hk_proc_t *hk_proc_start(int argc, char *argv[],
 		execvp(argv[0], argv);
 
 		/* Return from exec: something went wrong */
-		log_str("ERROR: execvp(%s): %s (pid=%d): %s\n", argv[0], getpid(), strerror(errno));
+		fprintf(stderr, "ERROR: execvp(%s): %s (pid=%d): %s\n", argv[0], getpid(), strerror(errno));
 		exit(255);
 		break;
 

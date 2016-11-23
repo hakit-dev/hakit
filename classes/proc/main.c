@@ -16,6 +16,7 @@
 #include <sys/types.h>
 
 #include "log.h"
+#include "env.h"
 #include "proc.h"
 #include "mod.h"
 #include "str_argv.h"
@@ -148,7 +149,7 @@ static void _enable(ctx_t *ctx, int value)
 
 				argv[i] = NULL;
 
-				ctx->proc = hk_proc_start(argc, argv,
+				ctx->proc = hk_proc_start(argc, argv, env_appdir(NULL),
 							  (hk_proc_out_func_t) _stdout, NULL,
 							  (hk_proc_term_func_t) _term, ctx);
 

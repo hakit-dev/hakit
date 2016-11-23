@@ -81,9 +81,19 @@ static char *env_dir(char *rootdir, char *subpath)
 	}
 
 	{
-		int size = strlen(rootdir)+strlen(subpath)+4;
+		int size = strlen(rootdir)+4;
+		int len;
+
+		if (subpath != NULL) {
+			size += strlen(subpath);
+		}
+
 		path = malloc(size);
-		snprintf(path, size, "%s/%s", rootdir, subpath);
+
+		len = snprintf(path, size, "%s", rootdir);
+		if (subpath != NULL) {
+			len += snprintf(path+len, size-len, "/%s", subpath);
+		}
 	}
 
 	return path;
