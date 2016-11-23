@@ -274,7 +274,7 @@ hk_proc_t *hk_proc_start(int argc, char *argv[], char *cwd,
 		execvp(argv[0], argv);
 
 		/* Return from exec: something went wrong */
-		fprintf(stderr, "ERROR: execvp(%s): %s (pid=%d): %s\n", argv[0], getpid(), strerror(errno));
+		fprintf(stderr, "ERROR: execvp(%s) [pid=%d]: %s\n", argv[0], getpid(), strerror(errno));
 		exit(255);
 		break;
 
