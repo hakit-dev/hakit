@@ -34,9 +34,6 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-# Enable _GNU_SOURCE option to enable Linux netlink definitions
-CFLAGS += -D_GNU_SOURCE
-
 all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
 
 ifneq ($(WITHOUT_SSL),yes)
