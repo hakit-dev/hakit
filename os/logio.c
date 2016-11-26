@@ -30,7 +30,6 @@
 #define LOG_SUFFIX ".log"
 
 static char *log_prefix = "HAKit";
-static int log_opened = 0;
 static const char *log_filename = LOG_DIRNAME LOG_BASENAME LOG_SUFFIX;
 static FILE *log_f = NULL;
 static buf_t log_buf = {};
@@ -42,19 +41,30 @@ static void log_flush(void);
 void log_init(char *prefix)
 {
 	log_prefix = prefix;
+	buf_init(&log_buf);
 }
 
 
 static void log_open(void)
 {
-	if (!log_opened) {
-		log_opened = 1;
-		buf_init(&log_buf);
-		if (opt_daemon) {
-			log_f = fopen(log_filename, "a");
-			if (log_f == NULL) {
-				fprintf(stderr, "%s: %s: %s\n", log_prefix, log_filename, strerror(errno));
-			}
+	static int error_shown = 0;
+
+	/* Nothing to do if log file alreay open */
+	if (log_f != NULL) {
+		return;
+	}
+
+	/* Do not attempt to open log file if an error previously occured */
+	if (error_shown) {
+		return;
+	}
+
+	/* Open log file in daemon mode only */
+	if (opt_daemon) {
+		log_f = fopen(log_filename, "a");
+		if (log_f == NULL) {
+			error_shown = 1;
+			log_str("WARNING: Cannot open log file '%s': %s\n", log_filename, strerror(errno));
 		}
 	}
 }
@@ -70,7 +80,6 @@ static void log_close(void)
 	}
 
 	buf_cleanup(&log_buf);
-	log_opened = 0;
 }
 
 
@@ -109,6 +118,12 @@ static void log_rotate(void)
 	static int error_shown = 0;
 	struct timeval t;
 	char path[strlen(LOG_DIRNAME)+strlen(LOG_BASENAME)+strlen(LOG_SUFFIX)+16];
+	int ret;
+
+	/* Do not attempt log-rotate if an error previously occured */
+	if (error_shown) {
+		return;
+	}
 
 	log_close();
 
@@ -120,11 +135,7 @@ static void log_rotate(void)
 		log_cleanup();
 	}
 	else {
-		/* Show log renaming error while preventing race condition */
-		if (!error_shown) {
-			log_str("WARNING: Failed to rename log file '%s' to '%s': %s", log_filename, path, strerror(errno));
-			error_shown = 1;
-		}
+		log_str("WARNING: Failed to rename log file '%s' to '%s': %s", log_filename, path, strerror(errno));
 	}
 }
 
@@ -139,8 +150,10 @@ static void log_flush(void)
 			log_buf.len = 0;
 
 			/* Perform a log rotate if file is too large */
-			if (ftell(f) >= LOG_MAX_SIZE) {
-				log_rotate();
+			if (log_f != NULL) {
+				if (ftell(log_f) >= LOG_MAX_SIZE) {
+					log_rotate();
+				}
 			}
 		}
 	}
