@@ -23,6 +23,9 @@ all:: check favicon css
 favicon: favicon.ico
 css: switch3.css
 
+clean::
+	$(RM) *~ favicon.ico
+
 install: all
 	$(MKDIR) $(INSTALL_SHARE)
 	$(CP) -a *.html *.css *.js favicon.ico vendor $(INSTALL_SHARE)/

@@ -34,7 +34,7 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes
+all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes ui
 
 ifneq ($(WITHOUT_SSL),yes)
 ifndef TARGET
@@ -66,9 +66,16 @@ lws:
 #
 .PHONY: classes
 classes:
-	make -C classes
+	make -C classes TARGET=$(TARGET)
 
 LDFLAGS += -rdynamic -ldl
+
+#
+# User interface resources
+#
+.PHONY: ui
+ui:
+	make -C ui
 
 #
 # HAKit libs and bins
@@ -83,7 +90,8 @@ $(OUTDIR)/hakit: $(OUTDIR)/hakit.o $(OBJS)
 clean::
 	make -C classes clean
 	make -C lws clean
-	$(RM) os/*~ core/*~ ui/favicon.ico
+	make -C ui clean
+	$(RM) os/*~ core/*~
 
 
 #
