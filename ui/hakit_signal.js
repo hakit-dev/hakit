@@ -80,7 +80,7 @@ function hakit_widget_switch3(id, value)
 	str += '<label for="'+prefix+'" class="switch3_'+i+'_lbl">'+labels[i]+'</label>';
 	str += '<input type="radio" value="'+i+'" name="'+id+':switch3" class="switch3_'+i+'" id="'+prefix+'"';
 	str += ' onchange="hakit_widget_updated(this,this.value);"';
-	if (i == 2) {
+	if (i == value) {
 	    str += ' checked';
 	}
 	str += '>';
