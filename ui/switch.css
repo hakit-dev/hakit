@@ -29,8 +29,12 @@
   cursor: pointer;
 }
 
-/* Push button with LED.
-   Could be either used as a bistable button (as input type=checkbox),
+
+/*======================*/
+/* Push button with LED *
+/*======================*/
+
+/* Could be either used as a bistable button (as input type=checkbox),
    or an astable push button (as input type=button). */
 
 .switch.push {
@@ -121,7 +125,9 @@
 }
 
 
+/*==================*/
 /* Flip-flop button */
+/*==================*/
 
 .switch.demo2 {
   width: 50px;
@@ -192,7 +198,10 @@
       0 8px 6px rgba(0,0,0,0.18);
 }
 
+
+/*==============*/
 /* Slide switch */
+/*==============*/
 
 .switch.slide {
   width: 70px;
@@ -321,7 +330,10 @@
     0 -1px 0 #6b8659;
 }
 
+
+/*==============*/
 /* Power button */
+/*==============*/
 
 .switch.demo4 {
   width: 150px;
@@ -421,6 +433,11 @@
     0 -2px 5px rgba(255,255,255,0.05),
     0 2px 5px rgba(255,255,255,0.1);
 }
+
+
+/*==============*/
+/* Range Slider */
+/*==============*/
 
 input[type=range] {
     -webkit-appearance: none;
