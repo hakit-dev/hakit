@@ -60,7 +60,7 @@ static void _start(hk_obj_t *obj)
 	ctx_t *ctx = obj->ctx;
 
 	if (ctx->output->value.base != NULL) {
-		comm_sink_update_str(ctx->id, ctx->output->value.base);
+		comm_sink_update_str(ctx->id, (char *) ctx->output->value.base);
 	}
 }
 
