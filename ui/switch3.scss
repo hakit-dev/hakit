@@ -1,0 +1,98 @@
+/* HAKit CSS 3-state switch */
+/* Shamelessly inspired from http://codepen.io/Davide_sd/pen/AmazD */
+
+/* Height */
+$h: 1.5rem;
+
+/* Width */
+$w: $h * 3;
+
+/* Toggle width */
+$tw: $h * 1.2;
+
+/* Font size */
+$fs: $h / 2;
+
+/* Toggle's border thickness */
+$bt: 0.1rem;
+
+/* Toggle box shadow */
+$bs: $bt * 2;
+
+@mixin button() {
+  background: #b2ac9e;
+  background: -moz-linear-gradient(#f7f2f6, #b2ac9e);
+  background: -ms-linear-gradient(#f7f2f6, #b2ac9e);
+  background: -o-linear-gradient(#f7f2f6, #b2ac9e);
+  background: -webkit-gradient(linear, 0 0, 0 100%, from(#f7f2f6), to(#b2ac9e));
+  background: -webkit-linear-gradient(#f7f2f6, #b2ac9e);
+  background: linear-gradient(#f7f2f6, #b2ac9e);
+  box-shadow:
+      inset 0 1px 0 white,
+      0 0 8px rgba(0,0,0,0.3),
+      0 5px 5px rgba(0,0,0,0.2);
+}
+
+.switch3 {
+  width: $w;
+  height: $h;
+  position: relative;
+  border-radius: $h/2;
+  background: #a5a39d;
+}
+.switch3 .switch3_toggle {
+  width: $tw;
+  height: $tw;
+  position: absolute;
+  left: $w / 3 - ($tw - $h) / 2;
+  top: -($tw - $h) / 2;
+  border-radius: 50%;
+  box-sizing: border-box;
+  @include button();
+  transition: all 0.3s;
+}
+.switch3 label {
+  cursor: pointer;
+  width: $h;
+  height: $h;
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  z-index: 1;
+  display: inline-block;
+  text-align: center;
+  line-height: $h;
+  text-transform: uppercase;
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: $fs;
+  font-weight: bold;
+  color: #555;
+  text-shadow: 
+    0 1px 0 #ccc,
+    0 -1px 0 #888;
+}
+.switch3 input {
+  position: absolute;
+  left: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.switch3_0:checked ~ .switch3_toggle {
+  @include button();
+  left: -($tw - $h) / 2;
+}
+
+.switch3_1:checked ~ .switch3_toggle {
+  @include button();
+  left: $w * 2 / 3 - ($tw - $h) / 2;
+}
+
+.switch3_2, .switch3_2_lbl {
+  left: 33.33333%;
+}
+
+.switch3_1, .switch3_1_lbl {
+  left: 66.66667%;
+}

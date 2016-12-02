@@ -70,6 +70,28 @@ function hakit_widget_switch_push(id, value)
 }
 
 
+function hakit_widget_switch3(id, value)
+{
+    var labels = ["0", "1", "A"];
+    var str = '<div class="switch3">';
+
+    for (var i = 0; i < 3; i++) {
+	var prefix = id+':switch3_'+i;
+	str += '<label for="'+prefix+'" class="switch3_'+i+'_lbl">'+labels[i]+'</label>';
+	str += '<input type="radio" value="'+i+'" name="'+id+':switch3" class="switch3_'+i+'" id="'+prefix+'"';
+	str += ' onchange="hakit_widget_updated(this,this.value);"';
+	if (i == 2) {
+	    str += ' checked';
+	}
+	str += '>';
+    }
+
+    str += '<div class="switch3_toggle"></div></div>';
+
+    return str;
+}
+
+
 function hakit_widget_slider(id, value, options)
 {
     var str = '<input type="range" class="slider" id="'+id+':slider" onchange="hakit_widget_updated(this,this.value);"';
@@ -168,6 +190,9 @@ function hakit_signal_add(name, value, dir, widget)
     else if (widget == 'switch-push') {
 	str = hakit_widget_switch_push(name, value);
     }
+    else if (widget == 'switch-3state') {
+	str = hakit_widget_switch3(name, value);
+    }
     else if (widget.substr(0,5) == 'meter') {
 	var args = widget.split(':');
 	str = hakit_widget_meter(name, value, args[1]);
@@ -198,12 +223,21 @@ function hakit_updated(name, value, dir, widget)
 	if (widget.substr(0, 4) == 'led-') {
 	    row.cells[3].innerHTML = hakit_widget_led(widget, value);
 	}
-	else {
-	    var elmt = document.getElementById(name+':switch');
-	    if (elmt) {
-		elmt.checked = ((value != '') && (value != '0'));
+	else if (widget.substr(0, 7) == 'switch-') {
+	    if (widget == 'switch-3state') {
+		var elmt = document.getElementById(name+':switch3_'+value);
+		if (elmt) {
+		    elmt.checked = 1;
+		}
 	    }
-
+	    else {
+		var elmt = document.getElementById(name+':switch');
+		if (elmt) {
+		    elmt.checked = ((value != '') && (value != '0'));
+		}
+	    }
+	}
+	else {
 	    elmt = document.getElementById(name+':meter');
 	    if (elmt) {
 		elmt.value = value;
