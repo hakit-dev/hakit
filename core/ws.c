@@ -106,6 +106,14 @@ static int ws_http_request(ws_t *ws,
 		goto try_to_reuse;
 	}
 
+	/* Show user agent */
+	int hlen = lws_hdr_total_length(wsi, WSI_TOKEN_HTTP_USER_AGENT);
+	if (hlen > 0) {
+		char user_agent[hlen+1];
+		lws_hdr_copy(wsi, user_agent, sizeof(user_agent), WSI_TOKEN_HTTP_USER_AGENT);
+		log_debug(2, "ws_http_request: User agent = '%s'", user_agent);
+	}
+
 	/* If a legal POST URL, let it continue and accept data */
 	if (lws_hdr_total_length(wsi, WSI_TOKEN_POST_URI)) {
 		log_debug(2, "=> POST");
@@ -419,6 +427,9 @@ static int ws_http_callback(struct lws *wsi,
 	int ret = 0;
 
 	switch (reason) {
+	case LWS_CALLBACK_CLOSED_HTTP:
+		log_debug(3, "ws_http_callback LWS_CALLBACK_CLOSED_HTTP");
+		break;
 	case LWS_CALLBACK_HTTP:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP");
 		ret = ws_http_request(ws, wsi, pss, in, len);
