@@ -1,4 +1,5 @@
 /* HAKit CSS 3-state switch */
+/* Copyright (C) 2014-2016 Sylvain Giroudon */
 /* Shamelessly inspired from http://codepen.io/Davide_sd/pen/AmazD */
 
 /* Height */
@@ -84,15 +85,15 @@ $bs: $bt * 2;
   left: -($tw - $h) / 2;
 }
 
-.switch3_1:checked ~ .switch3_toggle {
+.switch3_2:checked ~ .switch3_toggle {
   @include button();
   left: $w * 2 / 3 - ($tw - $h) / 2;
 }
 
-.switch3_2, .switch3_2_lbl {
+.switch3_1, .switch3_1_lbl {
   left: 33.33333%;
 }
 
-.switch3_1, .switch3_1_lbl {
+.switch3_2, .switch3_2_lbl {
   left: 66.66667%;
 }

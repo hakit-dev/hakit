@@ -1,6 +1,6 @@
 [objects]
-switch: sink local widget=switch-3state out=2
-mux: mux ninputs=3 in0=100 in1=97 in2=99
+switch: sink local widget=switch-3state:0,A,1 out=1
+mux: mux ninputs=3 in0=100 in1=99 in2=97
 meter: source local widget=meter:min=0,low=98,high=99,max=100
 
 [nets]

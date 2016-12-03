@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation Kit
- * Copyright (C) 2014 Sylvain Giroudon
+ * Copyright (C) 2014-2016 Sylvain Giroudon
  *
  * Dynamic table of source/sink signals
  *
@@ -70,9 +70,9 @@ function hakit_widget_switch_push(id, value)
 }
 
 
-function hakit_widget_switch3(id, value)
+function hakit_widget_switch3(id, value, options)
 {
-    var labels = ["0", "1", "A"];
+    var labels = options.split(',');
     var str = '<div class="switch3">';
 
     for (var i = 0; i < 3; i++) {
@@ -180,26 +180,28 @@ function hakit_signal_add(name, value, dir, widget)
     row.insertCell(1).innerHTML = name;
     row.insertCell(2).innerHTML = value;
 
+    var args = widget.split(':');
+    var wname = args[0];
+    var options = args[1];
+
     var str = "";
-    if (widget.substr(0,4) == 'led-') {
+    if (wname.substr(0,4) == 'led-') {
 	str = hakit_widget_led(widget, value);
     }
-    else if (widget == 'switch-slide') {
+    else if (wname == 'switch-slide') {
 	str = hakit_widget_switch_slide(name, value);
     }
-    else if (widget == 'switch-push') {
+    else if (wname == 'switch-push') {
 	str = hakit_widget_switch_push(name, value);
     }
-    else if (widget == 'switch-3state') {
-	str = hakit_widget_switch3(name, value);
+    else if (wname == 'switch-3state') {
+	str = hakit_widget_switch3(name, value, options);
     }
-    else if (widget.substr(0,5) == 'meter') {
-	var args = widget.split(':');
-	str = hakit_widget_meter(name, value, args[1]);
+    else if (wname == 'meter') {
+	str = hakit_widget_meter(name, value, options);
     }
-    else if (widget.substr(0,6) == 'slider') {
-	var args = widget.split(':');
-	str = hakit_widget_slider(name, value, args[1]);
+    else if (wname == 'slider') {
+	str = hakit_widget_slider(name, value, options);
     }
 
     row.insertCell(3).innerHTML = str;
