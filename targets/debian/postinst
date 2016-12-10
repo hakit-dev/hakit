@@ -4,4 +4,5 @@ NAME=hakit
 
 update-rc.d $NAME defaults
 update-rc.d $NAME enable
-service $NAME restart
+service $NAME stop
+service $NAME start

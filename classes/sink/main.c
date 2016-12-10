@@ -59,9 +59,8 @@ static void _start(hk_obj_t *obj)
 {
 	ctx_t *ctx = obj->ctx;
 
-	char *value = hk_prop_get(&obj->props, "default");
-	if (value != NULL) {
-		hk_pad_update_str(ctx->output, value);
+	if (ctx->output->value.base != NULL) {
+		comm_sink_update_str(ctx->id, (char *) ctx->output->value.base);
 	}
 }
 

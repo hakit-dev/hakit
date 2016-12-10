@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation Kit
- * Copyright (C) 2014 Sylvain Giroudon
+ * Copyright (C) 2014-2016 Sylvain Giroudon
  *
  * Dynamic table of source/sink signals
  *
@@ -65,6 +65,28 @@ function hakit_widget_switch_push(id, value)
 	str += ' checked';
     }
     str += '><label><i></i></label></div>';
+
+    return str;
+}
+
+
+function hakit_widget_switch3(id, value, options)
+{
+    var labels = options.split(',');
+    var str = '<div class="switch3">';
+
+    for (var i = 0; i < 3; i++) {
+	var prefix = id+':switch3_'+i;
+	str += '<label for="'+prefix+'" class="switch3_'+i+'_lbl">'+labels[i]+'</label>';
+	str += '<input type="radio" value="'+i+'" name="'+id+':switch3" class="switch3_'+i+'" id="'+prefix+'"';
+	str += ' onchange="hakit_widget_updated(this,this.value);"';
+	if (i == value) {
+	    str += ' checked';
+	}
+	str += '>';
+    }
+
+    str += '<div class="switch3_toggle"></div></div>';
 
     return str;
 }
@@ -158,23 +180,28 @@ function hakit_signal_add(name, value, dir, widget)
     row.insertCell(1).innerHTML = name;
     row.insertCell(2).innerHTML = value;
 
+    var args = widget.split(':');
+    var wname = args[0];
+    var options = args[1];
+
     var str = "";
-    if (widget.substr(0,4) == 'led-') {
+    if (wname.substr(0,4) == 'led-') {
 	str = hakit_widget_led(widget, value);
     }
-    else if (widget == 'switch-slide') {
+    else if (wname == 'switch-slide') {
 	str = hakit_widget_switch_slide(name, value);
     }
-    else if (widget == 'switch-push') {
+    else if (wname == 'switch-push') {
 	str = hakit_widget_switch_push(name, value);
     }
-    else if (widget.substr(0,5) == 'meter') {
-	var args = widget.split(':');
-	str = hakit_widget_meter(name, value, args[1]);
+    else if (wname == 'switch-3state') {
+	str = hakit_widget_switch3(name, value, options);
     }
-    else if (widget.substr(0,6) == 'slider') {
-	var args = widget.split(':');
-	str = hakit_widget_slider(name, value, args[1]);
+    else if (wname == 'meter') {
+	str = hakit_widget_meter(name, value, options);
+    }
+    else if (wname == 'slider') {
+	str = hakit_widget_slider(name, value, options);
     }
 
     row.insertCell(3).innerHTML = str;
@@ -198,12 +225,21 @@ function hakit_updated(name, value, dir, widget)
 	if (widget.substr(0, 4) == 'led-') {
 	    row.cells[3].innerHTML = hakit_widget_led(widget, value);
 	}
-	else {
-	    var elmt = document.getElementById(name+':switch');
-	    if (elmt) {
-		elmt.checked = ((value != '') && (value != '0'));
+	else if (widget.substr(0, 7) == 'switch-') {
+	    if (widget == 'switch-3state') {
+		var elmt = document.getElementById(name+':switch3_'+value);
+		if (elmt) {
+		    elmt.checked = 1;
+		}
 	    }
-
+	    else {
+		var elmt = document.getElementById(name+':switch');
+		if (elmt) {
+		    elmt.checked = ((value != '') && (value != '0'));
+		}
+	    }
+	}
+	else {
 	    elmt = document.getElementById(name+':meter');
 	    if (elmt) {
 		elmt.value = value;

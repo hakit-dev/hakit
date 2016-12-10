@@ -11,7 +11,7 @@
 
 ### BEGIN INIT INFO
 # Provides:          hakit
-# Required-Start:    $local_fs $syslog
+# Required-Start:    $local_fs $syslog $network
 # Required-Stop:
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6

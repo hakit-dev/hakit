@@ -25,8 +25,6 @@
 #include "hkcp.h"
 
 
-#define INTERFACE_CHECK_DELAY 60000   // Check for available network interfaces once per minute
-
 #define ADVERTISE_DELAY 1000   // Delay before advertising a newly registered sink/source
 #define ADVERTISE_MAXLEN 1200  // Maxim advertising packet length
 
@@ -1420,25 +1418,6 @@ static void hkcp_advertise(hkcp_t *hkcp)
 }
 
 
-static int hkcp_check_interfaces(hkcp_t *hkcp)
-{
-	int ninterfaces = netif_check_interfaces();
-
-	if (ninterfaces != hkcp->ninterfaces) {
-		hkcp->ninterfaces = ninterfaces;
-
-		log_str("Network interface change detected");
-		netif_show_interfaces();
-
-		if (ninterfaces > 0) {
-			hkcp_advertise(hkcp);
-		}
-	}
-
-	return 1;
-}
-
-
 static void hkcp_init_hosts(hkcp_t *hkcp, char *hosts)
 {
 	char *s1 = hosts;
@@ -1487,8 +1466,7 @@ int hkcp_init(hkcp_t *hkcp, int port, char *hosts)
 
 	/* Init network interface check */
 	if (port > 0) {
-		hkcp->ninterfaces = netif_show_interfaces();
-		sys_timeout(INTERFACE_CHECK_DELAY, (sys_func_t) hkcp_check_interfaces, hkcp);
+		netif_init(&hkcp->ifs, (netif_change_callback_t) hkcp_advertise, hkcp);
 	}
 
 	ret = 0;

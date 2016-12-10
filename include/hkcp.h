@@ -14,6 +14,7 @@
 
 #include "sys.h"
 #include "buf.h"
+#include "netif.h"
 #include "tcpio.h"
 #include "udpio.h"
 #include "tab.h"
@@ -98,7 +99,7 @@ typedef struct {
  */
 
 struct hkcp_s {
-	int ninterfaces;
+	netif_env_t ifs;
 	udp_srv_t udp_srv;
 	tcp_srv_t tcp_srv;
 	hk_tab_t hosts;       // Table of (char *)
