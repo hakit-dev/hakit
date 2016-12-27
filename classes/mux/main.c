@@ -27,7 +27,6 @@ typedef struct {
 	hk_pad_t *sel;
 	hk_pad_t **inputs;
 	hk_pad_t *output;
-	int refresh;
 } ctx_t;
 
 
@@ -61,8 +60,6 @@ static int _new(hk_obj_t *obj)
 	}
 
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
-
-	ctx->refresh = 1;
 
 	return 0;
 }
