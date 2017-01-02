@@ -118,7 +118,6 @@ static void log_rotate(void)
 	static int error_shown = 0;
 	struct timeval t;
 	char path[strlen(LOG_DIRNAME)+strlen(LOG_BASENAME)+strlen(LOG_SUFFIX)+16];
-	int ret;
 
 	/* Do not attempt log-rotate if an error previously occured */
 	if (error_shown) {
