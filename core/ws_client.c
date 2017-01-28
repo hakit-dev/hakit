@@ -58,7 +58,7 @@ static int ws_http_client_read(struct lws *wsi, struct per_session_data__client 
 
 			// Callback received data
 			if (pss->func != NULL) {
-				pss->func(pss->user_data, pss->buf.base, pss->buf.len);
+				pss->func(pss->user_data, (char *) pss->buf.base, pss->buf.len);
 			}
 
 			buf_cleanup(&pss->buf);
