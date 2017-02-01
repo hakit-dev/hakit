@@ -36,6 +36,8 @@ typedef struct {
 	int cmd_argc;
 	char **cmd_argv;
 	proc_mode_t mode;
+	int respawn_delay;
+	sys_tag_t respawn_tag;
 	hk_pad_t *pad_enable;
 	hk_pad_t *pad_in;
 	hk_pad_t *pad_run;
@@ -43,6 +45,8 @@ typedef struct {
 	hk_pad_t *pad_status;
 	hk_proc_t *proc;
 } ctx_t;
+
+static void _term(ctx_t *ctx, int status);
 
 
 static int _new(hk_obj_t *obj)
@@ -81,6 +85,12 @@ static int _new(hk_obj_t *obj)
 		}
 	}
 
+	/* Get respawn timer */
+	str = hk_prop_get(&obj->props, "respawn");
+	if (str != NULL) {
+		ctx->respawn_delay = atoi(str);
+	}
+
 	/* Create input/output pads */
 	ctx->pad_enable = hk_pad_create(obj, HK_PAD_IN, "enable");
 	ctx->pad_in = hk_pad_create(obj, HK_PAD_IN, "in");
@@ -111,12 +121,67 @@ static void _stdout(ctx_t *ctx, char *buf, int len)
 }
 
 
+static void _start(ctx_t *ctx)
+{
+	if (ctx->proc == NULL) {
+		int argc = ctx->cmd_argc;
+		char *argv[argc+1];
+		int i;
+
+		for (i = 0; i < argc; i++) {
+			char *args = ctx->cmd_argv[i];
+			if (args[0] == '$') {
+				char *s = hk_pad_get_value(args+1);
+				if (s != NULL) {
+					args = s;
+				}
+				else {
+					log_str("WARNING: %s: Referencing unknown pad '%s' in command line argument $%d", ctx->obj->name, args+1, i);
+				}
+			}
+
+			argv[i] = args;
+		}
+
+		argv[i] = NULL;
+
+		ctx->proc = hk_proc_start(argc, argv, env_appdir(NULL),
+					  (hk_proc_out_func_t) _stdout, NULL,
+					  (hk_proc_term_func_t) _term, ctx);
+
+		if (ctx->proc != NULL) {
+			hk_pad_update_int(ctx->pad_run, 1);
+		}
+	}
+}
+
+
+static int _respawn(ctx_t *ctx)
+{
+	ctx->respawn_tag = 0;
+
+	if (ctx->pad_enable->state) {
+		_start(ctx);
+	}
+
+	return 0;
+}
+
+
 static void _term(ctx_t *ctx, int status)
 {
 	log_debug(1, "%s: terminated with status=%d", ctx->obj->name, status);
 	ctx->proc = NULL;
 	hk_pad_update_int(ctx->pad_run, 0);
 	hk_pad_update_int(ctx->pad_status, status);
+
+	if (ctx->respawn_delay > 0) {
+		log_debug(1, "%s: respawning process in %d seconds...", ctx->obj->name, ctx->respawn_delay);
+		if (ctx->respawn_tag != 0) {
+			sys_remove(ctx->respawn_tag);
+		}
+		ctx->respawn_tag = sys_timeout(ctx->respawn_delay * 1000, (sys_func_t) _respawn, ctx);
+	}
 }
 
 
@@ -127,38 +192,16 @@ static void _enable(ctx_t *ctx, int value)
 		ctx->pad_enable->state = value;
 
 		if (value) {
-			if (ctx->proc == NULL) {
-				int argc = ctx->cmd_argc;
-				char *argv[argc+1];
-				int i;
-
-				for (i = 0; i < argc; i++) {
-					char *args = ctx->cmd_argv[i];
-					if (args[0] == '$') {
-						char *s = hk_pad_get_value(args+1);
-						if (s != NULL) {
-							args = s;
-						}
-						else {
-							log_str("WARNING: %s: Referencing unknown pad '%s' in command line argument $%d", ctx->obj->name, args+1, i);
-						}
-					}
-
-					argv[i] = args;
-				}
-
-				argv[i] = NULL;
-
-				ctx->proc = hk_proc_start(argc, argv, env_appdir(NULL),
-							  (hk_proc_out_func_t) _stdout, NULL,
-							  (hk_proc_term_func_t) _term, ctx);
-
-				if (ctx->proc != NULL) {
-					hk_pad_update_int(ctx->pad_run, 1);
-				}
-			}
+			_start(ctx);
 		}
 		else {
+			/* Kill running respwan timer, if any */
+			if (ctx->respawn_tag != 0) {
+				sys_remove(ctx->respawn_tag);
+				ctx->respawn_tag = 0;
+			}
+
+			/* Kill process */
 			if ((ctx->proc != NULL) && (ctx->mode == MODE_AGENT)) {
 				hk_proc_stop(ctx->proc);
 			}
