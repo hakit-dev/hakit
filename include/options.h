@@ -14,7 +14,8 @@
 extern "C" {
 #endif
 
-#define OPTIONS_DEFAULT_CONF "/etc/hakit.conf"
+#define OPTIONS_DEFAULT_CONF "/etc/hakit/config"
+#define OPTIONS_DEFAULT_AUTH "/etc/hakit/users"
 
 #define OPTIONS_TYPE_NONE 0
 #define OPTIONS_TYPE_INT 1

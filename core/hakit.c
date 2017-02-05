@@ -23,6 +23,7 @@
 #include "mod.h"
 #include "mod_init.h"
 #include "mod_load.h"
+#include "ws_auth.h"
 
 #include "lws_config.h"
 #include "hakit_version.h"
@@ -39,6 +40,7 @@ static char *opt_hosts = NULL;
 static int opt_no_hkcp = 0;
 static int opt_no_ssl = 0;
 static int opt_insecure_ssl = 0;
+static char *opt_auth = OPTIONS_DEFAULT_AUTH;
 
 const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
@@ -51,6 +53,7 @@ const options_entry_t options_entries[] = {
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
 	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure SSL client connections (self-signed certificates)" },
 #endif
+	{ "auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_auth, "HTTP Authentication file (default: " OPTIONS_DEFAULT_AUTH ")", "FILE" },
 	{ NULL }
 };
 
@@ -136,6 +139,10 @@ int main(int argc, char *argv[])
 
 	if (opt_monitor) {
 		comm_monitor((comm_sink_func_t) monitor_sink_event, NULL);
+	}
+
+	if (opt_auth != NULL) {
+		ws_auth_init(opt_auth);
 	}
 
 	/* Init module management */
