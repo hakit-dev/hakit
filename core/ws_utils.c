@@ -68,3 +68,19 @@ void ws_dump_handshake_info(struct lws *wsi)
 		n++;
 	} while (c);
 }
+
+
+void ws_show_http_token(struct lws *wsi)
+{
+	int i;
+
+	/* Show all token */
+	for (i = 0; i < WSI_TOKEN_COUNT; i++) {
+		int len = lws_hdr_total_length(wsi, i);
+		if (len > 0) {
+			char str[len+1];
+			lws_hdr_copy(wsi, str, sizeof(str), i);
+			log_debug(2, "ws_http_request TOKEN: %s %s", lws_token_to_string(i), str);
+		}
+	}
+}

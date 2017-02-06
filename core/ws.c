@@ -22,6 +22,7 @@
 #include "ws_utils.h"
 #include "ws_client.h"
 #include "ws_events.h"
+#include "ws_auth.h"
 
 #define SERVER_NAME "HAKit"
 
@@ -83,11 +84,40 @@ static char *search_file(ws_t *ws, char *uri, size_t uri_len)
 }
 
 
+static void show_connection_info(struct lws *wsi)
+{
+	char name[100], rip[50];
+	char *user_agent = NULL;
+	int len;
+
+	/* Get peer address */
+	lws_get_peer_addresses(wsi, lws_get_socket_fd(wsi), name, sizeof(name), rip, sizeof(rip));
+
+	/* Show user agent */
+	len = lws_hdr_total_length(wsi, WSI_TOKEN_HTTP_USER_AGENT);
+	if (len > 0) {
+		int size = len + 1;
+		user_agent = malloc(size);
+		lws_hdr_copy(wsi, user_agent, size, WSI_TOKEN_HTTP_USER_AGENT);
+	}
+	else {
+		user_agent = strdup("?");
+	}
+
+	log_str("HTTP connect from %s (%s): %s\n", name, rip, user_agent);
+
+	if (user_agent != NULL) {
+		free(user_agent);
+	}
+}
+
+
 static int ws_http_request(ws_t *ws,
 			   struct lws *wsi,
 			   struct per_session_data__http *pss,
 			   char *uri, size_t len)
 {
+	char *username = NULL;
 	char *file_path = NULL;
 	int content_length = 0;
 	const char *mimetype = NULL;
@@ -101,17 +131,46 @@ static int ws_http_request(ws_t *ws,
 
 	ws_dump_handshake_info(wsi);
 
+	show_connection_info(wsi);
+
 	if (len < 1) {
 		lws_return_http_status(wsi, HTTP_STATUS_BAD_REQUEST, NULL);
 		goto try_to_reuse;
 	}
 
-	/* Show user agent */
-	int hlen = lws_hdr_total_length(wsi, WSI_TOKEN_HTTP_USER_AGENT);
-	if (hlen > 0) {
-		char user_agent[hlen+1];
-		lws_hdr_copy(wsi, user_agent, sizeof(user_agent), WSI_TOKEN_HTTP_USER_AGENT);
-		log_debug(2, "ws_http_request: User agent = '%s'", user_agent);
+	/* Clear data source settings */
+	pss->f = NULL;
+	buf_init(&pss->rsp);
+	pss->offset = 0;
+
+	/* Setup reply buffering */
+	p = pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING;
+	end = p + sizeof(pss->tx_buffer) - LWS_SEND_BUFFER_PRE_PADDING;
+
+	//ws_show_http_token(wsi);
+
+	/* Check authorization */
+	if (ws_auth_check(wsi, &username)) {
+		if (username != NULL) {
+			log_str("HTTP authentication accepted for user '%s'", username);
+		}
+	}
+	else {
+		char *str = "Basic realm=\"HAKit HTTP Server\"";
+
+		log_str("Requesting HTTP authentication");
+
+		if (lws_add_http_header_status(wsi, HTTP_STATUS_UNAUTHORIZED, &p, end)) {
+			goto done;
+		}
+
+		if (lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_WWW_AUTHENTICATE,
+						 (unsigned char *) str, strlen(str),
+						 &p, end)) {
+			goto done;
+		}
+
+		goto finalize;
 	}
 
 	/* If a legal POST URL, let it continue and accept data */
@@ -119,11 +178,6 @@ static int ws_http_request(ws_t *ws,
 		log_debug(2, "=> POST");
 		return 0;
 	}
-
-	/* Clear data source settings */
-	pss->f = NULL;
-	buf_init(&pss->rsp);
-	pss->offset = 0;
 
 	/* Try to match URL aliases */
 	for (i = 0; i < ws->server.aliases.nmemb; i++) {
@@ -180,15 +234,7 @@ static int ws_http_request(ws_t *ws,
 	 * depending on what connection it happens to be working
 	 * on
 	 */
-	p = pss->tx_buffer + LWS_SEND_BUFFER_PRE_PADDING;
-	end = p + sizeof(pss->tx_buffer) - LWS_SEND_BUFFER_PRE_PADDING;
-
 	if (lws_add_http_header_status(wsi, HTTP_STATUS_OK, &p, end)) {
-		goto done;
-	}
-	if (lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_SERVER,
-					 (unsigned char *) SERVER_NAME, strlen(SERVER_NAME),
-					 &p, end)) {
 		goto done;
 	}
 	if (mimetype != NULL) {
@@ -198,11 +244,18 @@ static int ws_http_request(ws_t *ws,
 			goto done;
 		}
 	}
-	if (content_length > 0) {
-		if (lws_add_http_header_content_length(wsi, content_length, &p, end)) {
-			goto done;
-		}
+
+finalize:
+	if (lws_add_http_header_by_token(wsi, WSI_TOKEN_HTTP_SERVER,
+					 (unsigned char *) SERVER_NAME, strlen(SERVER_NAME),
+					 &p, end)) {
+		goto done;
 	}
+
+	if (lws_add_http_header_content_length(wsi, content_length, &p, end)) {
+		goto done;
+	}
+
 	if (lws_finalize_http_header(wsi, &p, end)) {
 		goto done;
 	}

@@ -16,6 +16,7 @@
 #include "buf.h"
 #include "command.h"
 #include "ws_utils.h"
+#include "ws_auth.h"
 #include "ws_events.h"
 
 
@@ -48,6 +49,7 @@ static int ws_events_callback(struct lws *wsi,
 	struct lws_context *context = lws_get_context(wsi);
 	ws_t *ws = lws_context_user(context);
 	struct per_session_data__events *pss = user;
+	int ret = 0;
 	int i;
 
 	switch (reason) {
@@ -57,6 +59,12 @@ static int ws_events_callback(struct lws *wsi,
 		buf_init(&pss->out_buf);
 		pss->id = ws_session_add(ws, pss);
 		log_debug(2, "ws_events_callback LWS_CALLBACK_ESTABLISHED [%04X]", pss->id);
+
+		//ws_show_http_token(wsi);
+
+		if (!ws_auth_check(wsi, NULL)) {
+			ret = -1;
+		}
 		break;
 
 	case LWS_CALLBACK_SERVER_WRITEABLE:
@@ -70,8 +78,8 @@ static int ws_events_callback(struct lws *wsi,
 			pss->out_buf.len = 0;
 
 			if (ret < i) {
-				log_str("HTTP ERROR: %d writing to event websocket", ret);
-				return -1;
+				log_str("WS ERROR: %d writing to event websocket", ret);
+				ret = -1;
 			}
 		}
 		else {
@@ -132,7 +140,7 @@ static int ws_events_callback(struct lws *wsi,
 		break;
 	}
 
-	return 0;
+	return ret;
 }
 
 

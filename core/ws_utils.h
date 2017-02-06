@@ -15,5 +15,6 @@
 extern void ws_poll(struct lws_context *context, struct lws_pollargs *pa);
 extern void ws_poll_remove(struct lws_pollargs *pa);
 extern void ws_dump_handshake_info(struct lws *wsi);
+extern void ws_show_http_token(struct lws *wsi);
 
 #endif /* __HAKIT_WS_UTILS_H__ */
