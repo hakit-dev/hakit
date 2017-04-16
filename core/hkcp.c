@@ -16,7 +16,6 @@
 
 #include "log.h"
 #include "buf.h"
-#include "iputils.h"
 #include "netif.h"
 #include "tcpio.h"
 #include "udpio.h"
