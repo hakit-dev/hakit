@@ -63,7 +63,7 @@ static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 			if (argc > 1) {
 				// HTTP/HTTPS get operation. This command is for debug/testing purpose only.
 				// Result will be displayed to the debug log
-				ws_client_get(&comm_ws->client, argv[1], comm_wget_recv, NULL);
+				ws_client_get(&comm_ws->client, argv[1], NULL, comm_wget_recv, NULL);
 			}
 			else {
 				log_str("ERROR: Usage: %s <uri>", argv[0]);
@@ -239,5 +239,5 @@ void comm_source_update_int(int id, int value)
 
 int comm_wget(char *uri, comm_recv_func_t *func, void *user_data)
 {
-	return ws_client_get(&comm_ws->client, uri, func, user_data);
+	return ws_client_get(&comm_ws->client, uri, NULL, func, user_data);
 }

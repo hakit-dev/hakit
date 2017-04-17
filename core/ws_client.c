@@ -8,16 +8,21 @@
  */
 
 #include <libwebsockets.h>
+#include <sys/utsname.h>
 
 #include "log.h"
 #include "buf.h"
-//#include "ws.h"
+#include "netif.h"
 #include "ws_utils.h"
 #include "ws_client.h"
+
+#include "hakit_version.h"
+
 
 #define MAX_BUF_LEN (256*1024)
 
 struct per_session_data__client {
+	buf_t headers;
 	int completed;
 	buf_t buf;
 	ws_client_func_t *func;
@@ -71,16 +76,92 @@ static int ws_http_client_read(struct lws *wsi, struct per_session_data__client 
 }
 
 
+static int ws_http_client_append_header(struct lws *wsi, struct per_session_data__client *pss,
+					char **hbuf, int hlen)
+{
+	char *str;
+	int len;
+	char buf[128];
+	struct utsname u;
+	int ofs = 0;
+
+	// Get system information
+	if (uname(&u) < 0) {
+		log_str("ERROR: Cannot get system identification");
+		return -1;
+	}
+
+	// Network addresses
+	str = netif_socket_signature(lws_get_socket_fd(wsi));
+	len = snprintf(buf, sizeof(buf), "Api-Device: %s %s %s\r\n", str, u.nodename, u.machine);
+	free(str);
+
+	if (hlen > len) {
+		memcpy(*hbuf+ofs, buf, len+1);
+		ofs += len;
+		hlen -= len;
+	}
+	else {
+		log_str("ERROR: HTTP client header (device) too long (%d/%d)", len, hlen);
+		return -1;
+	}
+
+	// OS version
+	len = snprintf(buf, sizeof(buf), "Api-OS: %s %s %s\r\n",
+		       u.sysname, u.release, u.version);
+	if (hlen > len) {
+		memcpy(*hbuf+ofs, buf, len+1);
+		ofs += len;
+		hlen -= len;
+	}
+	else {
+		log_str("ERROR: HTTP client header (os) too long (%d/%d)", len, hlen);
+		return -1;
+	}
+
+	// HAKit version
+	len = snprintf(buf, sizeof(buf), "Api-Version: %s\r\n", HAKIT_VERSION);
+	if (hlen > len) {
+		memcpy(*hbuf+ofs, buf, len+1);
+		ofs += len;
+		hlen -= len;
+	}
+	else {
+		log_str("ERROR: HTTP client header (version) too long (%d/%d)", len, hlen);
+		return -1;
+	}
+
+	// User specified header
+	if (pss->headers.len > 0) {
+		if (hlen > pss->headers.len) {
+			memcpy(*hbuf+ofs, pss->headers.base, pss->headers.len);
+			ofs += pss->headers.len;
+			hlen -= pss->headers.len;
+		}
+		else {
+			log_str("ERROR: HTTP client header (user) too long (%d/%d)", pss->headers.len, hlen);
+			return -1;
+		}
+	}
+
+	if (ofs > 0) {
+		log_debug_data((unsigned char *) *hbuf, ofs);
+		*hbuf += ofs;
+	}
+
+	return ofs;
+}
+
+
 static int ws_client_callback(struct lws *wsi,
 			      enum lws_callback_reasons reason, void *user,
 			      void *in, size_t len)
 {
 	struct lws_context *context = lws_get_context(wsi);
 	struct per_session_data__client *pss = (struct per_session_data__client *) user;
-	struct lws_pollargs *pa = (struct lws_pollargs *) in;
 	int ret = 0;
 
-	log_debug(3, "ws_client_callback reason=%d pss=%p", reason, pss);
+	//log_debug(3, "ws_client_callback reason=%d pss=%p", reason, pss);
 
 	switch (reason) {
 	case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
@@ -95,7 +176,11 @@ static int ws_client_callback(struct lws *wsi,
 		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH");
 		break;
 	case LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER:
-		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER");
+		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER: len=%d", len);
+
+		if (ws_http_client_append_header(wsi, pss, in, len) < 0) {
+			ret = 1;
+		}
 		break;
 	case LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP");
@@ -128,36 +213,46 @@ static int ws_client_callback(struct lws *wsi,
 	case LWS_CALLBACK_WSI_DESTROY:
 		log_debug(3, "ws_htclienttp_callback LWS_CALLBACK_WSI_DESTROY");
 		// Free the pss that was allocated when initiating client connection
+		buf_cleanup(&pss->headers);
 		buf_cleanup(&pss->buf);
 		memset(pss, 0, sizeof(struct per_session_data__client));
 		free(pss);
 		break;
 
 	case LWS_CALLBACK_LOCK_POLL:
-		//log_debug(3, "ws_http_callback LWS_CALLBACK_LOCK_POLL");
+		log_debug(3, "ws_http_callback LWS_CALLBACK_LOCK_POLL");
 		/*
 		 * lock mutex to protect pollfd state
 		 * called before any other POLL related callback
 		 */
 		break;
 	case LWS_CALLBACK_UNLOCK_POLL:
-		//log_debug(3, "ws_http_callback LWS_CALLBACK_UNLOCK_POLL");
+		log_debug(3, "ws_http_callback LWS_CALLBACK_UNLOCK_POLL");
 		/*
 		 * unlock mutex to protect pollfd state when
 		 * called after any other POLL related callback
 		 */
 		break;
 	case LWS_CALLBACK_ADD_POLL_FD:
-		log_debug(3, "ws_client_callback LWS_CALLBACK_ADD_POLL_FD %d %02X", pa->fd, pa->events);
-		ws_poll(context, pa);
+	        {
+			struct lws_pollargs *pa = (struct lws_pollargs *) in;
+			log_debug(3, "ws_client_callback LWS_CALLBACK_ADD_POLL_FD %d %02X", pa->fd, pa->events);
+			ws_poll(context, pa);
+		}
 		break;
 	case LWS_CALLBACK_DEL_POLL_FD:
-		log_debug(3, "ws_client_callback LWS_CALLBACK_DEL_POLL_FD %d", pa->fd);
-		ws_poll_remove(pa);
+	        {
+			struct lws_pollargs *pa = (struct lws_pollargs *) in;
+			log_debug(3, "ws_client_callback LWS_CALLBACK_DEL_POLL_FD %d", pa->fd);
+			ws_poll_remove(pa);
+		}
 		break;
 	case LWS_CALLBACK_CHANGE_MODE_POLL_FD:
-		log_debug(3, "ws_client_callback LWS_CALLBACK_CHANGE_MODE_POLL_FD %d %02X", pa->fd, pa->events);
-		ws_poll(context, pa);
+	        {
+			struct lws_pollargs *pa = (struct lws_pollargs *) in;
+			log_debug(3, "ws_client_callback LWS_CALLBACK_CHANGE_MODE_POLL_FD %d %02X", pa->fd, pa->events);
+			ws_poll(context, pa);
+		}
 		break;
 
 	default:
@@ -235,7 +330,7 @@ static const struct lws_extension exts[] = {
 };
 
 
-int ws_client_get(ws_client_t *client, char *uri, ws_client_func_t *func, void *user_data)
+int ws_client_get(ws_client_t *client, char *uri, char *headers, ws_client_func_t *func, void *user_data)
 {
 	struct lws_client_connect_info i;
 	struct per_session_data__client *pss;
@@ -245,12 +340,14 @@ int ws_client_get(ws_client_t *client, char *uri, ws_client_func_t *func, void *
 	struct lws *wsi;
 	int ret;
 
-	log_debug(2, "ws_client '%s'", uri);
+	log_debug(2, "ws_client_get '%s'", uri);
 
 	memset(&i, 0, sizeof(i));
 	i.port = 80;
 
-	ret = lws_parse_uri(uri, &prot, &i.address, &i.port, &p);
+	strncpy(path, uri, sizeof(path)-1);
+	path[sizeof(path)-1] = '\0';
+	ret = lws_parse_uri(path, &prot, &i.address, &i.port, &p);
 	if (ret) {
 		return -1;
 	}
@@ -263,6 +360,12 @@ int ws_client_get(ws_client_t *client, char *uri, ws_client_func_t *func, void *
 
 	pss = malloc(sizeof(struct per_session_data__client));
 	memset(pss, 0, sizeof(struct per_session_data__client));
+
+	buf_init(&pss->headers);
+	if (headers != NULL) {
+		buf_append_str(&pss->headers, headers);
+	}
+
 	buf_init(&pss->buf);
 	pss->func = func;
 	pss->user_data = user_data;
@@ -279,10 +382,10 @@ int ws_client_get(ws_client_t *client, char *uri, ws_client_func_t *func, void *
 	i.client_exts = exts;
 	i.method = "GET";
 
-	log_debug(2, "ws_client addr='%s' port=%d ssl=%d", i.address, i.port, use_ssl);
+	log_debug(2, "ws_client_get addr='%s' port=%d ssl=%d", i.address, i.port, use_ssl);
 
 	wsi = lws_client_connect_via_info(&i);
-	log_debug(3, "ws_client => wsi=%p", wsi);
+	log_debug(3, "ws_client_get => wsi=%p", wsi);
 
 	return (wsi != NULL) ? 0:-1;
 }

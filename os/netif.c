@@ -15,14 +15,20 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <ifaddrs.h>
+#include <arpa/inet.h>
 
 #include "log.h"
 #include "sys.h"
+#include "buf.h"
 #include "tab.h"
 #include "iputils.h"
 #include "netif_watch.h"
 #include "netif.h"
 
+
+/*
+ * Get HW addr from interface name
+ */
 
 #define HWADDR_SIZE 6
 
@@ -69,6 +75,10 @@ char *netif_get_hwaddr(char *if_name)
 }
 
 
+/*
+ * Scan all network interfaces
+ */
+
 int netif_foreach_interface(void *user_data, int (*func)(void *user_data, struct ifaddrs *current))
 {
 	struct ifaddrs* ifap = NULL;
@@ -113,17 +123,13 @@ DONE:
 typedef struct {
 	char name[16];
 	char hwaddr[24];
-	char addr[32];
-	char bcast[32];
+	char addr[INET6_ADDRSTRLEN];
+	char bcast[INET6_ADDRSTRLEN];
 } netif_iface_t;
 
 
 static int netif_get_interface(hk_tab_t *tab, struct ifaddrs* current)
 {
-	struct sockaddr_in *addr = (struct sockaddr_in *) current->ifa_addr;
-	unsigned long addr_ = ntohl(addr->sin_addr.s_addr);
-	struct sockaddr_in *bcast = (struct sockaddr_in *) current->ifa_broadaddr;
-	unsigned long bcast_ = ntohl(bcast->sin_addr.s_addr);
 	netif_iface_t *iface;
 	char *hwaddr;
 
@@ -132,10 +138,9 @@ static int netif_get_interface(hk_tab_t *tab, struct ifaddrs* current)
 	iface = hk_tab_push(tab);
 	strncpy(iface->name, current->ifa_name, sizeof(iface->name)-1);
 	strncpy(iface->hwaddr, hwaddr, sizeof(iface->hwaddr)-1);
-	snprintf(iface->addr, sizeof(iface->addr), "%lu.%lu.%lu.%lu",
-		 (addr_ >> 24) & 0xFF, (addr_ >> 16) & 0xFF, (addr_ >> 8) & 0xFF, addr_ & 0xFF);
-	snprintf(iface->bcast, sizeof(iface->bcast), "%lu.%lu.%lu.%lu",
-		 (bcast_ >> 24) & 0xFF, (bcast_ >> 16) & 0xFF, (bcast_ >> 8) & 0xFF, bcast_ & 0xFF);
+
+	ip_addr(current->ifa_addr, iface->addr, sizeof(iface->addr));
+	ip_addr(current->ifa_broadaddr, iface->bcast, sizeof(iface->bcast));
 
 	if (hwaddr != NULL) {
 		free(hwaddr);
@@ -219,4 +224,82 @@ int netif_init(netif_env_t *ifs, netif_watch_callback_t change_callback, void *u
 	netif_watch_init(&ifs->watch, (netif_watch_callback_t) netif_check_interfaces, ifs);
 
 	return 0;
+}
+
+
+/*
+ * Get HW addr from connected socket
+ */
+
+typedef struct {
+	struct sockaddr sa;
+	char *str;
+} netif_socket_signature_ctx_t;
+
+
+static int netif_socket_signature_scan(netif_socket_signature_ctx_t *ctx, struct ifaddrs* current)
+{
+	// Ignore if IP address does not match
+	if (current->ifa_addr->sa_family != ctx->sa.sa_family) {
+		return 0;
+	}
+
+	switch(ctx->sa.sa_family) {
+	case AF_INET:
+	        {
+			struct sockaddr_in *addr1 = (struct sockaddr_in *) &ctx->sa;
+			struct sockaddr_in *addr2 = (struct sockaddr_in *) current->ifa_addr;
+
+			if (memcmp(&addr1->sin_addr, &addr2->sin_addr, sizeof(struct in_addr))) {
+				return 0;
+			}
+		}
+		break;
+
+        case AF_INET6:
+	        {
+			struct sockaddr_in6 *addr1 = (struct sockaddr_in6 *) &ctx->sa;
+			struct sockaddr_in6 *addr2 = (struct sockaddr_in6 *) current->ifa_addr;
+
+			if (memcmp(&addr1->sin6_addr, &addr2->sin6_addr, sizeof(struct in6_addr))) {
+				return 0;
+			}
+		}
+		break;
+
+		
+        default:
+		return 0;
+	}
+
+	if (ctx->str == NULL) {
+		ctx->str = netif_get_hwaddr(current->ifa_name);
+	}
+
+	return -1;
+}
+
+
+char *netif_socket_signature(int sock)
+{
+	netif_socket_signature_ctx_t ctx;
+	socklen_t addr_len = sizeof(ctx.sa);
+
+	memset(&ctx, 0, sizeof(ctx));
+
+	// Append hardware address
+	if (getsockname(sock, &ctx.sa, &addr_len) < 0) {
+		log_str("getsockname: %s", strerror(errno));
+		return NULL;
+	}
+
+	netif_foreach_interface(&ctx, (netif_func_t) netif_socket_signature_scan);
+
+	// Append IP address
+	int len = strlen(ctx.str);
+	ctx.str = realloc(ctx.str, len+INET6_ADDRSTRLEN+2);
+	ctx.str[len++] = ' ';
+	ip_addr(&ctx.sa, ctx.str+len, INET6_ADDRSTRLEN);
+
+	return ctx.str;
 }
