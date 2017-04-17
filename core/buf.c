@@ -109,7 +109,7 @@ int buf_append_fmt(buf_t *buf, char *fmt, ...)
 int buf_append_zero(buf_t *buf, int len)
 {
 	int ret = buf_grow(buf, len);
-	buf->len = len;
+	buf->len += len;
 	return ret;
 }
 
