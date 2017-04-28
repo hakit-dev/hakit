@@ -26,6 +26,8 @@ ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 include defs.mk
 
+SUBDIRS := classes ui
+
 OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c netif_watch.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c mod_init.c \
 	usb_io.c usb_device.c
@@ -34,7 +36,10 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c comm.c mod.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS) classes ui
+all:: $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS)
+	for dir in $(SUBDIRS); do \
+	  make -C "$$dir" TARGET=$(TARGET) ;\
+	done
 
 ifneq ($(WITHOUT_SSL),yes)
 ifndef TARGET
@@ -62,24 +67,10 @@ lws:
 	make -C lws TARGET=$(TARGET)
 
 #
-# HAKit standard classes
-#
-.PHONY: classes
-classes:
-	make -C classes TARGET=$(TARGET)
-
-LDFLAGS += -rdynamic -ldl
-
-#
-# User interface resources
-#
-.PHONY: ui
-ui:
-	make -C ui
-
-#
 # HAKit libs and bins
 #
+LDFLAGS += -rdynamic -ldl
+
 $(ARCH_LIB): $(OBJS)
 
 $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIBS)
@@ -89,9 +80,10 @@ $(OUTDIR)/hakit-launcher: $(OUTDIR)/hakit-launcher.o $(ARCH_LIBS)
 $(OUTDIR)/hakit: $(OUTDIR)/hakit.o $(OBJS)
 
 clean::
-	make -C classes clean
+	for dir in $(SUBDIRS); do \
+	  make -C "$$dir" clean ;\
+	done
 	make -C lws clean
-	make -C ui clean
 	$(RM) os/*~ core/*~
 
 
