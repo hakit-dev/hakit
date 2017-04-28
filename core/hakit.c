@@ -33,16 +33,18 @@
 // Command line arguments
 //===================================================
 
-const char *options_summary = "HAKit " HAKIT_VERSION " (" ARCH ")";
+const char *options_summary = "HAKit engine " HAKIT_VERSION " (" ARCH ")";
+
 static int opt_monitor = 0;
 static char *opt_class_path = NULL;
 static char *opt_hosts = NULL;
 static int opt_no_hkcp = 0;
 static int opt_no_ssl = 0;
 static int opt_insecure_ssl = 0;
+static char *opt_api_key = NULL;
 static char *opt_auth = NULL;
 
-const options_entry_t options_entries[] = {
+static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
 	{ "daemon",  'D', 0, OPTIONS_TYPE_NONE,   &opt_daemon,  "Run in background as a daemon" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
@@ -52,8 +54,9 @@ const options_entry_t options_entries[] = {
 #ifdef WITH_SSL
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
 	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure SSL client connections (self-signed certificates)" },
+	{ "api-key", 'K', 0,   OPTIONS_TYPE_STRING,   &opt_api_key,  "API key for accessing hakit.net web platform" },
 #endif
-	{ "auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
+	{ "http-auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
 	{ NULL }
 };
 
@@ -107,7 +110,7 @@ int main(int argc, char *argv[])
 	char *app;
 	int use_ssl = 1;  // 0 = disable SSL, 2 = allow insecure SSL
 
-	if (options_parse(&argc, argv) != 0) {
+	if (options_parse(options_entries, &argc, argv) != 0) {
 		exit(1);
 	}
 

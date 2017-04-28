@@ -22,7 +22,7 @@
 
 const char *options_summary = "HAKit USB test";
 
-const options_entry_t options_entries[] = {
+static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0, OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
 	{ NULL }
 };
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
 
 	log_init(NAME);
 
-	if (options_parse(&argc, argv, NULL) != 0) {
+	if (options_parse(options_entries, &argc, argv) != 0) {
 		exit(1);
 	}
 
