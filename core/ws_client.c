@@ -8,15 +8,12 @@
  */
 
 #include <libwebsockets.h>
-#include <sys/utsname.h>
 
 #include "log.h"
 #include "buf.h"
 #include "netif.h"
 #include "ws_utils.h"
 #include "ws_client.h"
-
-#include "hakit_version.h"
 
 
 #define MAX_BUF_LEN (256*1024)
@@ -82,18 +79,11 @@ static int ws_http_client_append_header(struct lws *wsi, struct per_session_data
 	char *str;
 	int len;
 	char buf[128];
-	struct utsname u;
 	int ofs = 0;
-
-	// Get system information
-	if (uname(&u) < 0) {
-		log_str("ERROR: Cannot get system identification");
-		return -1;
-	}
 
 	// Network addresses
 	str = netif_socket_signature(lws_get_socket_fd(wsi));
-	len = snprintf(buf, sizeof(buf), "Api-Device: %s %s %s\r\n", str, u.nodename, u.machine);
+	len = snprintf(buf, sizeof(buf), "HAKit-Device: %s\r\n", str);
 	free(str);
 
 	if (hlen > len) {
@@ -103,31 +93,6 @@ static int ws_http_client_append_header(struct lws *wsi, struct per_session_data
 	}
 	else {
 		log_str("ERROR: HTTP client header (device) too long (%d/%d)", len, hlen);
-		return -1;
-	}
-
-	// OS version
-	len = snprintf(buf, sizeof(buf), "Api-OS: %s %s %s\r\n",
-		       u.sysname, u.release, u.version);
-	if (hlen > len) {
-		memcpy(*hbuf+ofs, buf, len+1);
-		ofs += len;
-		hlen -= len;
-	}
-	else {
-		log_str("ERROR: HTTP client header (os) too long (%d/%d)", len, hlen);
-		return -1;
-	}
-
-	// HAKit version
-	len = snprintf(buf, sizeof(buf), "Api-Version: %s\r\n", HAKIT_VERSION);
-	if (hlen > len) {
-		memcpy(*hbuf+ofs, buf, len+1);
-		ofs += len;
-		hlen -= len;
-	}
-	else {
-		log_str("ERROR: HTTP client header (version) too long (%d/%d)", len, hlen);
 		return -1;
 	}
 
