@@ -44,6 +44,7 @@ typedef struct {
 	sys_tag_t timeout_tag;
 	hkcp_t *hkcp;
 	command_t *cmd;
+	int watch;
 } hkcp_node_t;
 
 
