@@ -1277,6 +1277,49 @@ static void hkcp_command_status(hkcp_t *hkcp, buf_t *out_buf)
 }
 
 
+static void hkcp_command_watch(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf, hkcp_command_ctx_t *ctx)
+{
+	int show = 1;
+	int err = 0;
+
+	if (argc > 1) {
+		if (argc == 2) {
+			if ((strcmp(argv[1], "0") == 0) || (strcmp(argv[1], "off") == 0)) {
+				ctx->watch = 0;
+				show = 0;
+			}
+			else if ((strcmp(argv[1], "1") == 0) || (strcmp(argv[1], "on") == 0)) {
+				ctx->watch = 1;
+			}
+			else {
+				err = 1;
+			}
+		}
+		else {
+			err = 1;
+		}
+	}
+
+	if (err) {
+		buf_append_str(out_buf, "ERROR: watch: Syntax error");
+	}
+	else if (show) {
+		int i;
+
+		for (i = 0; i < hkcp->sources.nmemb; i++) {
+			hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
+			if (source->ep.name != NULL) {
+				buf_append_str(out_buf, "!");
+				buf_append_str(out_buf, source->ep.name);
+				buf_append_str(out_buf, "=");
+				buf_append(out_buf, source->ep.value.base, source->ep.value.len);
+				buf_append_str(out_buf, "\n");
+			}
+		}
+	}
+}
+
+
 void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 {
 	int i;
@@ -1323,31 +1366,7 @@ static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tc
 
 		if (strcmp(argv[0], "watch") == 0) {
 			hkcp_command_ctx_t *ctx = tcp_sock_get_data(tcp_sock);
-			int err = 0;
-
-			if (argc > 1) {
-				if (argc == 2) {
-					if ((strcmp(argv[1], "0") == 0) || (strcmp(argv[1], "off") == 0)) {
-						ctx->watch = 0;
-					}
-					else if ((strcmp(argv[1], "1") == 0) || (strcmp(argv[1], "on") == 0)) {
-						ctx->watch = 1;
-					}
-					else {
-						err = 1;
-					}
-				}
-				else {
-					err = 1;
-				}
-			}
-
-			if (err) {
-				buf_append_str(&out_buf, "ERROR: watch: Syntax error");
-			}
-			else {
-				buf_append_str(&out_buf, ctx->watch ? "on\n":"off\n");
-			}
+			hkcp_command_watch(hkcp, argc, argv, &out_buf, ctx);
 		}
 		else {
 			hkcp_command(hkcp, argc, argv, &out_buf);
