@@ -14,8 +14,7 @@
 extern "C" {
 #endif
 
-#define OPTIONS_DEFAULT_CONF_DIR "/etc/hakit/"
-#define OPTIONS_DEFAULT_CONF OPTIONS_DEFAULT_CONF_DIR "config"
+#define OPTIONS_DEFAULT_CONF_DIR "/etc/hakit"
 
 typedef enum {
 	OPTIONS_TYPE_NONE=0,

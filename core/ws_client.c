@@ -126,7 +126,7 @@ static int ws_client_callback(struct lws *wsi,
 	struct per_session_data__client *pss = (struct per_session_data__client *) user;
 	int ret = 0;
 
-	//log_debug(3, "ws_client_callback reason=%d pss=%p", reason, pss);
+	//log_debug(3, "ws_client_callback wsi=%p reason=%d pss=%p", wsi, reason, pss);
 
 	switch (reason) {
 	case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
@@ -299,8 +299,10 @@ int ws_client_get(ws_client_t *client, char *uri, char *headers, ws_client_func_
 {
 	struct lws_client_connect_info i;
 	struct per_session_data__client *pss;
-	const char *prot, *p;
-	char path[1024];
+	char buf[1024];
+	const char *prot = NULL;
+	const char *p = NULL;
+	char *path;
 	int use_ssl = 0;
 	struct lws *wsi;
 	int ret;
@@ -310,11 +312,25 @@ int ws_client_get(ws_client_t *client, char *uri, char *headers, ws_client_func_
 	memset(&i, 0, sizeof(i));
 	i.port = 80;
 
-	strncpy(path, uri, sizeof(path)-1);
-	path[sizeof(path)-1] = '\0';
-	ret = lws_parse_uri(path, &prot, &i.address, &i.port, &p);
+	strncpy(buf, uri, sizeof(buf)-1);
+	buf[sizeof(buf)-1] = '\0';
+	ret = lws_parse_uri(buf, &prot, &i.address, &i.port, &p);
 	if (ret) {
 		return -1;
+	}
+
+	if (p != NULL) {
+		if (*p == '/') {
+			path = strdup(p);
+		}
+		else {
+			int size = strlen(p) + 2;
+			path = malloc(size);
+			snprintf(path, size, "/%s", p);
+		}
+	}
+	else {
+		path = strdup("/");
 	}
 
 #ifdef WITH_SSL
@@ -335,7 +351,6 @@ int ws_client_get(ws_client_t *client, char *uri, char *headers, ws_client_func_
 	pss->func = func;
 	pss->user_data = user_data;
 
-	snprintf(path, sizeof(path), "/%s", p);
 	i.context = client->context;
 	i.ssl_connection = use_ssl;
 	i.path = path;
@@ -347,10 +362,15 @@ int ws_client_get(ws_client_t *client, char *uri, char *headers, ws_client_func_
 	i.client_exts = exts;
 	i.method = "GET";
 
-	log_debug(2, "ws_client_get addr='%s' port=%d ssl=%d", i.address, i.port, use_ssl);
+	log_debug(2, "ws_client_get ssl=%d port=%d addr='%s' path='%s'", use_ssl, i.port, i.address, i.path);
 
 	wsi = lws_client_connect_via_info(&i);
 	log_debug(3, "ws_client_get => wsi=%p", wsi);
+
+	if (path != NULL) {
+		free(path);
+		path = NULL;
+	}
 
 	return (wsi != NULL) ? 0:-1;
 }
