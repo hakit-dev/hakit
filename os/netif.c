@@ -295,6 +295,10 @@ char *netif_socket_signature(int sock)
 
 	netif_foreach_interface(&ctx, (netif_func_t) netif_socket_signature_scan);
 
+	if (ctx.str == NULL) {
+		ctx.str = strdup("00:00:00:00:00:00");
+	}
+
 	// Append IP address
 	int len = strlen(ctx.str);
 	ctx.str = realloc(ctx.str, len+INET6_ADDRSTRLEN+2);
