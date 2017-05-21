@@ -69,8 +69,8 @@ static char *platform_http_header(void)
 		if (uname(&u) == 0) {
 			size += strlen(u.sysname) + strlen(u.nodename) + strlen(u.release) + strlen(u.version) + strlen(u.machine) + 36;
 			header = realloc(header, size);
-			len += snprintf(header+len, size-len, "HAKit-OS: %s %s %s\r\n", u.sysname, u.release, u.version);
-			len += snprintf(header+len, size-len, "HAKit-Machine: %s %s\r\n", u.nodename, u.machine);
+			len += snprintf(header+len, size-len, "HAKit-OS: %s %s %s %s\r\n", u.sysname, u.release, u.version, u.machine);
+			len += snprintf(header+len, size-len, "HAKit-Hostname: %s\r\n", u.nodename);
 		}
 		else {
 			log_str("WARNING: Cannot retrieve system identification: %s", strerror(errno));
@@ -87,6 +87,7 @@ static char *platform_http_header(void)
 	return header;
 }
 
+
 //===================================================
 // Device id
 //==================================================
@@ -102,7 +103,7 @@ static void device_advertise_response(void *user_data, char *buf, int len)
 
 static void device_advertise_request(void)
 {
-	ws_client_get(&ws_client, PLATFORM_URL, platform_http_header(), device_advertise_response, NULL);
+	ws_client_get(&ws_client, PLATFORM_URL "hello.php", platform_http_header(), device_advertise_response, NULL);
 }
 
 	
