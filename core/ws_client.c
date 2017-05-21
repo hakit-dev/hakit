@@ -9,6 +9,7 @@
 
 #include <libwebsockets.h>
 
+#include "options.h"
 #include "log.h"
 #include "buf.h"
 #include "netif.h"
@@ -245,6 +246,10 @@ int ws_client_init(ws_client_t *client, int use_ssl)
 {
 	struct lws_context_creation_info info;
 
+	// Setup LWS logging
+	ws_log_init(opt_debug);
+
+	// Init HTTP client context
 	memset(&info, 0, sizeof(info));
 
 	info.port = CONTEXT_PORT_NO_LISTEN;

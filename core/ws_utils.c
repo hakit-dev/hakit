@@ -49,7 +49,12 @@ static void ws_log(int level, const char *line)
 
 void ws_log_init(int debug)
 {
+	static int initialized = 0;
 	int log_level = LLL_ERR | LLL_WARN | LLL_NOTICE;
+
+	if (initialized) {
+		return;
+	}
 
 	if (debug >= 2) {
 		log_level |= LLL_INFO;
@@ -58,6 +63,8 @@ void ws_log_init(int debug)
 		log_level |= LLL_DEBUG | LLL_HEADER | LLL_EXT | LLL_CLIENT | LLL_LATENCY;
 	}
 	lws_set_log_level(log_level, ws_log);
+
+	initialized = 1;
 }
 
 
