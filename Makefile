@@ -26,7 +26,7 @@ ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
 
 include defs.mk
 
-SUBDIRS := classes ui
+SUBDIRS := classes ui launcher
 
 OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c netif_watch.c udpio.c tcpio.c uevent.c sysfs.c \
 	gpio.c serial.c proc.c mod_init.c \
