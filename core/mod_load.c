@@ -239,34 +239,65 @@ int hk_mod_load(char *fname)
 	}
 
 	buf_init(&buf);
-	buf_grow(&buf, 1);
+
+	int check_nl = 0;
 
 	while ((ret == 0) && (!feof(f))) {
-		char *str = (char *) buf.base + buf.len;
+		char str[1024];
+		int len = fread(str, 1, sizeof(str)-1, f);
+		if (len > 0) {
+			int i;
 
-		if (fgets(str, buf.size-buf.len, f) != NULL) {
-			buf.len += strlen(str);
+			// Replace all non-printable characters with spaces
+			for (i = 0; i < len; i++) {
+				if ((str[i] < ' ') && (str[i] != '\n')) {
+					str[i] = ' ';
+				}
+			}
 
-			if ((buf.len > 0) && (buf.base[buf.len-1] == '\n')) {
-				ctx.lnum++;
+			// Put NUL character at end of buffer to ease string parsing
+			str[len] = '\0';
 
-				buf.len--;
-				buf.base[buf.len] = '\0';
+			char *s1 = str;
 
-				if (buf.len > 0) {
-					if (buf.base[buf.len-1] == '\\') {
-						buf.len--;
-						buf.base[buf.len] = '\0';
+			// If previous buffer chunk ended with \n, perform line continuation check now
+			if (check_nl) {
+				check_nl = 0;
+				if (*s1 != ' ') {
+					ret = hk_mod_load_line(&ctx, (char *) buf.base);
+					buf.len = 0;
+				}
+			}
+
+			while (s1 != NULL) {
+				char *s2 = strchr(s1, '\n');
+				if (s2 != NULL) {
+					*(s2++) = '\0';
+					buf_append_str(&buf, s1);
+
+					if (*s2 == '\0') {
+						// We don't have enough characters to check whether the next lines begins with a space.
+						// So we need to deffer this processing to the next buffer chunk
+						check_nl = 1;
+						s1 = NULL;
 					}
-					else {
+					else if (*s2 != ' ') {
+						// If the next line does not begins with a space,
+						// the current line is complete and must be processed
 						ret = hk_mod_load_line(&ctx, (char *) buf.base);
 						buf.len = 0;
 					}
 				}
+				else {
+					buf_append_str(&buf, s1);
+				}
+
+				s1 = s2;
 			}
-			else {
-				buf_grow(&buf, 1);
-			}
+		}
+		else if (len < 0) {
+			log_str("ERROR: Cannot read file '%s': %s", fname, strerror(errno));
+			ret = -1;
 		}
 	}
 
