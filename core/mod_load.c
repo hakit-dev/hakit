@@ -81,25 +81,19 @@ static int hk_mod_load_object(load_ctx_t *ctx, char *name, int argc, char **argv
 }
 
 
-static int hk_mod_load_net(load_ctx_t *ctx, char *name, int argc, char **argv)
+static int hk_mod_load_net(load_ctx_t *ctx, int argc, char **argv)
 {
-	char name_str[32];
-	hk_net_t *net = NULL;
+	hk_net_t *net;
 	int i;
 
-	/* Create net name if none is provided */
-	if (strempty(name)) {
-		int inc = 0;
-		do {
-			snprintf(name_str, sizeof(name_str), "$net%d", ctx->lnum+inc);
-			name = name_str;
-			inc++;
-		} while (hk_net_find(name));
-	}
-	else {
-		net = hk_net_find(name);
+	/* Create net */
+	net = hk_net_create();
+	if (net == NULL) {
+		log_str("PANIC: %s:%d: Failed to create new net", ctx->fname, ctx->lnum);
+		return -1;
 	}
 
+	/* Attach pads to this net */
 	for (i = 0; i < argc; i++) {
 		char *args = argv[i];
 		char *pt = strchr(args, '.');
@@ -116,22 +110,14 @@ static int hk_mod_load_net(load_ctx_t *ctx, char *name, int argc, char **argv)
 		*pt = '.';
 
 		if (obj == NULL) {
-			log_str("ERROR: %s:%d: Referencing undefined object in '%s'", ctx->fname, ctx->lnum, args);
+			log_str("ERROR: %s:%d: Referencing undefined object '%s'", ctx->fname, ctx->lnum, args);
 			return -1;
 		}
 
 		pad = hk_pad_find(obj, pt+1);
 		if (pad == NULL) {
-			log_str("ERROR: %s:%d: Unknown pad '%s' in object '%s'", ctx->fname, ctx->lnum, pt+1, obj->name);
+			log_str("ERROR: %s:%d: Referencing unknown pad '%s' in object '%s'", ctx->fname, ctx->lnum, pt+1, obj->name);
 			return -1;
-		}
-
-		if (net == NULL) {
-			net = hk_net_create(name);
-			if (net == NULL) {
-				log_str("PANIC: %s:%d: Failed to create net '%s'", ctx->fname, ctx->lnum, name);
-				return -1;
-			}
 		}
 
 		hk_net_connect(net, pad);
@@ -206,7 +192,7 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 		ret = hk_mod_load_object(ctx, name, argc, argv);
 		break;
 	case SECTION_NETS:
-		ret = hk_mod_load_net(ctx, name, argc, argv);
+		ret = hk_mod_load_net(ctx, argc, argv);
 		break;
 	default:
 		break;

@@ -69,12 +69,11 @@ extern char *hk_pad_get_value(char *name);
  */
 
 struct hk_net_s {
-	char *name;
+	int id;
 	hk_tab_t pads;  /**< Table of (hk_pad_t *) */
 };
 
-extern hk_net_t *hk_net_create(char *name);
-extern hk_net_t *hk_net_find(char *name);
+extern hk_net_t *hk_net_create(void);
 extern int hk_net_connect(hk_net_t *net, hk_pad_t *pad);
 
 

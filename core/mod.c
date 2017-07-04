@@ -192,40 +192,20 @@ static HK_TAB_DECLARE(nets, hk_net_t *);
 #define HK_NET_ENTRY(i) HK_TAB_VALUE(nets, hk_net_t *, i)
 
 
-hk_net_t *hk_net_find(char *name)
+hk_net_t *hk_net_create(void)
 {
-	int i;
-
-	for (i = 0; i < nets.nmemb; i++) {
-		hk_net_t *net = HK_NET_ENTRY(i);
-		if (strcmp(net->name, name) == 0) {
-			return net;
-		}
-	}
-
-	return NULL;
-}
-
-
-hk_net_t *hk_net_create(char *name)
-{
-	hk_net_t *net = hk_net_find(name);
+	hk_net_t *net;
 	hk_net_t **pnet;
-
-	if (net != NULL) {
-		log_str("ERROR: Net '%s' already exists", name);
-		return NULL;
-	}
-
-	log_debug(2, "Creating net '%s'", name);
 
 	net = (hk_net_t *) malloc(sizeof(hk_net_t));
 	memset(net, 0, sizeof(hk_net_t));
-	net->name = strdup(name);
 	hk_tab_init(&net->pads, sizeof(hk_pad_t *));
 
 	pnet = hk_tab_push(&nets);
 	*pnet = net;
+
+	net->id = nets.nmemb;
+	log_debug(2, "Creating net #%d", net->id);
 
 	return net;
 }
@@ -240,18 +220,18 @@ int hk_net_connect(hk_net_t *net, hk_pad_t *pad)
 	for (i = 0; i < net->pads.nmemb; i++) {
 		hk_pad_t *pad2 = HK_TAB_VALUE(net->pads, hk_pad_t *, i);
 		if (pad2 == pad) {
-			log_str("WARNING: pad '%s.%s' already connected to net '%s'", pad->obj->name, pad->name, net->name);
+			log_str("WARNING: pad '%s.%s' already connected to net #%d", pad->obj->name, pad->name, net->id);
 			return 0;
 		}
 	}
 
 	/* Check pad is not already connected */
 	if (pad->net != NULL) {
-		log_str("ERROR: pad '%s.%s' already connected to net '%s'", pad->obj->name, pad->name, net->name);
+		log_str("ERROR: pad '%s.%s' already connected to net #%d", pad->obj->name, pad->name, net->id);
 		return 0;
 	}
 
-	log_debug(2, "Connecting pad '%s.%s' to net '%s'", pad->obj->name, pad->name, net->name);
+	log_debug(2, "Connecting pad '%s.%s' to net #%d", pad->obj->name, pad->name, net->id);
 
 	ppad = hk_tab_push(&net->pads);
 	*ppad = pad;
