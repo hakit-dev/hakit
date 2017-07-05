@@ -1,34 +1,32 @@
-[objects]
 input1: sink local
 input2: sink local
   widget=switch-push
 input3: sink
 input: or
   ninputs=3
+  in0=$input1.out
+  in1=$input2.out
+  in2=$input3.out
 
 pulse: timer-pulse
   delay=3000
+  in=$input.out
 pulse-output: source
+  in=$pulse.out
 
 on: timer-on
   delay=1000
 on-output: source
+  in=$on.out
 
 off: timer-off
   delay=5000
+  in=$input.out
 off-output: source
+  in=$off.out
 
 meter: source local
   widget=meter:min=0,low=20,high=80,max=100
+  in=$slider.out
 slider: sink local
   widget=slider:min=0,max=100,step=10
-
-[nets]
-input1.out input.in0
-input2.out input.in1
-input3.out input.in2
-input.out pulse.in on.in off.in
-pulse.out pulse-output.in
-on.out on-output.in
-off.out off-output.in
-slider.out meter.in

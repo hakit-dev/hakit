@@ -19,8 +19,7 @@
 #include "mod_load.h"
 
 typedef enum {
-	SECTION_NONE=0,
-	SECTION_OBJECTS,
+	SECTION_OBJECTS=0,
 	SECTION_NETS,
 	SECTION_UNKNOWN,
 	NSECTIONS
@@ -213,7 +212,7 @@ int hk_mod_load(char *fname)
 	buf_t buf;
 	load_ctx_t ctx = {
 		.fname = fname,
-		.section = SECTION_NONE,
+		.section = SECTION_OBJECTS,
 	};
 
 	log_debug(2, "hk_mod_load '%s'", fname);

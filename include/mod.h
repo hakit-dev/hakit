@@ -69,7 +69,7 @@ extern char *hk_pad_get_value(char *name);
  */
 
 struct hk_net_s {
-	int id;
+	unsigned int id;
 	hk_tab_t pads;  /**< Table of (hk_pad_t *) */
 };
 

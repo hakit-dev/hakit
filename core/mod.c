@@ -194,18 +194,35 @@ static HK_TAB_DECLARE(nets, hk_net_t *);
 
 hk_net_t *hk_net_create(void)
 {
-	hk_net_t *net;
+	hk_net_t *net = NULL;
 	hk_net_t **pnet;
+	int i;
 
-	net = (hk_net_t *) malloc(sizeof(hk_net_t));
-	memset(net, 0, sizeof(hk_net_t));
-	hk_tab_init(&net->pads, sizeof(hk_pad_t *));
+	// Try to recycle a freed net entry
+	for (i = 0; i < nets.nmemb; i++) {
+		net = HK_NET_ENTRY(i);
+		if (net->id != 0) {
+			net = NULL;
+		}
+		else {
+			net->id = i+1;
+			break;
+		}
+	}
+
+	if (net == NULL) {
+		net = (hk_net_t *) malloc(sizeof(hk_net_t));
+		memset(net, 0, sizeof(hk_net_t));
+		net->id = nets.nmemb+1;
+		hk_tab_init(&net->pads, sizeof(hk_pad_t *));
+		log_debug(2, "hk_net_create: new net #%d", net->id);
+	}
+	else {
+		log_debug(2, "hk_net_create: recycled net #%d", net->id);
+	}
 
 	pnet = hk_tab_push(&nets);
 	*pnet = net;
-
-	net->id = nets.nmemb;
-	log_debug(2, "Creating net #%d", net->id);
 
 	return net;
 }
@@ -214,16 +231,8 @@ hk_net_t *hk_net_create(void)
 int hk_net_connect(hk_net_t *net, hk_pad_t *pad)
 {
 	hk_pad_t **ppad;
-	int i;
 
-	/* Ensure pad is not bound to this net */
-	for (i = 0; i < net->pads.nmemb; i++) {
-		hk_pad_t *pad2 = HK_TAB_VALUE(net->pads, hk_pad_t *, i);
-		if (pad2 == pad) {
-			log_str("WARNING: pad '%s.%s' already connected to net #%d", pad->obj->name, pad->name, net->id);
-			return 0;
-		}
-	}
+	log_debug(2, "hk_net_connect net=#%d pad=%s.%s", net->id, pad->obj->name, pad->name);
 
 	/* Check pad is not already connected */
 	if (pad->net != NULL) {
@@ -231,13 +240,32 @@ int hk_net_connect(hk_net_t *net, hk_pad_t *pad)
 		return 0;
 	}
 
-	log_debug(2, "Connecting pad '%s.%s' to net #%d", pad->obj->name, pad->name, net->id);
-
 	ppad = hk_tab_push(&net->pads);
 	*ppad = pad;
 	pad->net = net;
 
 	return 1;
+}
+
+
+static void hk_net_merge(hk_net_t *net1, hk_net_t *net2)
+{
+	int i;
+
+	log_debug(2, "hk_net_merge net1=#%d net2=#%d", net1->id, net2->id);
+
+	if (net1 == net2) {
+		return;
+	}
+
+	for (i = 0; i < net2->pads.nmemb; i++) {
+		hk_pad_t *pad2 = HK_TAB_VALUE(net2->pads, hk_pad_t *, i);
+		pad2->net = NULL;
+		hk_net_connect(net1, pad2);
+	}
+
+	net2->id = 0;
+	hk_tab_cleanup(&net2->pads);
 }
 
 
@@ -271,13 +299,13 @@ hk_obj_t *hk_obj_create(hk_class_t *class, char *name, int argc, char **argv)
 	hk_obj_t **pobj;
 	int i;
 
+	log_debug(2, "hk_obj_create class='%s' name='%s'", class->name, name);
+
 	obj = hk_obj_find(name);
 	if (obj != NULL) {
 		log_str("ERROR: Object '%s' already exists", name);
 		return NULL;
 	}
-
-	log_debug(2, "Creating object '%s' from class '%s'", name, class->name);
 
 	obj = (hk_obj_t *) malloc(sizeof(hk_obj_t));
 	obj->name = strdup(name);
@@ -310,19 +338,86 @@ hk_obj_t *hk_obj_create(hk_class_t *class, char *name, int argc, char **argv)
 }
 
 
-static int hk_obj_preset(hk_obj_t *obj, char *name, char *value)
+static int hk_obj_net(hk_pad_t *pad1, char *ref)
+{
+	char *pt;
+	hk_obj_t *obj2;
+	hk_pad_t *pad2;
+	int ret = 0;
+
+	log_debug(2, "hk_obj_net %s.%s=%s", pad1->obj->name, pad1->name, ref);
+
+	// Parse target pad
+	pt = strchr(ref, '.');
+	if (pt == NULL) {
+		log_str("ERROR: %s.%s: Syntax error in target pad specification '%s'", pad1->obj->name, pad1->name, ref);
+		return 0;
+	}
+
+	*pt = '\0';
+
+	obj2 = hk_obj_find(ref);
+	if (obj2 == NULL) {
+		log_str("ERROR: %s:%s: Referencing undefined object '%s'", pad1->obj->name, pad1->name, ref);
+		goto done;
+	}
+
+	pad2 = hk_pad_find(obj2, pt+1);
+	if (pad2 == NULL) {
+		log_str("ERROR: %s:%s: Referencing unknown pad '%s' in object '%s'", pad1->obj->name, pad1->name, pt+1, obj2->name);
+		goto done;
+	}
+
+	if (pad1->net != NULL) {
+		if (pad2->net != NULL) {
+			hk_net_merge(pad1->net, pad2->net);
+		}
+		else {
+			hk_net_connect(pad1->net, pad2);
+		}
+	}
+	else {
+		if (pad2->net != NULL) {
+			hk_net_connect(pad2->net, pad1);
+		}
+		else {
+			hk_net_t *net = hk_net_create();
+			hk_net_connect(net, pad1);
+			hk_net_connect(net, pad2);
+		}
+	}
+
+	ret = 1;
+done:
+	*pt = '.';
+	return ret;
+}
+
+
+static void hk_obj_preset(hk_pad_t *pad, char *value)
+{
+	log_debug(2, "hk_obj_preset %s.%s='%s'", pad->obj->name, pad->name, value);
+
+	if (pad->dir == HK_PAD_OUT) {
+		hk_pad_update_str(pad, value);
+	}
+	else {
+		buf_set_str(&pad->value, value);
+		hk_pad_update_input(pad, value);
+	}
+}
+
+
+static int hk_obj_setup(hk_obj_t *obj, char *name, char *value)
 {
 	hk_pad_t *pad = hk_pad_find(obj, name);
 
 	if ((pad != NULL) && (value != NULL)) {
-		log_debug(2, "hk_obj_preset %s.%s='%s'", obj->name, name, value);
-
-		if (pad->dir == HK_PAD_OUT) {
-			hk_pad_update_str(pad, value);
+		if (*value == '$') {
+			hk_obj_net(pad, value+1);
 		}
 		else {
-			buf_set_str(&pad->value, value);
-			hk_pad_update_input(pad, value);
+			hk_obj_preset(pad, value);
 		}
 	}
 
@@ -334,13 +429,16 @@ void hk_obj_start_all(void)
 {
 	int i;
 
+	/* Create nets and presets */
+	for (i = 0; i < objs.nmemb; i++) {
+		hk_obj_t *obj = HK_OBJ_ENTRY(i);
+		hk_prop_foreach(&obj->props, (hk_prop_foreach_func) hk_obj_setup, (void *) obj);
+	}
+
+	/* Invoke start handlers */
 	for (i = 0; i < objs.nmemb; i++) {
 		hk_obj_t *obj = HK_OBJ_ENTRY(i);
 
-		/* Configure input/output presets */
-		hk_prop_foreach(&obj->props, (hk_prop_foreach_func) hk_obj_preset, (void *) obj);
-
-		/* Invoke start handler */
 		if (obj->class->start != NULL) {
 			log_debug(2, "Starting object '%s'", obj->name);
 			obj->class->start(obj);
@@ -351,7 +449,7 @@ void hk_obj_start_all(void)
 
 void hk_obj_prop_set(hk_obj_t *obj, char *name, char *value)
 {
-	log_debug(2, "Setting property for object '%s': %s='%s'", obj->name, name, value);
+	log_debug(2, "hk_obj_prop_set obj='%s': %s='%s'", obj->name, name, value);
 	hk_prop_set(&obj->props, name, value);
 }
 
