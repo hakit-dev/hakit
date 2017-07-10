@@ -2,7 +2,7 @@
 ARCH ?= $(shell arch)
 DISTRO ?= debian
 
-OUTDIR = out/$(ARCH)
+OUTDIR = ../out/$(ARCH)
 
 BINS = hakit-launcher
 ARCH_BINS = $(BINS:%=$(OUTDIR)/%)

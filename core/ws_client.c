@@ -19,9 +19,16 @@
 
 #define MAX_BUF_LEN (256*1024)
 
+typedef enum {
+        PSS_STATE_IDLE=0,
+        PSS_STATE_ESTABLISHED,
+        PSS_STATE_COMPLETED,
+        PSS_STATE_DONE,
+} pss_state_t;
+
 struct per_session_data__client {
 	buf_t headers;
-	int completed;
+	pss_state_t state;
 	buf_t buf;
 	ws_client_func_t *func;
 	void *user_data;
@@ -43,27 +50,31 @@ static int ws_http_client_read(struct lws *wsi, struct per_session_data__client 
 	 * the output.
 	 */
 	ret = lws_http_client_read(wsi, &px, &lenx);
+        log_debug(3, "ws_http_client_read (%d) => %d", pss->state, ret);
 	if (ret < 0) {
-		log_debug(2, "ws_http_client_read => CLOSED", ret);
 		ret = 1;
 	}
 	else {
-		log_debug(3, "ws_http_client_read: partial len=%d", lenx);
-		//log_debug_data((unsigned char *) px, lenx);
+                if (lenx > 0) {
+                        log_debug(3, "  lenx=%d", lenx);
+                        //log_debug_data((unsigned char *) px, lenx);
 
-		if ((pss->buf.len+lenx) < MAX_BUF_LEN) {
-			buf_append(&pss->buf, (unsigned char *) px, lenx);
-		}
+                        if ((pss->buf.len+lenx) < MAX_BUF_LEN) {
+                                buf_append(&pss->buf, (unsigned char *) px, lenx);
+                        }
+                }
 
-		if (pss->completed) {
+		if (pss->state == PSS_STATE_COMPLETED) {
 			log_debug(2, "ws_http_client_read: completed len=%d", pss->buf.len);
-			log_debug_data(pss->buf.base, pss->buf.len);
+                        log_debug_data(pss->buf.base, pss->buf.len);
 
-			// Callback received data
-			if (pss->func != NULL) {
-				pss->func(pss->user_data, (char *) pss->buf.base, pss->buf.len);
-			}
+                        pss->state = PSS_STATE_DONE;
 
+                        // Callback received data
+                        if (pss->func != NULL) {
+                                pss->func(pss->user_data, (char *) pss->buf.base, pss->buf.len);
+                        }
+ 
 			buf_cleanup(&pss->buf);
 		}
 
@@ -139,7 +150,8 @@ static int ws_client_callback(struct lws *wsi,
 		ret = 1;
 		break;
 	case LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH:
-		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH");
+		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_FILTER_PRE_ESTABLISH %d", len);
+                // Check for header
 		break;
 	case LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_APPEND_HANDSHAKE_HEADER: len=%d", len);
@@ -150,7 +162,7 @@ static int ws_client_callback(struct lws *wsi,
 		break;
 	case LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP");
-		pss->completed = 0;
+                pss->state = PSS_STATE_ESTABLISHED;
 		break;
 	case LWS_CALLBACK_CLOSED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_CLOSED_CLIENT_HTTP");
@@ -161,7 +173,7 @@ static int ws_client_callback(struct lws *wsi,
 		break;
 	case LWS_CALLBACK_COMPLETED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_COMPLETED_CLIENT_HTTP");
-		pss->completed = 1;
+                pss->state = PSS_STATE_COMPLETED;
 		break;
 	case LWS_CALLBACK_RECEIVE_CLIENT_HTTP_READ:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_RECEIVE_CLIENT_HTTP_READ");
