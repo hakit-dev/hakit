@@ -45,6 +45,10 @@ extern hk_proc_t *hk_proc_start(char *argv[], char *cwd,
 				hk_proc_term_func_t cb_term,
 				void *user_data);
 
+extern hk_proc_t *hk_proc_start_nopipe(char *argv[], char *cwd,
+                                       hk_proc_term_func_t cb_term,
+                                       void *user_data);
+
 extern void hk_proc_stop(hk_proc_t * proc);
 
 extern int hk_proc_write(hk_proc_t * proc, char *buf, int size);

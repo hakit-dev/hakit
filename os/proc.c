@@ -56,6 +56,8 @@ static hk_proc_t *hk_proc_add(void)
 	}
 
 	memset(proc, 0, sizeof(hk_proc_t));
+        proc->stdin_fd = -1;
+
 	return proc;
 }
 
@@ -93,7 +95,7 @@ static void hk_proc_term(hk_proc_t *proc)
 
 	if (proc->stdin_fd > 0) {
 		close(proc->stdin_fd);
-		proc->stdin_fd = 0;
+		proc->stdin_fd = -1;
 	}
 }
 
@@ -183,44 +185,24 @@ static int hk_proc_sigchld(hk_proc_t *proc, pid_t pid, int status)
 }
 
 
-hk_proc_t *hk_proc_start(char *argv[], char *cwd,
-			 hk_proc_out_func_t cb_stdout,
-			 hk_proc_out_func_t cb_stderr,
-			 hk_proc_term_func_t cb_term,
-			 void *user_data)
+typedef struct {
+	int in[2];
+	int out[2];
+	int err[2];
+} hk_proc_start_pipes_t;
+
+
+static hk_proc_t *hk_proc_start_(char *argv[], char *cwd,
+                                 hk_proc_start_pipes_t *p,
+                                 hk_proc_out_func_t cb_stdout,
+                                 hk_proc_out_func_t cb_stderr,
+                                 hk_proc_term_func_t cb_term,
+                                 void *user_data)
 {
 	hk_proc_t *proc = NULL;
-	int p_in[2] = {-1,-1};
-	int p_out[2] = {-1,-1};
-	int p_err[2] = {-1,-1};
 	pid_t pid;
 
 	log_debug(2, "hk_proc_start %s ...", argv[0]);
-	log_debug(2, "hk_proc_start chdir = %s", cwd);
-
-	/* Create standard input pipe */
-	if (pipe(p_in) == -1) {
-		log_str("ERROR: Cannot create proc stdin pipe: %s", strerror(errno));
-		return NULL;
-	}
-
-	/* Create standard output pipe */
-	if ( pipe(p_out) == -1 ) {
-		log_str("ERROR: Cannot create proc stdout pipe: %s", strerror(errno));
-		close(p_in[0]);
-		close(p_in[1]);
-		return NULL;
-	}
-
-	/* Create standard error pipe */
-	if ( pipe(p_err) == -1 ) {
-		log_str("ERROR: Cannot create proc stderr pipe: %s", strerror(errno));
-		close(p_in[0]);
-		close(p_in[1]);
-		close(p_out[0]);
-		close(p_out[1]);
-		return NULL;
-	}
 
 	pid = fork();
 	switch (pid) {
@@ -241,29 +223,31 @@ hk_proc_t *hk_proc_start(char *argv[], char *cwd,
 			exit(254);
 		}
 
-		/* Redirect stdin to input pipe */
-		if (dup2(p_in[0], STDIN_FILENO) == -1) {
-			log_str("ERROR: Cannot dup2 proc stdin: %s", strerror(errno));
-			exit(254);
-		}
-		close(p_in[0]);
-		close(p_in[1]);
+                if (p != NULL) {
+                        /* Redirect stdin to input pipe */
+                        if (dup2(p->in[0], STDIN_FILENO) == -1) {
+                                log_str("ERROR: Cannot dup2 proc stdin: %s", strerror(errno));
+                                exit(254);
+                        }
+                        close(p->in[0]);
+                        close(p->in[1]);
 
-		/* Redirect stdout to output pipe */
-		if (dup2(p_out[1], STDOUT_FILENO) == -1) {
-			log_str("ERROR: Cannot dup2 proc stdout: %s", strerror(errno));
-			exit(254);
-		}
-		close(p_out[0]);
-		close(p_out[1]);
+                        /* Redirect stdout to output pipe */
+                        if (dup2(p->out[1], STDOUT_FILENO) == -1) {
+                                log_str("ERROR: Cannot dup2 proc stdout: %s", strerror(errno));
+                                exit(254);
+                        }
+                        close(p->out[0]);
+                        close(p->out[1]);
 
-		/* Redirect stderr to error pipe */
-		if (dup2(p_err[1], STDERR_FILENO) == -1) {
-			log_str("ERROR: Cannot dup2 proc stderr: %s", strerror(errno));
-			exit(254);
-		}
-		close(p_err[0]);
-		close(p_err[1]);
+                        /* Redirect stderr to error pipe */
+                        if (dup2(p->err[1], STDERR_FILENO) == -1) {
+                                log_str("ERROR: Cannot dup2 proc stderr: %s", strerror(errno));
+                                exit(254);
+                        }
+                        close(p->err[0]);
+                        close(p->err[1]);
+                }
 
 		/* Perform exec (returnless call if success) */
 		execvp(argv[0], argv);
@@ -275,12 +259,6 @@ hk_proc_t *hk_proc_start(char *argv[], char *cwd,
 
 	case -1: /* Error */
 		log_str("PANIC: Cannot fork process: %s", strerror(errno));
-		close(p_in[0]);
-		close(p_in[1]);
-		close(p_out[0]);
-		close(p_out[1]);
-		close(p_err[0]);
-		close(p_err[1]);
 		break;
 
 	default : /* Parent */
@@ -288,22 +266,9 @@ hk_proc_t *hk_proc_start(char *argv[], char *cwd,
 
 		proc = hk_proc_add();
 		proc->pid = pid;
-		close(p_in[0]);
-		proc->stdin_fd = p_in[1];
-		close(p_out[1]);
-		close(p_err[1]);
-
-		/* Hook stdio handler */
-		io_channel_setup(&proc->stdout, p_out[0], (io_func_t) hk_proc_stdout, proc);
-		io_channel_setup(&proc->stderr, p_err[0], (io_func_t) hk_proc_stderr, proc);
 
 		/* Hook sigchld handler */
 		proc->sigchld_tag = sys_child_watch(pid, (sys_child_func_t) hk_proc_sigchld, proc);
-
-		/* Enable close-on-exec mode on local pipe endpoints */
-		fcntl(proc->stdin_fd, F_SETFD, FD_CLOEXEC);
-		fcntl(proc->stdout.fd, F_SETFD, FD_CLOEXEC);
-		fcntl(proc->stderr.fd, F_SETFD, FD_CLOEXEC);
 
 		/* Setup callbacks */
 		proc->cb_stdout = cb_stdout;
@@ -317,6 +282,89 @@ hk_proc_t *hk_proc_start(char *argv[], char *cwd,
 	}
 
 	return proc;
+}
+
+
+hk_proc_t *hk_proc_start(char *argv[], char *cwd,
+			 hk_proc_out_func_t cb_stdout,
+			 hk_proc_out_func_t cb_stderr,
+			 hk_proc_term_func_t cb_term,
+			 void *user_data)
+{
+        hk_proc_start_pipes_t p = {
+                .in = {-1,-1},
+                .out = {-1,-1},
+                .err = {-1,-1},
+        };
+        hk_proc_t *proc = NULL;
+
+        /* Create standard input pipe */
+        if (pipe(p.in) == -1) {
+                log_str("ERROR: Cannot create proc stdin pipe: %s", strerror(errno));
+                goto done;
+        }
+
+        /* Create standard output pipe */
+        if ( pipe(p.out) == -1 ) {
+                log_str("ERROR: Cannot create proc stdout pipe: %s", strerror(errno));
+                goto done;
+        }
+
+        /* Create standard error pipe */
+        if ( pipe(p.err) == -1 ) {
+                log_str("ERROR: Cannot create proc stderr pipe: %s", strerror(errno));
+                goto done;
+        }
+
+        proc = hk_proc_start_(argv, cwd, &p, cb_stdout, cb_stderr, cb_term, user_data);
+
+        if (proc != NULL) {
+                close(p.in[0]);
+                proc->stdin_fd = p.in[1];
+                close(p.out[1]);
+                close(p.err[1]);
+
+                /* Hook stdio handlers */
+                io_channel_setup(&proc->stdout, p.out[0], (io_func_t) hk_proc_stdout, proc);
+                io_channel_setup(&proc->stderr, p.err[0], (io_func_t) hk_proc_stderr, proc);
+
+                /* Enable close-on-exec mode on local pipe endpoints */
+                fcntl(proc->stdin_fd, F_SETFD, FD_CLOEXEC);
+                fcntl(proc->stdout.fd, F_SETFD, FD_CLOEXEC);
+                fcntl(proc->stderr.fd, F_SETFD, FD_CLOEXEC);
+        }
+
+done:
+        if (proc == NULL) {
+                if (p.in[0] >= 0) {
+                        close(p.in[0]);
+                }
+                if (p.in[1] >= 0) {
+                        close(p.in[1]);
+                }
+                if (p.out[0] >= 0) {
+                        close(p.out[0]);
+                }
+                if (p.out[1] >= 0) {
+                        close(p.out[1]);
+                }
+                if (p.err[0] >= 0) {
+                        close(p.err[0]);
+                }
+                if (p.err[1] >= 0) {
+                        close(p.err[1]);
+                }
+        }
+
+        return proc;
+}
+
+
+hk_proc_t *hk_proc_start_nopipe(char *argv[], char *cwd,
+                                hk_proc_term_func_t cb_term,
+                                void *user_data)
+{
+        return hk_proc_start_(argv, cwd, NULL, NULL, NULL, cb_term, user_data);
 }
 
 
