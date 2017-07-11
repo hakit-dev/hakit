@@ -19,10 +19,10 @@
 int opt_debug = 0;
 int opt_daemon = 0;
 
-static char *options_command = NULL;
+static char *conf_dir = NULL;
 
 
-static void options_help(void)
+static void options_help(const options_entry_t *entries, char *command)
 {
 	options_entry_t *entry;
 	int tab_len = 0;
@@ -33,8 +33,8 @@ static void options_help(void)
 	}
 
 	fprintf(stderr, "Usage:\n");
-	if (options_command) {
-		fprintf(stderr, "  %s [OPTION...] APP_FILE\n\n", options_command);
+	if (command != NULL) {
+		fprintf(stderr, "  %s [OPTION...] APP_FILE\n\n", command);
 	}
 
 	fprintf(stderr,
@@ -42,7 +42,7 @@ static void options_help(void)
 		"  -h, --help\n\n"
 		"Application Options:\n");
 
-	entry = (options_entry_t *) options_entries;
+	entry = (options_entry_t *) entries;
 	while (entry->long_opt != NULL) {
 		len = 2 + strlen(entry->long_opt);
 		if (entry->value_symbol) {
@@ -57,15 +57,15 @@ static void options_help(void)
 	}
 
 	fprintf(stderr, "  -c, ");
-	len = fprintf(stderr, "--conf=FILE");
+	len = fprintf(stderr, "--config=DIR");
 	while (len < tab_len) {
 		fprintf(stderr, " ");
 		len++;
 	}
 
-	fprintf(stderr, "    Set config file (default: " OPTIONS_DEFAULT_CONF ")\n");
+	fprintf(stderr, "    Set config directory (default: " OPTIONS_DEFAULT_CONF_DIR ")\n");
 
-	entry = (options_entry_t *) options_entries;
+	entry = (options_entry_t *) entries;
 	while (entry->long_opt != NULL) {
 		fprintf(stderr, "  ");
 		if (entry->short_opt) {
@@ -95,159 +95,192 @@ static void options_help(void)
 }
 
 
-static char *options_conf_file(int argc, char *argv[])
+static void options_set_conf_dir(int argc, char *argv[])
 {
+	char *dir = NULL;
 	int i;
 
-	for (i = 1; i < argc; i++) {
+	for (i = 1; (i < argc) && (dir == NULL); i++) {
 		char *args = argv[i];
 
 		if (strcmp(args, "-c") == 0) {
 			args += 2;
 			if (*args == '\0') {
-				return argv[i+1];
+				dir = argv[i+1];
 			}
 			else {
-				return args;
+				dir = args;
 			}
 		}
 		else if (strncmp(args, "--config", 8) == 0) {
 			char *eq = strchr(args+2, '=');
 			if (eq != NULL) {
-				return eq+1;
+				dir = eq+1;
 			}
 		}
 	}
 
-	return OPTIONS_DEFAULT_CONF;
+	if (dir != NULL) {
+		int len = strlen(dir);
+
+		/* Strip leading dir separator(s) */
+		while ((len > 0) && (dir[len-1] == '/')) {
+			len--;
+			dir[len] = '\0';
+		}
+
+		if (conf_dir != NULL) {
+			free(conf_dir);
+		}
+		conf_dir = strdup(dir);
+	}
 }
 
 
-static void options_conf_parse(char *conf_file)
+static int options_parse_value(const options_entry_t *entry, char *value)
 {
-	FILE *f = fopen(conf_file, "r");
-	if (f != NULL) {
-		char buf[1024];
-		int lineno = 0;
+	switch (entry->type) {
+	case OPTIONS_TYPE_INT:
+		if (value == NULL) {
+			return -1;
+		}
+		else {
+			*((int *) entry->value_ptr) = strtol(value, NULL, 0);
+		}
+		break;
+	case OPTIONS_TYPE_STRING:
+		if (value == NULL) {
+			return -1;
+		}
+		else {
+			*((char **) entry->value_ptr) = strdup(value);
+		}
+		break;
+	default:
+		if (value == NULL) {
+			*((int *) entry->value_ptr) = 1;
+		}
+		else {
+			*((int *) entry->value_ptr) = strtol(value, NULL, 0);
+		}
+		break;
+	}
 
-		while (fgets(buf, sizeof(buf), f) != NULL) {
-			lineno++;
+	return 0;
+}
 
-			/* Strip leading blanks */
-			char *kw = buf;
-			while ((*kw != '\0') && (*kw <= ' ')) {
-				kw++;
-			}
 
-			/* Cut-off comments */
-			char *s = strchr(kw, '#');
-			if (s != NULL) {
-				*s = '\0';
-			}
+int options_conf_parse(const options_entry_t *entries, char *conf_file)
+{
+	char *dir = (conf_dir != NULL) ? conf_dir : OPTIONS_DEFAULT_CONF_DIR;
+	char path[strlen(dir) + strlen(conf_file) + 2];
+	char buf[1024];
+	int lineno = 0;
+	int ret = 0;
+	FILE *f;
 
-			/* Strip trailing blanks */
-			int len = strlen(kw);
-			while ((len > 0) && (kw[len-1] <= ' ')) {
-				len--;
-				kw[len] = '\0';
-			}
+	/* Open config file from config directory */
+	snprintf(path, sizeof(path), "%s/%s", dir, conf_file);
+	f = fopen(path, "r");
+	if (f == NULL) {
+		log_debug(3, "Cannot open file '%s': %s", path, strerror(errno));
+		return -1;
+	}
 
-			/* Ignore empty lines */
-			if (*kw == '\0') {
-				continue;
-			}
+	while ((ret == 0) && (fgets(buf, sizeof(buf), f) != NULL)) {
+		lineno++;
 
-			/* Find out config keyword */
-			len = 0;
-			while ((kw[len] > ' ') && (kw[len] != '=')) {
-				len++;
-			}
+		/* Strip leading blanks */
+		char *kw = buf;
+		while ((*kw != '\0') && (*kw <= ' ')) {
+			kw++;
+		}
 
-			options_entry_t *entry = (options_entry_t *) options_entries;
-			while (entry->long_opt != NULL) {
-				if (strncmp(kw, entry->long_opt, len) == 0) {
-					break;
-				}
-				else {
-					entry++;
-				}
-			}
+		/* Cut-off comments */
+		char *s = strchr(kw, '#');
+		if (s != NULL) {
+			*s = '\0';
+		}
 
-			/* If keyword found, set config value */
-			if (entry->long_opt != NULL) {
-				char *value = strchr(&kw[len], '=');
-				if (value != NULL) {
-					value++;
+		/* Strip trailing blanks */
+		int len = strlen(kw);
+		while ((len > 0) && (kw[len-1] <= ' ')) {
+			len--;
+			kw[len] = '\0';
+		}
 
-					while ((*value != '\0') && (*value <= ' ')) {
-						value++;
-					}
-				}
+		/* Ignore empty lines */
+		if (*kw == '\0') {
+			continue;
+		}
 
-				switch (entry->type) {
-				case OPTIONS_TYPE_INT:
-					if (value == NULL) {
-						log_str("WARNING: %s:%d: Missing config value for keyword '%s'", conf_file, lineno, entry->long_opt);
-					}
-					else {
-						*((int *) entry->value_ptr) = strtol(value, NULL, 0);
-					}
-					break;
-				case OPTIONS_TYPE_STRING:
-					if (value == NULL) {
-						log_str("WARNING: %s:%d: Missing config value for keyword '%s'", conf_file, lineno, entry->long_opt);
-					}
-					else {
-						*((char **) entry->value_ptr) = strdup(value);
-					}
-					break;
-				default:
-					if (value == NULL) {
-						*((int *) entry->value_ptr) = 1;
-					}
-					else {
-						*((int *) entry->value_ptr) = strtol(value, NULL, 0);
-					}
-					break;
-				}
+		/* Find out config keyword */
+		len = 0;
+		while ((kw[len] > ' ') && (kw[len] != '=')) {
+			len++;
+		}
+
+		options_entry_t *entry = (options_entry_t *) entries;
+		while (entry->long_opt != NULL) {
+			if (strncmp(kw, entry->long_opt, len) == 0) {
+				break;
 			}
 			else {
-				kw[len] = '\0';
-				log_str("WARNING: %s:%d: Unknown keyword '%s'", conf_file, lineno, kw);
+				entry++;
 			}
 		}
 
-		fclose(f);
+		/* If keyword found, set config value */
+		if (entry->long_opt != NULL) {
+			char *value = strchr(&kw[len], '=');
+			if (value != NULL) {
+				value++;
+
+				while ((*value != '\0') && (*value <= ' ')) {
+					value++;
+				}
+			}
+
+			if (options_parse_value(entry, value)) {
+				log_str("ERROR: %s:%d: Missing config value for keyword '%s'", conf_file, lineno, entry->long_opt);
+				ret = -2;
+			}
+		}
+		else {
+			kw[len] = '\0';
+			log_str("WARNING: %s:%d: Unknown keyword '%s'", conf_file, lineno, kw);
+		}
 	}
-	else {
-		log_str("WARNING: Cannot open config file '%s': %s", conf_file, strerror(errno));
-	}
+
+	fclose(f);
+
+	return ret;
 }
 
 
-int options_parse(int *_argc, char *argv[])
+int options_parse(const options_entry_t *entries, int *_argc, char *argv[])
 {
 	int argc = *_argc;
+	char *command;
 	int i, j;
 
 	/* Get command name */
-	options_command = strrchr(argv[0], '/');
-	if (options_command == NULL) {
-		options_command = strrchr(argv[0], '\\');
+	command = strrchr(argv[0], '/');
+	if (command == NULL) {
+		command = strrchr(argv[0], '\\');
 	}
-	if (options_command == NULL) {
-		options_command = argv[0];
+	if (command == NULL) {
+		command = argv[0];
 	}
 	else {
-		options_command++;
+		command++;
 	}
 
 	/* Get config file name */
-	char *conf_file = options_conf_file(argc, argv);
-	//log_str("Config file: %s", conf_file);
+	options_set_conf_dir(argc, argv);
 
 	/* Parse options from config file */
-	options_conf_parse(conf_file);
+	options_conf_parse(entries, "config");
 
 	/* Parse options from command line */
 	i = 1;
@@ -259,7 +292,7 @@ int options_parse(int *_argc, char *argv[])
 			char *value = NULL;
 			int stride = 0;
 
-			options_entry_t *entry = (options_entry_t *) options_entries;
+			options_entry_t *entry = (options_entry_t *) entries;
 			while ((found == NULL) && (entry->long_opt != NULL)) {
 				if (args[1] == '-') {
 					char *eq = strchr(args+2, '=');
@@ -294,7 +327,7 @@ int options_parse(int *_argc, char *argv[])
 									stride++;
 								}
 								else {
-									options_help();
+									options_help(entries, command);
 									return -1;
 								}
 							}
@@ -304,7 +337,7 @@ int options_parse(int *_argc, char *argv[])
 								value = &args[2];
 							}
 							else {
-								options_help();
+								options_help(entries, command);
 								return -1;
 							}
 						}
@@ -315,24 +348,9 @@ int options_parse(int *_argc, char *argv[])
 			}
 
 			if (found != NULL) {
-				switch (found->type) {
-				case OPTIONS_TYPE_INT:
-					if (value == NULL) {
-						options_help();
-						return -1;
-					}
-					*((int *) found->value_ptr) = strtol(value, NULL, 0);
-					break;
-				case OPTIONS_TYPE_STRING:
-					if (value == NULL) {
-						options_help();
-						return -1;
-					}
-					*((char **) found->value_ptr) = strdup(value);
-					break;
-				default:
-					*((int *) found->value_ptr) = 1;
-					break;
+				if (options_parse_value(found, value)) {
+					options_help(entries, command);
+					return -1;
 				}
 
 				argc -= stride;
@@ -341,7 +359,7 @@ int options_parse(int *_argc, char *argv[])
 				}
 			}
 			else {
-				options_help();
+				options_help(entries, command);
 
 				if ((strcmp(args, "--help") == 0) || (strcmp(args, "-h") == 0)) {
 					return 0;
@@ -359,11 +377,4 @@ int options_parse(int *_argc, char *argv[])
 	*_argc = argc;
 
 	return 0;
-}
-
-
-void options_usage(void)
-{
-	options_help();
-	exit(1);
 }

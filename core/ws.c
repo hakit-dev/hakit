@@ -585,31 +585,6 @@ static struct lws_protocols ws_server_protocols[] = {
  * HTTP/WebSocket server init
  */
 
-static void ws_log(int level, const char *line)
-{
-	static const char *slevel[] = {
-		"ERROR  ", "WARN   ", "NOTICE ", "INFO   ",
-		"DEBUG  ", "PARSER ", "HEADER ", "EXT    ",
-		"CLIENT ", "LATENCY",
-	};
-	int ilevel = 0;
-	char *tag = "";
-
-	for (ilevel = 0; ilevel < LLL_COUNT; ilevel++) {
-		if (level & (1 << ilevel)) {
-			break;
-		}
-	}
-
-	if (ilevel < ARRAY_SIZE(slevel)) {
-		tag = (char *) slevel[ilevel];
-	}
-
-	log_tstamp();
-	log_printf("LWS %s : %s", tag, line);
-}
-
-
 static int ws_server_init(ws_t *ws, int port, char *ssl_dir)
 {
 #ifdef WITH_SSL
@@ -666,17 +641,10 @@ static int ws_server_init(ws_t *ws, int port, char *ssl_dir)
 
 ws_t *ws_new(int port, int use_ssl, char *ssl_dir)
 {
-	int log_level = LLL_ERR | LLL_WARN | LLL_NOTICE;
 	ws_t *ws = NULL;
 
 	// Setup LWS logging
-	if (opt_debug >= 2) {
-		log_level |= LLL_INFO;
-	}
-	if (opt_debug >= 3) {
-		log_level |= LLL_DEBUG | LLL_HEADER | LLL_EXT | LLL_CLIENT | LLL_LATENCY;
-	}
-	lws_set_log_level(log_level, ws_log);
+	ws_log_init(opt_debug);
 
 	// Alloc HTTP/WS client & server environment
 	ws = malloc(sizeof(ws_t));

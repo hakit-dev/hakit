@@ -12,6 +12,17 @@
 
 #include <libwebsockets.h>
 
+/*
+ * LWS logging
+ */
+
+extern void ws_log_init(int debug);
+
+
+/*
+ * LWS i/o management
+ */
+
 extern void ws_poll(struct lws_context *context, struct lws_pollargs *pa);
 extern void ws_poll_remove(struct lws_pollargs *pa);
 extern void ws_dump_handshake_info(struct lws *wsi);

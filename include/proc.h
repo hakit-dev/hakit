@@ -39,11 +39,15 @@ typedef struct {
 } hk_proc_t;
 
 
-extern hk_proc_t *hk_proc_start(int argc, char *argv[], char *cwd,
+extern hk_proc_t *hk_proc_start(char *argv[], char *cwd,
 				hk_proc_out_func_t cb_stdout,
 				hk_proc_out_func_t cb_stderr,
 				hk_proc_term_func_t cb_term,
 				void *user_data);
+
+extern hk_proc_t *hk_proc_start_nopipe(char *argv[], char *cwd,
+                                       hk_proc_term_func_t cb_term,
+                                       void *user_data);
 
 extern void hk_proc_stop(hk_proc_t * proc);
 

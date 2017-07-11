@@ -16,7 +16,6 @@
 
 #include "log.h"
 #include "buf.h"
-#include "iputils.h"
 #include "netif.h"
 #include "tcpio.h"
 #include "udpio.h"
@@ -32,6 +31,14 @@
 #define UDP_TYPE_SINK   0x01   // Advertising field type: sink
 #define UDP_TYPE_SOURCE 0x02   // Advertising field type: source
 #define UDP_TYPE_MONITOR 0x03  // Advertising field type: monitor
+
+/* TCP Command context */
+typedef struct {
+	hkcp_t *hkcp;
+	tcp_sock_t *tcp_sock;
+	command_t *cmd;
+	int watch;
+} hkcp_command_ctx_t;
 
 
 /* Local functions forward declarations */
@@ -852,8 +859,31 @@ static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *n
 }
 
 
-static void hkcp_source_send(hkcp_source_t *source)
+static int hkcp_source_send_watch(tcp_sock_t *tcp_sock, char *str)
 {
+	hkcp_command_ctx_t *ctx = tcp_sock_get_data(tcp_sock);
+
+	if (ctx->watch) {
+		tcp_sock_write(tcp_sock, str, strlen(str));
+	}
+
+	return 1;
+}
+
+
+char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
+{
+	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
+
+	if ((source == NULL) || (source->ep.name == NULL)) {
+		log_str("PANIC: Attempting to update unknown source #%d\n", id);
+		return NULL;
+	}
+
+	log_debug(3, "hkcp_source_update id=%d name='%s' value='%s'", id, source->ep.name, value);
+
+	buf_set_str(&source->ep.value, value);
+
 	if ((source->ep.flag & HKCP_FLAG_LOCAL) == 0) {
 		int size = strlen(source->ep.name) + source->ep.value.len + 20;
 		char str[size];
@@ -873,21 +903,11 @@ static void hkcp_source_send(hkcp_source_t *source)
 				tcp_sock_write(&node->tcp_sock, str, len);
 			}
 		}
+
+		/* Send event to watchers */
+		snprintf(str, size, "!%s=%s\n", source->ep.name, source->ep.value.base);
+		tcp_srv_foreach_client(&hkcp->tcp_srv, (tcp_foreach_func_t) hkcp_source_send_watch, str);
 	}
-}
-
-
-char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
-{
-	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
-
-	if ((source == NULL) || (source->ep.name == NULL)) {
-		log_str("PANIC: Attempting to update unknown source #%d\n", id);
-		return NULL;
-	}
-
-	buf_set_str(&source->ep.value, value);
-	hkcp_source_send(source);
 
 	return source->ep.name;
 }
@@ -1105,13 +1125,6 @@ static void hkcp_udp_event(hkcp_t *hkcp, unsigned char *buf, int size)
  * TCP/stdin/websocket commands
  */
 
-typedef struct {
-	hkcp_t *hkcp;
-	tcp_sock_t *tcp_sock;
-	command_t *cmd;
-} hkcp_command_ctx_t;
-
-
 static void hkcp_command_ctx_recv(hkcp_command_ctx_t *ctx, int argc, char **argv)
 {
 	hkcp_command_tcp(ctx->hkcp, argc, argv, ctx->tcp_sock);
@@ -1126,6 +1139,7 @@ static hkcp_command_ctx_t *hkcp_command_ctx_new(tcp_sock_t *tcp_sock)
 	ctx->hkcp = tcp_sock_get_data(tcp_sock);
 	ctx->tcp_sock = tcp_sock;
 	ctx->cmd = command_new((command_handler_t) hkcp_command_ctx_recv, ctx);
+	ctx->watch = 0;
 
 	return ctx;
 }
@@ -1290,6 +1304,49 @@ static void hkcp_command_status(hkcp_t *hkcp, buf_t *out_buf)
 }
 
 
+static void hkcp_command_watch(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf, hkcp_command_ctx_t *ctx)
+{
+	int show = 1;
+	int err = 0;
+
+	if (argc > 1) {
+		if (argc == 2) {
+			if ((strcmp(argv[1], "0") == 0) || (strcmp(argv[1], "off") == 0)) {
+				ctx->watch = 0;
+				show = 0;
+			}
+			else if ((strcmp(argv[1], "1") == 0) || (strcmp(argv[1], "on") == 0)) {
+				ctx->watch = 1;
+			}
+			else {
+				err = 1;
+			}
+		}
+		else {
+			err = 1;
+		}
+	}
+
+	if (err) {
+		buf_append_str(out_buf, "ERROR: watch: Syntax error");
+	}
+	else if (show) {
+		int i;
+
+		for (i = 0; i < hkcp->sources.nmemb; i++) {
+			hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
+			if (source->ep.name != NULL) {
+				buf_append_str(out_buf, "!");
+				buf_append_str(out_buf, source->ep.name);
+				buf_append_str(out_buf, "=");
+				buf_append(out_buf, source->ep.value.base, source->ep.value.len);
+				buf_append_str(out_buf, "\n");
+			}
+		}
+	}
+}
+
+
 void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 {
 	int i;
@@ -1334,7 +1391,14 @@ static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tc
 
 		buf_init(&out_buf);
 
-		hkcp_command(hkcp, argc, argv, &out_buf);
+		if (strcmp(argv[0], "watch") == 0) {
+			hkcp_command_ctx_t *ctx = tcp_sock_get_data(tcp_sock);
+			hkcp_command_watch(hkcp, argc, argv, &out_buf, ctx);
+		}
+		else {
+			hkcp_command(hkcp, argc, argv, &out_buf);
+		}
+
 		io_channel_write(&tcp_sock->chan, (char *) out_buf.base, out_buf.len);
 
 		buf_cleanup(&out_buf);

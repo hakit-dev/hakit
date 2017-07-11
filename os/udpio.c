@@ -1,3 +1,12 @@
+/*
+ * HAKit - The Home Automation KIT - www.hakit.net
+ * Copyright (C) 2014 Sylvain Giroudon
+ *
+ * This file is subject to the terms and conditions of the GNU Lesser
+ * General Public License v2.1. See the file LICENSE in the top level
+ * directory for more details.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <errno.h>
@@ -56,17 +65,20 @@ typedef struct {
 
 static int udp_send_bcast_addr(udp_send_bcast_ctx_t *ctx, struct ifaddrs* current)
 {
+	char s_addr[64];
 	struct sockaddr_in iremote;
 	int ret;
+
+	ip_addr(current->ifa_broadaddr, s_addr, sizeof(s_addr));
+	log_debug(2, "Sending UDP broadcast to %s:%d", s_addr, ctx->port);
 
 	memcpy(&iremote, current->ifa_broadaddr, sizeof(iremote));
 	iremote.sin_port = htons(ctx->port);
 
-	log_debug(2, "Sending UDP broadcast to %s", ip_addr(NULL, &iremote));
-
 	ret = sendto(ctx->fd, ctx->buf, ctx->size, 0, (struct sockaddr *) &iremote, sizeof(iremote));
 	if (ret < 0) {
-		log_str("ERROR: sendto(%s): %s", ip_addr(NULL, &iremote), strerror(errno));
+		ip_addr((struct sockaddr *) &iremote, s_addr, INET_ADDRSTRLEN);
+		log_str("ERROR: sendto(%s:%d): %s", s_addr, ctx->port, strerror(errno));
 		return -1;
 	}
 
@@ -124,6 +136,7 @@ static int udp_srv_local_addr(void *piremote, struct ifaddrs* current)
 static int udp_srv_event(udp_srv_t *srv, int fd)
 {
 	unsigned int iremote_size = sizeof(srv->iremote);
+	char s_addr[64];
 	char buf[1500];
 	int len;
 
@@ -137,11 +150,14 @@ static int udp_srv_event(udp_srv_t *srv, int fd)
 
 	/* Reject datagrams from myself */
 	if (netif_foreach_interface(&srv->iremote, udp_srv_local_addr)) {
-		log_debug(2, "udp_srv_event: filtered packet from %s", ip_addr(NULL, &srv->iremote));
+		ip_addr((struct sockaddr *) &srv->iremote, s_addr, sizeof(s_addr));
+		log_debug(2, "udp_srv_event: filtered packet from %s", s_addr);
 		return 1;
 	}
 
-	log_debug(2, "udp_srv_event: %d bytes from %s", len, ip_addr(NULL, &srv->iremote));
+	ip_addr((struct sockaddr *) &srv->iremote, s_addr, sizeof(s_addr));
+	log_debug(2, "udp_srv_event: %d bytes from %s:%d", len, s_addr, ntohs(srv->iremote.sin_port));
+
 	if (srv->chan.func != NULL) {
 		srv->chan.func(srv->chan.user_data, buf, len);
 	}
@@ -205,11 +221,13 @@ int udp_srv_init(udp_srv_t *srv, int port, io_func_t func, void *user_data)
 
 int udp_srv_send_reply(udp_srv_t *srv, char *buf, int size)
 {
+	char s_addr[64];
 	int ssize;
 
 	ssize = sendto(srv->chan.fd, buf, size, 0, (struct sockaddr *) &srv->iremote, sizeof(srv->iremote));
 	if (ssize < 0) {
-		log_str("ERROR: udp_srv_write(%s): %s", ip_addr(NULL, &srv->iremote), strerror(errno));
+		ip_addr((struct sockaddr *) &srv->iremote, s_addr, sizeof(s_addr));
+		log_str("ERROR: udp_srv_write(%s:%d): %s", s_addr, ntohs(srv->iremote.sin_port), strerror(errno));
 		return -1;
 	}
 

@@ -22,6 +22,8 @@ extern int netif_foreach_interface(void *user_data, netif_func_t func);
 
 extern char *netif_get_hwaddr(char *if_name);
 
+extern char *netif_socket_signature(int sock);
+
 
 /**************************/
 /* Contextualized methods */

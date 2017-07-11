@@ -18,7 +18,7 @@ int opt_mode = 0;
 
 const char *options_summary = "HAKit comm test";
 
-const options_entry_t options_entries[] = {
+static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0, OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
 	{ "mode",   'm', 0, OPTIONS_TYPE_INT,  &opt_mode,    "Test mode" },
 	{ NULL }
@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
 {
 	log_init(NAME);
 
-	if (options_parse(&argc, argv) != 0) {
+	if (options_parse(options_entries, &argc, argv) != 0) {
 		exit(1);
 	}
 
