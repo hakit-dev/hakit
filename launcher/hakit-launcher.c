@@ -18,16 +18,18 @@
 #include "options.h"
 #include "log.h"
 #include "sys.h"
+#include "env.h"
 #include "buf.h"
 #include "tab.h"
 #include "ws_client.h"
+#include "proc.h"
 
 #include "hakit_version.h"
 
 
 #define NAME "hakit-launcher"
-#define PLATFORM_URL "https://hakit.net/api/"
-//#define PLATFORM_URL "http://localhost/api/"
+//#define PLATFORM_URL "https://hakit.net/api/"
+#define PLATFORM_URL "http://localhost/api/"
 
 #define LIB_DIR "/var/lib/hakit"
 #define APPS_DIR LIB_DIR "/apps"
@@ -36,12 +38,18 @@
 
 typedef enum {
 	ST_IDLE=0,
-	ST_HELLO
+	ST_HELLO,
+	ST_RETRY,
+	ST_APP,
+	ST_ENGINE,
+        NSTATES
 } platform_state_t;
 
 static platform_state_t platform_state = ST_HELLO;
 
 static ws_client_t ws_client;
+
+static void hello_retry(void);
 
 
 //===================================================
@@ -65,10 +73,7 @@ static const options_entry_t options_entries[] = {
 // Environment
 //===================================================
 
-static char *env_apps_dir = NULL;
-
-
-static int env_mkdir(const char *dir)
+static int create_dir(const char *dir)
 {
         if (mkdir(dir, 0755) == 0) {
                 log_str("INFO: Directory '%s' created", dir);
@@ -83,40 +88,31 @@ static int env_mkdir(const char *dir)
         return 0;
 }
 
-static int env_init(void)
+
+static char *app_dir(char *app_name)
 {
-        // Create lib directory
-        if (env_mkdir(opt_lib_dir) != 0) {
-                return -1;
-        }
-
-        return 0;
-}
-
-
-static char *env_app_dir(char *app_name)
-{
+        static char *apps_dir = NULL;
         int size;
         char *dir;
 
         // Create apps directory
-        if (env_apps_dir == NULL) {
+        if (apps_dir == NULL) {
                 size = strlen(opt_lib_dir) + 8;
-                env_apps_dir = malloc(size);
-                snprintf(env_apps_dir, size, "%s/apps", opt_lib_dir);
+                apps_dir = malloc(size);
+                snprintf(apps_dir, size, "%s/apps", opt_lib_dir);
 
-                if (env_mkdir(env_apps_dir) != 0) {
-                        free(env_apps_dir);
-                        env_apps_dir = NULL;
+                if (create_dir(apps_dir) != 0) {
+                        free(apps_dir);
+                        apps_dir = NULL;
                         return NULL;
                 }
         }
 
-        size = strlen(env_apps_dir) + strlen(app_name) + 2;
+        size = strlen(apps_dir) + strlen(app_name) + 2;
         dir = malloc(size);
-        snprintf(dir, size, "%s/%s", env_apps_dir, app_name);
+        snprintf(dir, size, "%s/%s", apps_dir, app_name);
 
-        if (env_mkdir(dir) != 0) {
+        if (create_dir(dir) != 0) {
                 free(dir);
                 return NULL;
         }
@@ -239,11 +235,57 @@ static char *platform_get_prop(char **argv, char *key)
 
 
 //===================================================
-// APT configuration
+// HAKit Engine
 //==================================================
 
-static int apt_config_request(void)
+typedef struct {
+        char *name;
+        char *path;
+} app_t;
+
+
+static void engine_terminated(void *user_data, int status)
 {
+        log_str("WARNING: HAKit engine terminated with status %d", status);
+	hello_retry();
+}
+
+
+static int engine_start(hk_tab_t *apps)
+{
+        char *bin = env_bindir("hakit");
+        hk_proc_t *proc;
+        char debug[16];
+        HK_TAB_DECLARE(argv, char *);
+        int i;
+
+        log_debug(2, "engine_start");
+	platform_state = ST_ENGINE;
+
+        snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
+
+        HK_TAB_PUSH_VALUE(argv, (char *) bin);
+        HK_TAB_PUSH_VALUE(argv, (char *) debug);
+        for (i = 0; i < apps->nmemb; i++) {
+                app_t *app = HK_TAB_PTR(*apps, app_t, i);
+                HK_TAB_PUSH_VALUE(argv, app->path);
+        }
+        HK_TAB_PUSH_VALUE(argv, (char *) NULL);
+
+        proc = hk_proc_start_nopipe(argv.buf, NULL, engine_terminated, NULL);
+
+        if (proc != NULL) {
+                // Leave stdin stream to child
+                close(STDIN_FILENO);
+                log_str("HAKit engine process started: pid=%d", proc->pid);
+        }
+        else {
+                log_str("ERROR: HAKit engine start failed");
+                hello_retry();
+        }
+
+        free(bin);
+
 	return 0;
 }
 
@@ -253,31 +295,19 @@ static int apt_config_request(void)
 //==================================================
 
 typedef struct {
-        int argc;
-	char **argv;
+        hk_tab_t apps;
 	int index;
 } app_ctx_t;
 
 
-typedef struct {
-        char *fname;
-} app_t;
-
-static HK_TAB_DECLARE(apps, app_t);
-#define APP_ENTRY(i) HK_TAB_PTR(apps, app_t, i)
-
-
-static void hello_retry(void);
 static void app_request_send(app_ctx_t *ctx);
 
 
 static app_ctx_t *app_ctx_alloc(void)
 {
 	app_ctx_t *ctx = malloc(sizeof(app_ctx_t));
-        ctx->argc = 0;
-	ctx->argv = malloc(sizeof(char *));
+        hk_tab_init(&ctx->apps, sizeof(app_t));
 	ctx->index = 0;
-        ctx->argv[0] = NULL;
 
         return ctx;
 }
@@ -285,9 +315,9 @@ static app_ctx_t *app_ctx_alloc(void)
 
 static void app_ctx_feed(app_ctx_t *ctx, char *str)
 {
-        ctx->argv = realloc(ctx->argv, sizeof(char *) * (ctx->argc+2));
-        ctx->argv[(ctx->argc)++] = strdup(str);
-        ctx->argv[ctx->argc] = NULL;
+        app_t *app = hk_tab_push(&ctx->apps);
+        app->name = strdup(str);
+        app->path = NULL;
 }
 
 
@@ -295,13 +325,19 @@ static void app_ctx_cleanup(app_ctx_t *ctx)
 {
         int i;
 
-        for (i = 0; i < ctx->argc; i++) {
-                free(ctx->argv[i]);
-                ctx->argv[i] = NULL;
+        for (i = 0; i < ctx->apps.nmemb; i++) {
+                app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
+
+                free(app->name);
+                app->name = NULL;
+
+                if (app->path != NULL) {
+                        free(app->path);
+                        app->path = NULL;
+                }
         }
 
-        free(ctx->argv);
-        ctx->argv = NULL;
+        hk_tab_cleanup(&ctx->apps);
 
         free(ctx);
 }
@@ -317,30 +353,31 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
         int errcode = platform_get_status(buf, len, &errstr, &ofs);
 
         if (errcode == 0) {
+                app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
+
                 // Store application data
-                char *dir = env_app_dir(ctx->argv[ctx->index]);
+                char *dir = app_dir(app->name);
 
                 if (dir != NULL) {
-                        app_t *app = hk_tab_push(&apps);
                         int size = strlen(dir)+8;
                         FILE *f;
 
-                        app->fname = malloc(size);
-                        snprintf(app->fname, size, "%s/app.hk", dir);
+                        app->path = malloc(size);
+                        snprintf(app->path, size, "%s/app.hk", dir);
 
-                        f = fopen(app->fname, "w");
+                        f = fopen(app->path, "w");
                         if (f != NULL) {
                                 char *buf1 = buf + ofs;
                                 int len1 = len - ofs;
                                 int wlen = fwrite(buf1, 1, len1, f);
                                 if (wlen != len1) {
-                                        log_str("ERROR: Failed to write file '%s': %s", app->fname, strerror(errno));
+                                        log_str("ERROR: Failed to write file '%s': %s", app->path, strerror(errno));
                                         errcode = -1;
                                 }
                                 fclose(f);
                         }
                         else {
-                                log_str("ERROR: Failed to create file '%s': %s", app->fname, strerror(errno));
+                                log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
                                 errcode = -1;
                         }
 
@@ -361,27 +398,29 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
 
 static void app_request_send(app_ctx_t *ctx)
 {
-	char *str = ctx->argv[ctx->index];
-        buf_t header;
+	log_debug(2, "app_request_send [%d]", ctx->index);
 
-	log_debug(2, "app_request_send [%d]='%s'", ctx->index, str);
+        if (ctx->index < ctx->apps.nmemb) {
+                app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
+                buf_t header;
 
-	if (str == NULL) {
+                // API key
+                buf_init(&header);
+                platform_http_header(&header);
+
+                // Application name
+                buf_append_fmt(&header, "HAKit-Application: %s\r\n", app->name);
+
+                ws_client_get(&ws_client, PLATFORM_URL "app.php", (char *) header.base, (ws_client_func_t *) app_response, ctx);
+
+                buf_cleanup(&header);
+        }
+        else {
+		engine_start(&ctx->apps);
                 app_ctx_cleanup(ctx);
-		//TODO: Next step
 		return;
 	}
 
-	// API key
-        buf_init(&header);
-	platform_http_header(&header);
-
-	// Application name
-        buf_append_fmt(&header, "HAKit-Application: %s\r\n", str);
-
-	ws_client_get(&ws_client, PLATFORM_URL "app.php", (char *) header.base, (ws_client_func_t *) app_response, ctx);
-
-        buf_cleanup(&header);
 }
 
 
@@ -390,8 +429,8 @@ static int app_request(char *app_list)
 	app_ctx_t *ctx;
 
 	log_debug(2, "app_request app_list='%s'", app_list);
+	platform_state = ST_APP;
 
-        hk_tab_cleanup(&apps);
 	ctx = app_ctx_alloc();
 
 	while ((app_list != NULL) && (*app_list != '\0')) {
@@ -495,6 +534,7 @@ static int hello_request(void)
 	
 static void hello_retry(void)
 {
+	platform_state = ST_RETRY;
         log_str("INFO    : New HELLO attempt in %d seconds", HELLO_RETRY_DELAY);
         sys_timeout(HELLO_RETRY_DELAY*1000, (sys_func_t) hello_request, NULL);
 }
@@ -536,7 +576,11 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-        if (env_init() != 0) {
+        env_init(argc, argv);
+
+        // Create lib directory
+        log_debug(1, "Library path = '%s'", opt_lib_dir);
+        if (create_dir(opt_lib_dir) != 0) {
 		exit(2);
         }
 

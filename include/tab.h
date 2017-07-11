@@ -11,6 +11,7 @@
 #define __HAKIT_TAB_H__
 
 #define HK_TAB_DECLARE(_var_, _type_) hk_tab_t _var_ = { .msize = sizeof(_type_), .buf = NULL, .nmemb = 0 }
+#define HK_TAB_PUSH_VALUE(_var_, _value_) *((typeof(_value_) *) hk_tab_push(&(_var_))) = (_value_)
 
 #define HK_TAB_PTR(_var_, _type_, _index_) (((_type_ *) (_var_).buf)+(_index_))
 #define HK_TAB_VALUE(_var_, _type_, _index_) (*HK_TAB_PTR(_var_, _type_, _index_))
