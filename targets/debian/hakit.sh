@@ -26,14 +26,27 @@ DESC="HAKit daemon"
 NAME=hakit
 DAEMON="/usr/bin/$NAME"
 DAEMON_ARGS=""
-CONF=/etc/default/$NAME
-
-# Exit if the package is not installed
-[ -x "$DAEMON" ] || exit 0
+LAUNCHER="/usr/bin/$NAME-launcher"
+CONF_DEFAULT=/etc/default/$NAME
+CONF_PLATFORM=/etc/$NAME/platform
 
 # Read configuration variable file if it is present
-[ -r $CONF ] && . $CONF
-[ -z "$APP" ] && APP="/usr/share/$NAME/test.hk"
+[ -r $CONF_DEFAULT ] && . $CONF_DEFAULT
+
+if [ -z "$APP" ]; then
+    if [ -f $CONF_PLATFORM ]; then
+        # If no APP is specified and a HAKit platform config file is found,
+        # start the HAKit launcher
+        DAEMON=$LAUNCHER
+    else
+        # If no APP is specified and no HAKit platform config file is present,
+        # start a default test app
+        APP="/usr/share/$NAME/test.hk"
+    fi
+fi
+
+# Exit if the program is not installed
+[ -x "$DAEMON" ] || exit 0
 
 # Load the VERBOSE setting and other rcS variables
 . /lib/init/vars.sh
