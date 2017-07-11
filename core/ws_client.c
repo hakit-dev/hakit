@@ -27,6 +27,7 @@ typedef enum {
 } pss_state_t;
 
 struct per_session_data__client {
+        ws_client_t *client;
 	buf_t headers;
 	pss_state_t state;
 	buf_t buf;
@@ -88,25 +89,18 @@ static int ws_http_client_read(struct lws *wsi, struct per_session_data__client 
 static int ws_http_client_append_header(struct lws *wsi, struct per_session_data__client *pss,
 					char **hbuf, int hlen)
 {
-	char *str;
-	int len;
-	char buf[128];
 	int ofs = 0;
 
 	// Network addresses
-	str = netif_socket_signature(lws_get_socket_fd(wsi));
-	len = snprintf(buf, sizeof(buf), "HAKit-Device: %s\r\n", str);
-	free(str);
+        if (pss->client->socket_signature == NULL) {
+                pss->client->socket_signature = netif_socket_signature(lws_get_socket_fd(wsi));
+        }
 
-	if (hlen > len) {
-		memcpy(*hbuf+ofs, buf, len+1);
-		ofs += len;
-		hlen -= len;
-	}
-	else {
-		log_str("ERROR: HTTP client header (device) too long (%d/%d)", len, hlen);
-		return -1;
-	}
+        if (pss->client->socket_signature != NULL) {
+                int len = snprintf(*hbuf, hlen, "HAKit-Device: %s\r\n", pss->client->socket_signature);
+                ofs += len;
+                hlen -= len;
+        }
 
 	// User specified header
 	if (pss->headers.len > 0) {
@@ -359,6 +353,8 @@ int ws_client_get(ws_client_t *client, char *uri, char *headers, ws_client_func_
 	pss = malloc(sizeof(struct per_session_data__client));
 	memset(pss, 0, sizeof(struct per_session_data__client));
 
+        pss->client = client;
+
 	buf_init(&pss->headers);
 	if (headers != NULL) {
 		buf_append_str(&pss->headers, headers);
@@ -390,4 +386,10 @@ int ws_client_get(ws_client_t *client, char *uri, char *headers, ws_client_func_
 	}
 
 	return (wsi != NULL) ? 0:-1;
+}
+
+
+char *ws_client_socket_signature(ws_client_t *client)
+{
+        return client->socket_signature;
 }
