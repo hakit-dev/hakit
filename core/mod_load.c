@@ -19,8 +19,7 @@
 #include "mod_load.h"
 
 typedef enum {
-	SECTION_NONE=0,
-	SECTION_OBJECTS,
+	SECTION_OBJECTS=0,
 	SECTION_NETS,
 	SECTION_UNKNOWN,
 	NSECTIONS
@@ -81,25 +80,19 @@ static int hk_mod_load_object(load_ctx_t *ctx, char *name, int argc, char **argv
 }
 
 
-static int hk_mod_load_net(load_ctx_t *ctx, char *name, int argc, char **argv)
+static int hk_mod_load_net(load_ctx_t *ctx, int argc, char **argv)
 {
-	char name_str[32];
-	hk_net_t *net = NULL;
+	hk_net_t *net;
 	int i;
 
-	/* Create net name if none is provided */
-	if (strempty(name)) {
-		int inc = 0;
-		do {
-			snprintf(name_str, sizeof(name_str), "$net%d", ctx->lnum+inc);
-			name = name_str;
-			inc++;
-		} while (hk_net_find(name));
-	}
-	else {
-		net = hk_net_find(name);
+	/* Create net */
+	net = hk_net_create();
+	if (net == NULL) {
+		log_str("PANIC: %s:%d: Failed to create new net", ctx->fname, ctx->lnum);
+		return -1;
 	}
 
+	/* Attach pads to this net */
 	for (i = 0; i < argc; i++) {
 		char *args = argv[i];
 		char *pt = strchr(args, '.');
@@ -116,22 +109,14 @@ static int hk_mod_load_net(load_ctx_t *ctx, char *name, int argc, char **argv)
 		*pt = '.';
 
 		if (obj == NULL) {
-			log_str("ERROR: %s:%d: Referencing undefined object in '%s'", ctx->fname, ctx->lnum, args);
+			log_str("ERROR: %s:%d: Referencing undefined object '%s'", ctx->fname, ctx->lnum, args);
 			return -1;
 		}
 
 		pad = hk_pad_find(obj, pt+1);
 		if (pad == NULL) {
-			log_str("ERROR: %s:%d: Unknown pad '%s' in object '%s'", ctx->fname, ctx->lnum, pt+1, obj->name);
+			log_str("ERROR: %s:%d: Referencing unknown pad '%s' in object '%s'", ctx->fname, ctx->lnum, pt+1, obj->name);
 			return -1;
-		}
-
-		if (net == NULL) {
-			net = hk_net_create(name);
-			if (net == NULL) {
-				log_str("PANIC: %s:%d: Failed to create net '%s'", ctx->fname, ctx->lnum, name);
-				return -1;
-			}
 		}
 
 		hk_net_connect(net, pad);
@@ -206,7 +191,7 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 		ret = hk_mod_load_object(ctx, name, argc, argv);
 		break;
 	case SECTION_NETS:
-		ret = hk_mod_load_net(ctx, name, argc, argv);
+		ret = hk_mod_load_net(ctx, argc, argv);
 		break;
 	default:
 		break;
@@ -227,7 +212,7 @@ int hk_mod_load(char *fname)
 	buf_t buf;
 	load_ctx_t ctx = {
 		.fname = fname,
-		.section = SECTION_NONE,
+		.section = SECTION_OBJECTS,
 	};
 
 	log_debug(2, "hk_mod_load '%s'", fname);
@@ -239,34 +224,65 @@ int hk_mod_load(char *fname)
 	}
 
 	buf_init(&buf);
-	buf_grow(&buf, 1);
+
+	int check_nl = 0;
 
 	while ((ret == 0) && (!feof(f))) {
-		char *str = (char *) buf.base + buf.len;
+		char str[1024];
+		int len = fread(str, 1, sizeof(str)-1, f);
+		if (len > 0) {
+			int i;
 
-		if (fgets(str, buf.size-buf.len, f) != NULL) {
-			buf.len += strlen(str);
+			// Replace all non-printable characters with spaces
+			for (i = 0; i < len; i++) {
+				if ((str[i] < ' ') && (str[i] != '\n')) {
+					str[i] = ' ';
+				}
+			}
 
-			if ((buf.len > 0) && (buf.base[buf.len-1] == '\n')) {
-				ctx.lnum++;
+			// Put NUL character at end of buffer to ease string parsing
+			str[len] = '\0';
 
-				buf.len--;
-				buf.base[buf.len] = '\0';
+			char *s1 = str;
 
-				if (buf.len > 0) {
-					if (buf.base[buf.len-1] == '\\') {
-						buf.len--;
-						buf.base[buf.len] = '\0';
+			// If previous buffer chunk ended with \n, perform line continuation check now
+			if (check_nl) {
+				check_nl = 0;
+				if (*s1 != ' ') {
+					ret = hk_mod_load_line(&ctx, (char *) buf.base);
+					buf.len = 0;
+				}
+			}
+
+			while (s1 != NULL) {
+				char *s2 = strchr(s1, '\n');
+				if (s2 != NULL) {
+					*(s2++) = '\0';
+					buf_append_str(&buf, s1);
+
+					if (*s2 == '\0') {
+						// We don't have enough characters to check whether the next lines begins with a space.
+						// So we need to deffer this processing to the next buffer chunk
+						check_nl = 1;
+						s1 = NULL;
 					}
-					else {
+					else if (*s2 != ' ') {
+						// If the next line does not begins with a space,
+						// the current line is complete and must be processed
 						ret = hk_mod_load_line(&ctx, (char *) buf.base);
 						buf.len = 0;
 					}
 				}
+				else {
+					buf_append_str(&buf, s1);
+				}
+
+				s1 = s2;
 			}
-			else {
-				buf_grow(&buf, 1);
-			}
+		}
+		else if (len < 0) {
+			log_str("ERROR: Cannot read file '%s': %s", fname, strerror(errno));
+			ret = -1;
 		}
 	}
 
