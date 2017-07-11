@@ -107,8 +107,9 @@ install:: all
 	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
 	$(CP) -a test/timer.hk $(INSTALL_SHARE)/test.hk
 	$(CP) -a targets/$(DISTRO)/hakit.sh $(INSTALL_INIT)/hakit
-	make -C classes DESTDIR=$(INSTALL_DESTDIR) install
-	make -C ui DESTDIR=$(INSTALL_DESTDIR) install
+	for dir in $(SUBDIRS); do \
+	  make -C "$$dir" DESTDIR=$(INSTALL_DESTDIR) install ;\
+	done
 ifneq ($(WITHOUT_SSL),yes)
 	make -C ssl DESTDIR=$(INSTALL_DESTDIR) install
 endif
