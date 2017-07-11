@@ -10,6 +10,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
 #include <libgen.h>
@@ -33,7 +34,7 @@ void env_init(int argc, char *argv[])
 		free(env_bindir_);
 	}
 	path = strdup(argv[0]);
-	env_bindir_ = strdup(dirname(path));
+	env_bindir_ = realpath(dirname(path), NULL);
 	free(path);
 
 	/* Probe for development environment */
@@ -43,7 +44,7 @@ void env_init(int argc, char *argv[])
 	}
 	if (access(env_bindir(".version"), R_OK) == 0) {
 		path = strdup(env_bindir_);
-		env_devdir_ = strdup(dirname(dirname(env_bindir_)));
+		env_devdir_ = strdup(dirname(dirname(path)));
 		free(path);
 	}
 
