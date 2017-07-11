@@ -43,8 +43,26 @@ static hk_proc_t *hk_proc_find_free(void)
 }
 
 
+static int hk_proc_quit(void *user_data)
+{
+	int i;
+
+	/* Find a free entry in proc table */
+	for (i = 0; i < nprocs; i++) {
+                hk_proc_stop(&procs[i]);
+	}
+
+        return 0;
+}
+
+
 static hk_proc_t *hk_proc_add(void)
 {
+        /* Hook a quit handler if not already done */
+        if (procs == NULL) {
+                sys_quit_handler(hk_proc_quit, NULL);
+        }
+
 	/* Find a free entry in proc table */
 	hk_proc_t *proc = hk_proc_find_free();
 
