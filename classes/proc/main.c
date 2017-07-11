@@ -145,7 +145,7 @@ static void _start(ctx_t *ctx)
 
 		argv[i] = NULL;
 
-		ctx->proc = hk_proc_start(argc, argv, env_appdir(NULL),
+		ctx->proc = hk_proc_start(argv, env_appdir(NULL),
 					  (hk_proc_out_func_t) _stdout, NULL,
 					  (hk_proc_term_func_t) _term, ctx);
 

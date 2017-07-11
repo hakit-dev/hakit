@@ -183,7 +183,7 @@ static int hk_proc_sigchld(hk_proc_t *proc, pid_t pid, int status)
 }
 
 
-hk_proc_t *hk_proc_start(int argc, char *argv[], char *cwd,
+hk_proc_t *hk_proc_start(char *argv[], char *cwd,
 			 hk_proc_out_func_t cb_stdout,
 			 hk_proc_out_func_t cb_stderr,
 			 hk_proc_term_func_t cb_term,
@@ -194,11 +194,6 @@ hk_proc_t *hk_proc_start(int argc, char *argv[], char *cwd,
 	int p_out[2] = {-1,-1};
 	int p_err[2] = {-1,-1};
 	pid_t pid;
-
-	if (argc < 1) {
-		log_str("PANIC: Cannot start process with empty command line");
-		return NULL;
-	}
 
 	log_debug(2, "hk_proc_start %s ...", argv[0]);
 	log_debug(2, "hk_proc_start chdir = %s", cwd);
