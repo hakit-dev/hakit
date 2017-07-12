@@ -28,11 +28,10 @@
 
 
 #define NAME "hakit-launcher"
-//#define PLATFORM_URL "https://hakit.net/api/"
-#define PLATFORM_URL "http://localhost/api/"
+#define PLATFORM_URL "https://hakit.net/api/"
+//#define PLATFORM_URL "http://localhost/api/"
 
 #define LIB_DIR "/var/lib/hakit"
-#define APPS_DIR LIB_DIR "/apps"
 
 #define HELLO_RETRY_DELAY (3*60)
 
@@ -86,38 +85,6 @@ static int create_dir(const char *dir)
         }
 
         return 0;
-}
-
-
-static char *app_dir(char *app_name)
-{
-        static char *apps_dir = NULL;
-        int size;
-        char *dir;
-
-        // Create apps directory
-        if (apps_dir == NULL) {
-                size = strlen(opt_lib_dir) + 8;
-                apps_dir = malloc(size);
-                snprintf(apps_dir, size, "%s/apps", opt_lib_dir);
-
-                if (create_dir(apps_dir) != 0) {
-                        free(apps_dir);
-                        apps_dir = NULL;
-                        return NULL;
-                }
-        }
-
-        size = strlen(apps_dir) + strlen(app_name) + 2;
-        dir = malloc(size);
-        snprintf(dir, size, "%s/%s", apps_dir, app_name);
-
-        if (create_dir(dir) != 0) {
-                free(dir);
-                return NULL;
-        }
-
-        return dir;
 }
 
 
@@ -209,38 +176,16 @@ static int platform_get_status(char *buf, int len, char **errstr, int *pofs)
 }
 
 
-static char *platform_get_prop(char **argv, char *key)
-{
-	char *value = NULL;
-	int i;
-
-	for (i = 0; (argv[i] != NULL) && (value == NULL); i++) {
-		char *args = argv[i];
-		char *s = strchr(args, ':');
-		if (s != NULL) {
-			char c = *s;
-			*s = '\0';
-			if (strcmp(args, key) == 0) {
-				value = s+1;
-				while ((*value != '\0') && (*value <= ' ')) {
-					value++;
-				}
-			}
-			*s = c;
-		}
-	}
-
-	return value;
-}
-
-
 //===================================================
 // HAKit Engine
 //==================================================
 
 typedef struct {
         char *name;
+        char *rev;
         char *path;
+        char *basename;
+        int ready;
 } app_t;
 
 
@@ -268,6 +213,7 @@ static int engine_start(hk_tab_t *apps)
         HK_TAB_PUSH_VALUE(argv, (char *) debug);
         for (i = 0; i < apps->nmemb; i++) {
                 app_t *app = HK_TAB_PTR(*apps, app_t, i);
+                strcpy(app->basename, "app.hk");
                 HK_TAB_PUSH_VALUE(argv, app->path);
         }
         HK_TAB_PUSH_VALUE(argv, (char *) NULL);
@@ -300,7 +246,7 @@ typedef struct {
 } app_ctx_t;
 
 
-static void app_request_send(app_ctx_t *ctx);
+static void app_request(app_ctx_t *ctx);
 
 
 static app_ctx_t *app_ctx_alloc(void)
@@ -316,12 +262,54 @@ static app_ctx_t *app_ctx_alloc(void)
 static void app_ctx_feed(app_ctx_t *ctx, char *str)
 {
         app_t *app = hk_tab_push(&ctx->apps);
+
         app->name = strdup(str);
+        app->rev = NULL;
         app->path = NULL;
+        app->ready = 0;
+
+        char *s = strchr(app->name, ' ');
+        if (s != NULL) {
+                *(s++) = '\0';
+                while ((*s != '\0') && (*s <= ' ')) {
+                        s++;
+                }
+                app->rev = s;
+        }
+
+        int size = strlen(opt_lib_dir) + strlen(app->name) + 20;
+        app->path = malloc(size);
+        int ofs = snprintf(app->path, size, "%s/apps", opt_lib_dir);
+        create_dir(app->path);
+        ofs += snprintf(app->path+ofs, size-ofs, "/%s", app->name);
+        create_dir(app->path);
+        app->path[ofs++] = '/';
+        app->basename = &app->path[ofs];
+
+        if (app->rev != NULL) {
+                strcpy(app->basename, "REVISION");
+
+                // Check if app is already downloaded and up-to-date
+                FILE *f = fopen(app->path, "r");
+                if (f != NULL) {
+                        char buf[128];
+                        int len = fread(buf, 1, sizeof(buf)-1, f);
+                        fclose(f);
+
+                        if (len > 0) {
+                                buf[len] = '\0';
+                                if (strcmp(buf, app->rev) == 0) {
+                                        app->ready = 1;
+                                }
+                        }
+                }
+        }
+
+        *(app->basename) = '\0';
 }
 
 
-static void app_ctx_cleanup(app_ctx_t *ctx)
+static void app_ctx_free(app_ctx_t *ctx)
 {
         int i;
 
@@ -329,12 +317,9 @@ static void app_ctx_cleanup(app_ctx_t *ctx)
                 app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
 
                 free(app->name);
-                app->name = NULL;
+                free(app->path);
 
-                if (app->path != NULL) {
-                        free(app->path);
-                        app->path = NULL;
-                }
+                memset(app, 0, sizeof(app_t));
         }
 
         hk_tab_cleanup(&ctx->apps);
@@ -354,41 +339,51 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
 
         if (errcode == 0) {
                 app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
+                FILE *f;
+
+                log_str("INFO: Application '%s' downloaded successfully", app->name);
 
                 // Store application data
-                char *dir = app_dir(app->name);
+                strcpy(app->basename, "app.hk");
+                log_str("Writing app file: %s", app->path);
+                f = fopen(app->path, "w");
+                if (f != NULL) {
+                        char *buf1 = buf + ofs;
+                        int len1 = len - ofs;
+                        int wlen = fwrite(buf1, 1, len1, f);
+                        if (wlen != len1) {
+                                log_str("ERROR: Failed to write file '%s': %s", app->path, strerror(errno));
+                                errcode = -1;
+                        }
+                        fclose(f);
+                }
+                else {
+                        log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
+                        errcode = -1;
+                }
 
-                if (dir != NULL) {
-                        int size = strlen(dir)+8;
-                        FILE *f;
-
-                        app->path = malloc(size);
-                        snprintf(app->path, size, "%s/app.hk", dir);
-
+                // Store revision tag
+                if (errcode == 0) {
+                        strcpy(app->basename, "REVISION");
+                        log_str("Writing app revision tag: %s", app->path);
                         f = fopen(app->path, "w");
                         if (f != NULL) {
-                                char *buf1 = buf + ofs;
-                                int len1 = len - ofs;
-                                int wlen = fwrite(buf1, 1, len1, f);
-                                if (wlen != len1) {
-                                        log_str("ERROR: Failed to write file '%s': %s", app->path, strerror(errno));
-                                        errcode = -1;
-                                }
+                                fprintf(f, "%s", app->rev);
                                 fclose(f);
+
+                                app->ready = 1;
                         }
                         else {
                                 log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
                                 errcode = -1;
                         }
-
-                        free(dir);
                 }
         }
 
         if (errcode == 0) {
                 // Ask for next application
                 ctx->index++;
-                app_request_send(ctx);
+                app_request(ctx);
         }
         else {
                 hello_retry();
@@ -396,9 +391,23 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
 }
 
 
-static void app_request_send(app_ctx_t *ctx)
+static void app_request(app_ctx_t *ctx)
 {
-	log_debug(2, "app_request_send [%d]", ctx->index);
+	log_debug(2, "app_request %d/%d", ctx->index, ctx->apps.nmemb);
+	platform_state = ST_APP;
+
+        // Seek next appliation to download
+        while (ctx->index < ctx->apps.nmemb) {
+                app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
+                if (app->ready) {
+                        log_str("INFO: Application '%s' is up to date: %s", app->name, app->rev);
+                        ctx->index++;
+                }
+                else {
+                        log_str("INFO: Application '%s' will be downloaded: %s", app->name, app->rev);
+                        break;
+                }
+        }
 
         if (ctx->index < ctx->apps.nmemb) {
                 app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
@@ -417,48 +426,8 @@ static void app_request_send(app_ctx_t *ctx)
         }
         else {
 		engine_start(&ctx->apps);
-                app_ctx_cleanup(ctx);
-		return;
+                app_ctx_free(ctx);
 	}
-
-}
-
-
-static int app_request(char *app_list)
-{
-	app_ctx_t *ctx;
-
-	log_debug(2, "app_request app_list='%s'", app_list);
-	platform_state = ST_APP;
-
-	ctx = app_ctx_alloc();
-
-	while ((app_list != NULL) && (*app_list != '\0')) {
-		char *s = strchr(app_list, ' ');
-		if (s != NULL) {
-			*s = '\0';
-		}
-
-		while ((*app_list != '\0') && (*app_list <= ' ')) {
-			app_list++;
-		}
-		if (*app_list != '\0') {
-                        app_ctx_feed(ctx, app_list);
-		}
-
-		if (s != NULL) {
-			*s = ' ';
-			while ((*s != '\0') && (*s <= ' ')) {
-				s++;
-			}
-		}
-
-		app_list = s;
-	}
-
-	app_request_send(ctx);
-
-	return 0;
 } 
 
 
@@ -479,11 +448,27 @@ static void hello_response(void *user_data, char *buf, int len)
 			if (errcode == 0) {
 				log_str("INFO    : Device accepted by platform server");
                                 char **argv = platform_get_lines(buf+ofs, len-ofs);
-				char *app_list = platform_get_prop(argv, "Applications");
-				if (app_list != NULL) {
-					app_request(app_list);
-				}
+                                app_ctx_t *ctx = app_ctx_alloc();
+                                int i;
+
+                                for (i = 0; argv[i] != NULL; i++) {
+                                        char *key = argv[i];
+                                        char *value = strchr(key, ':');
+                                        if (value != NULL) {
+                                                *(value++) = '\0';
+                                                while ((*value != '\0') && (*value <= ' ')) {
+                                                        value++;
+                                                }
+
+                                                if (strcmp(key, "Application") == 0) {
+                                                        app_ctx_feed(ctx, value);
+                                                }
+                                        }
+                                }
+
                                 free(argv);
+
+                                app_request(ctx);
 			}
 			else {
 				log_str("WARNING : Access denied by platform server: %s", errstr);
