@@ -80,8 +80,15 @@ static int ws_callback_poll(struct lws_context *context, struct pollfd *pollfd)
 
 	ret = lws_service_fd(context, pollfd);
 	if (ret < 0) {
-		log_debug(3, "  => %d", ret);
+		log_str(3, "PANIC: lws service returned error %d", ret);
+                return 0;
 	}
+
+        /* if needed, force-service wsis that may not have read all input */
+        while (!lws_service_adjust_timeout(context, 1, 0)) {
+                lwsl_notice("extpoll doing forced service!\n");
+                lws_service_tsi(context, -1, 0);
+        }
 
 	return 1;
 }
