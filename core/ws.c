@@ -635,6 +635,9 @@ static int ws_server_init(ws_t *ws, int port, char *ssl_dir)
 	/* Init table of websocket sessions */
 	hk_tab_init(&ws->server.sessions, sizeof(void *));
 
+        /* Start 1-second clock tick for lws */
+        ws->server.tick = sys_timeout(1000, (sys_func_t) ws_tick, ws->server.context);
+
 	return 0;
 }
 
