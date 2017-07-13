@@ -139,7 +139,7 @@ static int ws_client_callback(struct lws *wsi,
 		log_debug(3, "ws_client_callback LWS_CALLBACK_CLIENT_CONNECTION_ERROR: %s", (char *) in);
 		// Callback error
 		if (pss->func != NULL) {
-			pss->func(pss->user_data, NULL, 0);
+			pss->func(pss->user_data, NULL, -1);
 		}
 		ret = 1;
 		break;

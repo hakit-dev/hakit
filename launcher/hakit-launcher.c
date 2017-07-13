@@ -332,61 +332,67 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
 {
 	log_debug(2, "app_response: index=%d len=%d", ctx->index, len);
 
-        // Get error code
-        char *errstr = NULL;
-        int ofs = 0;
-        int errcode = platform_get_status(buf, len, &errstr, &ofs);
+        if (len < 0) {
+                log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
+                hello_retry();
+        }
+        else {
+                // Get error code
+                char *errstr = NULL;
+                int ofs = 0;
+                int errcode = platform_get_status(buf, len, &errstr, &ofs);
 
-        if (errcode == 0) {
-                app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
-                FILE *f;
-
-                log_str("INFO: Application '%s' downloaded successfully", app->name);
-
-                // Store application data
-                strcpy(app->basename, "app.hk");
-                log_str("Writing app file: %s", app->path);
-                f = fopen(app->path, "w");
-                if (f != NULL) {
-                        char *buf1 = buf + ofs;
-                        int len1 = len - ofs;
-                        int wlen = fwrite(buf1, 1, len1, f);
-                        if (wlen != len1) {
-                                log_str("ERROR: Failed to write file '%s': %s", app->path, strerror(errno));
-                                errcode = -1;
-                        }
-                        fclose(f);
-                }
-                else {
-                        log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
-                        errcode = -1;
-                }
-
-                // Store revision tag
                 if (errcode == 0) {
-                        strcpy(app->basename, "REVISION");
-                        log_str("Writing app revision tag: %s", app->path);
+                        app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
+                        FILE *f;
+
+                        log_str("INFO: Application '%s' downloaded successfully", app->name);
+
+                        // Store application data
+                        strcpy(app->basename, "app.hk");
+                        log_str("Writing app file: %s", app->path);
                         f = fopen(app->path, "w");
                         if (f != NULL) {
-                                fprintf(f, "%s", app->rev);
+                                char *buf1 = buf + ofs;
+                                int len1 = len - ofs;
+                                int wlen = fwrite(buf1, 1, len1, f);
+                                if (wlen != len1) {
+                                        log_str("ERROR: Failed to write file '%s': %s", app->path, strerror(errno));
+                                        errcode = -1;
+                                }
                                 fclose(f);
-
-                                app->ready = 1;
                         }
                         else {
                                 log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
                                 errcode = -1;
                         }
-                }
-        }
 
-        if (errcode == 0) {
-                // Ask for next application
-                ctx->index++;
-                app_request(ctx);
-        }
-        else {
-                hello_retry();
+                        // Store revision tag
+                        if (errcode == 0) {
+                                strcpy(app->basename, "REVISION");
+                                log_str("Writing app revision tag: %s", app->path);
+                                f = fopen(app->path, "w");
+                                if (f != NULL) {
+                                        fprintf(f, "%s", app->rev);
+                                        fclose(f);
+
+                                        app->ready = 1;
+                                }
+                                else {
+                                        log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
+                                        errcode = -1;
+                                }
+                        }
+                }
+
+                if (errcode == 0) {
+                        // Ask for next application
+                        ctx->index++;
+                        app_request(ctx);
+                }
+                else {
+                        hello_retry();
+                }
         }
 }
 
@@ -439,7 +445,12 @@ static void hello_response(void *user_data, char *buf, int len)
 {
 	log_debug(2, "hello_response: len=%d", len);
 
-	if (len > 0) {
+        if (len < 0) {
+                log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
+                hello_retry();
+                //TODO: start local app if available
+        }
+	else if (len > 0) {
 		char *errstr = NULL;
                 int ofs = 0;
 		int errcode = platform_get_status(buf, len, &errstr, &ofs);
@@ -516,7 +527,7 @@ static int hello_request(void)
 	return 0;
 }
 
-	
+
 static void hello_retry(void)
 {
 	platform_state = ST_RETRY;
