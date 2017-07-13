@@ -196,19 +196,30 @@ static void engine_terminated(void *user_data, int status)
 }
 
 
-static int engine_start(hk_tab_t *apps)
+static void engine_start(hk_tab_t *apps)
 {
-        char *bin = env_bindir("hakit");
-        hk_proc_t *proc;
-        char debug[16];
         HK_TAB_DECLARE(argv, char *);
+        hk_proc_t *proc;
         int i;
 
         log_debug(2, "engine_start");
 	platform_state = ST_ENGINE;
 
+        // Check all application are ready
+        for (i = 0; i < apps->nmemb; i++) {
+                app_t *app = HK_TAB_PTR(*apps, app_t, i);
+                if (!app->ready) {
+                        log_str("ERROR: Cannot start engine: application '%s' is not up to date.");
+                        hello_retry();
+                        return;
+                }
+        }
+
+        // Prepare HAKit engine command
+        char debug[16];
         snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
 
+        char *bin = env_bindir("hakit");
         HK_TAB_PUSH_VALUE(argv, (char *) bin);
         HK_TAB_PUSH_VALUE(argv, (char *) debug);
         for (i = 0; i < apps->nmemb; i++) {
@@ -218,6 +229,7 @@ static int engine_start(hk_tab_t *apps)
         }
         HK_TAB_PUSH_VALUE(argv, (char *) NULL);
 
+        // Sart HAKit engine
         proc = hk_proc_start_nopipe(argv.buf, NULL, engine_terminated, NULL);
 
         if (proc != NULL) {
@@ -231,8 +243,6 @@ static int engine_start(hk_tab_t *apps)
         }
 
         free(bin);
-
-	return 0;
 }
 
 
@@ -441,14 +451,99 @@ static void app_request(app_ctx_t *ctx)
 // Device identification
 //==================================================
 
+static int hello_cache_save(char **argv)
+{
+        char fname[strlen(opt_lib_dir) + 8];
+        FILE *f;
+        int i;
+
+        snprintf(fname, sizeof(fname), "%s/HELLO", opt_lib_dir);
+
+        f = fopen(fname, "w");
+        if (f == NULL) {
+                log_str("WARNING: Cannot save HELLO cache file '%s': %s", fname, strerror(errno));
+                return -1;
+        }
+
+        for (i = 0; argv[i] != NULL; i++) {
+                fputs(argv[i], f);
+                fputc('\n', f);
+        }
+
+        fclose(f);
+
+        return 0;
+}
+
+
+static void hello_response_parse(char *str, app_ctx_t *ctx)
+{
+        char *value = strchr(str, ':');
+
+        if (value != NULL) {
+                *(value++) = '\0';
+                while ((*value != '\0') && (*value <= ' ')) {
+                        value++;
+                }
+
+                if (strcmp(str, "Application") == 0) {
+                        app_ctx_feed(ctx, value);
+                }
+        }
+}
+
+
+static app_ctx_t *hello_cache_load(void)
+{
+        char fname[strlen(opt_lib_dir) + 8];
+        app_ctx_t *ctx = NULL;
+        FILE *f;
+
+        snprintf(fname, sizeof(fname), "%s/HELLO", opt_lib_dir);
+
+        f = fopen(fname, "r");
+        if (f == NULL) {
+                log_str("WARNING: Cannot load HELLO cache file '%s': %s", fname, strerror(errno));
+                return NULL;
+        }
+
+        log_str("INFO: Loading HELLO cache file");
+        ctx = app_ctx_alloc();
+
+        while (!feof(f)) {
+                char buf[128];
+                if (fgets(buf, sizeof(buf), f) != NULL) {
+                        int len = strlen(buf);
+                        while ((len > 0) && (buf[len-1] <= ' ')) {
+                                len--;
+                        }
+                        buf[len] = '\0';
+
+                        hello_response_parse(buf, ctx);
+                }
+        }
+
+        fclose(f);
+
+        return ctx;
+}
+
+
 static void hello_response(void *user_data, char *buf, int len)
 {
 	log_debug(2, "hello_response: len=%d", len);
 
         if (len < 0) {
                 log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
-                hello_retry();
-                //TODO: start local app if available
+
+                app_ctx_t *ctx = hello_cache_load();
+                if (ctx != NULL) {
+                        engine_start(&ctx->apps);
+                        app_ctx_free(ctx);
+                }
+                else {
+                        hello_retry();
+                }
         }
 	else if (len > 0) {
 		char *errstr = NULL;
@@ -462,19 +557,10 @@ static void hello_response(void *user_data, char *buf, int len)
                                 app_ctx_t *ctx = app_ctx_alloc();
                                 int i;
 
-                                for (i = 0; argv[i] != NULL; i++) {
-                                        char *key = argv[i];
-                                        char *value = strchr(key, ':');
-                                        if (value != NULL) {
-                                                *(value++) = '\0';
-                                                while ((*value != '\0') && (*value <= ' ')) {
-                                                        value++;
-                                                }
+                                hello_cache_save(argv);
 
-                                                if (strcmp(key, "Application") == 0) {
-                                                        app_ctx_feed(ctx, value);
-                                                }
-                                        }
+                                for (i = 0; argv[i] != NULL; i++) {
+                                        hello_response_parse(argv[i], ctx);
                                 }
 
                                 free(argv);
