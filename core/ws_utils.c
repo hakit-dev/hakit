@@ -74,13 +74,14 @@ void ws_log_init(int debug)
 
 static int ws_callback_poll(struct lws_context *context, struct pollfd *pollfd)
 {
-	int ret;
+        int ret = (pollfd->revents & POLLHUP) ? 0:1;
+	int err;
 
-	log_debug(3, "ws_callback_poll: %d %02X", pollfd->fd, pollfd->revents);
+	log_debug(3, "ws_callback_poll: fd=%d revents=%02X", pollfd->fd, pollfd->revents);
 
-	ret = lws_service_fd(context, pollfd);
-	if (ret < 0) {
-		log_str(3, "PANIC: lws service returned error %d", ret);
+	err = lws_service_fd(context, pollfd);
+	if (err < 0) {
+		log_str("PANIC: lws service returned error %d", err);
                 return 0;
 	}
 
@@ -90,7 +91,7 @@ static int ws_callback_poll(struct lws_context *context, struct pollfd *pollfd)
                 lws_service_tsi(context, -1, 0);
         }
 
-	return 1;
+	return ret;
 }
 
 
