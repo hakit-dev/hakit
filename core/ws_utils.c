@@ -74,7 +74,7 @@ void ws_log_init(int debug)
 
 static int ws_callback_poll(struct lws_context *context, struct pollfd *pollfd)
 {
-        int ret = (pollfd->revents & POLLHUP) ? 0:1;
+        int ret = (pollfd->revents & (POLLHUP|POLLNVAL)) ? 0:1;
 	int err;
 
 	log_debug(3, "ws_callback_poll: fd=%d revents=%02X", pollfd->fd, pollfd->revents);
