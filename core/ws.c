@@ -104,7 +104,7 @@ static void show_connection_info(struct lws *wsi)
 		user_agent = strdup("?");
 	}
 
-	log_str("HTTP connect from %s (%s): %s\n", name, rip, user_agent);
+	log_str("HTTP connect from %s (%s): %s", name, rip, user_agent);
 
 	if (user_agent != NULL) {
 		free(user_agent);
