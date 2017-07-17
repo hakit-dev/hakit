@@ -126,6 +126,9 @@ int main(int argc, char *argv[])
 	log_str(options_summary);
 	log_str("Using libwebsockets version " LWS_LIBRARY_VERSION " build " LWS_BUILD_HASH);
 
+        /* Enable per-line output buffering */
+        setlinebuf(stdout);
+
 	/* Init system runtime */
 	sys_init();
 

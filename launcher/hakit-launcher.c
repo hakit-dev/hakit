@@ -47,6 +47,7 @@ typedef enum {
 static platform_state_t platform_state = ST_HELLO;
 
 static ws_client_t ws_client;
+static io_channel_t io_stdin;
 
 static void hello_retry(void);
 
@@ -188,10 +189,24 @@ typedef struct {
         int ready;
 } app_t;
 
+static hk_proc_t *engine_proc = NULL;
+
+static void engine_stdout(void *user_data, char *buf, int size)
+{
+        fwrite(buf, 1, size, stdout);
+}
+
+
+static void engine_stderr(void *user_data, char *buf, int size)
+{
+        log_put(buf, size);
+}
+
 
 static void engine_terminated(void *user_data, int status)
 {
         log_str("WARNING: HAKit engine terminated with status %d", status);
+        engine_proc = NULL;
 	hello_retry();
 }
 
@@ -199,7 +214,6 @@ static void engine_terminated(void *user_data, int status)
 static void engine_start(hk_tab_t *apps)
 {
         HK_TAB_DECLARE(argv, char *);
-        hk_proc_t *proc;
         int i;
 
         log_debug(2, "engine_start");
@@ -230,12 +244,11 @@ static void engine_start(hk_tab_t *apps)
         HK_TAB_PUSH_VALUE(argv, (char *) NULL);
 
         // Sart HAKit engine
-        proc = hk_proc_start_nopipe(argv.buf, NULL, engine_terminated, NULL);
+        engine_proc = hk_proc_start(argv.buf, NULL, engine_stdout, engine_stderr, engine_terminated, NULL);
 
-        if (proc != NULL) {
+        if (engine_proc != NULL) {
                 // Leave stdin stream to child
-                close(STDIN_FILENO);
-                log_str("HAKit engine process started: pid=%d", proc->pid);
+                log_str("HAKit engine process started: pid=%d", engine_proc->pid);
         }
         else {
                 log_str("ERROR: HAKit engine start failed");
@@ -651,6 +664,28 @@ static void run_as_daemon(void)
 }
 
 
+static int stdin_recv(void *user_data, char *buf, int len)
+{
+	if (buf == NULL) {
+		/* Quit if hangup from stdin */
+		sys_quit();
+                return 0;
+        }
+
+        if (engine_proc != NULL) {
+                hk_proc_write(engine_proc, buf, len);
+
+                while ((len > 0) && (buf[len-1] < ' ')) {
+                        buf[len--] = '\0';
+                }
+        }
+        else {
+                log_str("WARNING: Engine not running - Input data ignored");
+        }
+
+        return 1;
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -658,6 +693,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	/* Init exec environment */
         env_init(argc, argv);
 
         // Create lib directory
@@ -676,8 +712,16 @@ int main(int argc, char *argv[])
 
 	options_conf_parse(api_auth_entries, "platform");
 
+        /* Enable per-line output buffering */
+        setlinebuf(stdout);
+
 	/* Init system runtime */
 	sys_init();
+
+	/* Setup stdin command handler if not running as a daemon */
+	if (!opt_daemon) {
+		io_channel_setup(&io_stdin, STDIN_FILENO, (io_func_t) stdin_recv, NULL);
+	}
 
 	// Setup WS HTTP client
 	memset(&ws_client, 0, sizeof(ws_client));

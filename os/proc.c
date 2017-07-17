@@ -378,14 +378,6 @@ done:
 }
 
 
-hk_proc_t *hk_proc_start_nopipe(char *argv[], char *cwd,
-                                hk_proc_term_func_t cb_term,
-                                void *user_data)
-{
-        return hk_proc_start_(argv, cwd, NULL, NULL, NULL, cb_term, user_data);
-}
-
-
 static int hk_proc_kill_timeout(hk_proc_t * proc)
 {
 	proc->timeout_tag = 0;
