@@ -27,10 +27,12 @@
 #include "hakit_version.h"
 
 
+#define VERSION HAKIT_VERSION
 #define NAME "hakit-launcher"
 #define PLATFORM_URL "https://hakit.net/api/"
 //#define PLATFORM_URL "http://localhost/api/"
 
+#define PID_FILE "/var/run/hakit.pid"
 #define LIB_DIR "/var/lib/hakit"
 
 #define HELLO_RETRY_DELAY (3*60)
@@ -56,15 +58,16 @@ static void hello_retry(void);
 // Command line arguments
 //==================================================
 
-#define VERSION HAKIT_VERSION
 const char *options_summary = "HAKit launcher " VERSION " (" ARCH ")";
 
-static const char *opt_lib_dir = LIB_DIR;
+static char *opt_pid_file = PID_FILE;
+static char *opt_lib_dir = LIB_DIR;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
 	{ "daemon", 'D', 0,    OPTIONS_TYPE_NONE, &opt_daemon,  "Run in background as a daemon" },
-	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store application and config files", "DIR" },
+	{ "pid-file", 'P', 0,  OPTIONS_TYPE_STRING, &opt_pid_file,  "Daemon PID file name (default: " PID_FILE ")", "FILE" },
+	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store application and config files (default: " LIB_DIR ")", "DIR" },
 	{ NULL }
 };
 
@@ -639,6 +642,29 @@ static void hello_retry(void)
 // Program body
 //===================================================
 
+static void goodbye(void *user_data)
+{
+        log_debug(3, "Deleting PID file '%s'", opt_pid_file);
+        if (unlink(opt_pid_file) < 0) {
+                log_str("ERROR: Cannot delete pid file '%s': %s\n", opt_pid_file, strerror(errno));
+        }
+}
+
+
+static void write_pid_file(pid_t pid)
+{
+        FILE *f = fopen(opt_pid_file, "w");
+        if (f != NULL) {
+                fprintf(f, "%d\n", pid);
+                fclose(f);
+                log_debug(3, "PID file '%s' created", opt_pid_file);
+        }
+        else {
+                log_str("ERROR: Cannot create pid file '%s': %s\n", opt_pid_file, strerror(errno));
+        }
+}
+
+
 static void run_as_daemon(void)
 {
 	pid_t pid;
@@ -650,8 +676,11 @@ static void run_as_daemon(void)
 	}
 
 	if (pid > 0) {
+                write_pid_file(pid);
 		exit(0);
 	}
+
+        sys_quit_handler((sys_func_t) goodbye, NULL);
 
 	if (setsid() < 0) {
 		log_str("ERROR: Setsid failed: %s", strerror(errno));

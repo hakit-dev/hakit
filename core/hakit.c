@@ -29,12 +29,16 @@
 #include "hakit_version.h"
 
 
+#define PID_FILE "/var/run/hakit.pid"
+
+
 //===================================================
 // Command line arguments
 //===================================================
 
 const char *options_summary = "HAKit engine " HAKIT_VERSION " (" ARCH ")";
 
+static char *opt_pid_file = PID_FILE;
 static int opt_monitor = 0;
 static char *opt_class_path = NULL;
 static char *opt_hosts = NULL;
@@ -47,6 +51,7 @@ static char *opt_auth = NULL;
 static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
 	{ "daemon",  'D', 0, OPTIONS_TYPE_NONE,   &opt_daemon,  "Run in background as a daemon" },
+	{ "pid-file", 'P', 0,  OPTIONS_TYPE_STRING, &opt_pid_file,  "Daemon PID file name (default: " PID_FILE ")", "FILE" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
 	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable HKCP monitor mode" },
@@ -80,6 +85,29 @@ static void monitor_sink_event(void *user_data, char *name, char *value)
 // Program body
 //===================================================
 
+static void goodbye(void *user_data)
+{
+        log_debug(3, "Deleting PID file '%s'", opt_pid_file);
+        if (unlink(opt_pid_file) < 0) {
+                log_str("ERROR: Cannot delete pid file '%s': %s\n", opt_pid_file, strerror(errno));
+        }
+}
+
+
+static void write_pid_file(pid_t pid)
+{
+        FILE *f = fopen(opt_pid_file, "w");
+        if (f != NULL) {
+                fprintf(f, "%d\n", pid);
+                fclose(f);
+                log_debug(3, "PID file '%s' created", opt_pid_file);
+        }
+        else {
+                log_str("ERROR: Cannot create pid file '%s': %s\n", opt_pid_file, strerror(errno));
+        }
+}
+
+
 static void run_as_daemon(void)
 {
 	pid_t pid;
@@ -91,8 +119,11 @@ static void run_as_daemon(void)
 	}
 
 	if (pid > 0) {
+                write_pid_file(pid);
 		exit(0);
 	}
+
+        sys_quit_handler((sys_func_t) goodbye, NULL);
 
 	if (setsid() < 0) {
 		log_str("ERROR: Setsid failed: %s", strerror(errno));
