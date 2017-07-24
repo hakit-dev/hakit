@@ -2,7 +2,7 @@
 
 #
 # HAKit - The Home Automation KIT
-# Copyright (C) 2014-2015 Sylvain Giroudon
+# Copyright (C) 2014-2017 Sylvain Giroudon
 #
 # This file is subject to the terms and conditions of the GNU Lesser
 # General Public License v2.1. See the file LICENSE in the top level
@@ -14,12 +14,11 @@ START=99
 DEBUG=1
 
 NAME='hakit'
-DAEMON="/usr/bin/$NAME"
+DAEMON="/usr/bin/$NAME-launcher"
 DAEMON_ARGS=""
 CONF="/etc/$NAME.conf"
 
 [ -r $CONF ] && . $CONF
-[ -z "$APP" ] && APP="/usr/share/$NAME/test.hk"
 
 
 pidof() {

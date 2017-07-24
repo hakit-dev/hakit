@@ -2,7 +2,7 @@
 
 #
 # HAKit - The Home Automation KIT
-# Copyright (C) 2014-2015 Sylvain Giroudon
+# Copyright (C) 2014-2017 Sylvain Giroudon
 #
 # This file is subject to the terms and conditions of the GNU Lesser
 # General Public License v2.1. See the file LICENSE in the top level
@@ -24,29 +24,16 @@ DEBUG=1
 PATH=/sbin:/usr/sbin:/bin:/usr/bin
 DESC="HAKit daemon"
 NAME=hakit
-DAEMON="/usr/bin/$NAME"
+DAEMON="/usr/bin/$NAME-launcher"
 DAEMON_ARGS=""
 PIDFILE="/var/run/$NAME.pid"
 SCRIPTNAME="/etc/init.d/$NAME"
 
-LAUNCHER="/usr/bin/$NAME-launcher"
 CONF_DEFAULT=/etc/default/$NAME
 CONF_PLATFORM=/etc/$NAME/platform
 
 # Read configuration variable file if it is present
 [ -r $CONF_DEFAULT ] && . $CONF_DEFAULT
-
-if [ -z "$APP" ]; then
-    if [ -f $CONF_PLATFORM ]; then
-        # If no APP is specified and a HAKit platform config file is found,
-        # start the HAKit launcher
-        DAEMON=$LAUNCHER
-    else
-        # If no APP is specified and no HAKit platform config file is present,
-        # start a default test app
-        APP="/usr/share/$NAME/test.hk"
-    fi
-fi
 
 # Exit if the program is not installed
 [ -x "$DAEMON" ] || exit 0

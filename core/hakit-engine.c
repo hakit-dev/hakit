@@ -38,20 +38,16 @@
 
 const char *options_summary = "HAKit engine " HAKIT_VERSION " (" ARCH ")";
 
-static char *opt_pid_file = PID_FILE;
 static int opt_monitor = 0;
 static char *opt_class_path = NULL;
 static char *opt_hosts = NULL;
 static int opt_no_hkcp = 0;
 static int opt_no_ssl = 0;
 static int opt_insecure_ssl = 0;
-static char *opt_api_key = NULL;
 static char *opt_auth = NULL;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
-	{ "daemon",  'D', 0, OPTIONS_TYPE_NONE,   &opt_daemon,  "Run in background as a daemon" },
-	{ "pid-file", 'P', 0,  OPTIONS_TYPE_STRING, &opt_pid_file,  "Daemon PID file name (default: " PID_FILE ")", "FILE" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
 	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable HKCP monitor mode" },
@@ -59,7 +55,6 @@ static const options_entry_t options_entries[] = {
 #ifdef WITH_SSL
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
 	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure SSL client connections (self-signed certificates)" },
-	{ "api-key", 'K', 0,   OPTIONS_TYPE_STRING,   &opt_api_key,  "API key for accessing hakit.net web platform" },
 #endif
 	{ "http-auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
 	{ NULL }
@@ -85,57 +80,6 @@ static void monitor_sink_event(void *user_data, char *name, char *value)
 // Program body
 //===================================================
 
-static void goodbye(void *user_data)
-{
-        log_debug(3, "Deleting PID file '%s'", opt_pid_file);
-        if (unlink(opt_pid_file) < 0) {
-                log_str("ERROR: Cannot delete pid file '%s': %s\n", opt_pid_file, strerror(errno));
-        }
-}
-
-
-static void write_pid_file(pid_t pid)
-{
-        FILE *f = fopen(opt_pid_file, "w");
-        if (f != NULL) {
-                fprintf(f, "%d\n", pid);
-                fclose(f);
-                log_debug(3, "PID file '%s' created", opt_pid_file);
-        }
-        else {
-                log_str("ERROR: Cannot create pid file '%s': %s\n", opt_pid_file, strerror(errno));
-        }
-}
-
-
-static void run_as_daemon(void)
-{
-	pid_t pid;
-
-	pid = fork();
-	if (pid < 0) {
-		log_str("ERROR: Fork failed: %s", strerror(errno));
-		exit(3);
-	}
-
-	if (pid > 0) {
-                write_pid_file(pid);
-		exit(0);
-	}
-
-        sys_quit_handler((sys_func_t) goodbye, NULL);
-
-	if (setsid() < 0) {
-		log_str("ERROR: Setsid failed: %s", strerror(errno));
-		exit(3);
- 	}
-
-	close(STDIN_FILENO);
-
-	log_str("Starting in daemon mode: pid=%d", getpid());
-}
-
-
 int main(int argc, char *argv[])
 {
 	char *app;
@@ -143,10 +87,6 @@ int main(int argc, char *argv[])
 
 	if (options_parse(options_entries, &argc, argv) != 0) {
 		exit(1);
-	}
-
-	if (opt_daemon) {
-		run_as_daemon();
 	}
 
 	/* Init exec environment */
