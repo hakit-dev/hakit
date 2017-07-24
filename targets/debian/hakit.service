@@ -1,0 +1,15 @@
+[Unit]
+Description=HAKit, the Home Automation Kit
+After=local-fs.target systemd-journald-dev-log.socket network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+PIDFile=/var/run/hakit.pid
+ExecStart=/usr/bin/hakit-launcher --daemon
+Restart=no
+TimeoutSec=5s
+KillMode=mixed
+
+[Install]
+Alias=hakit
