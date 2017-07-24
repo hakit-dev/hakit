@@ -9,10 +9,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <libgen.h>
-#include <errno.h>
-#include <unistd.h>
 
 #include "types.h"
 #include "options.h"
