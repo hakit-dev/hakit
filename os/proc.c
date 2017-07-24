@@ -146,7 +146,7 @@ static void hk_proc_print_buf(hk_proc_t *proc, char *tag, char *buf, int len)
 
 static void hk_proc_stdout(hk_proc_t *proc, char *buf, int len)
 {
-	log_debug(2, "hk_proc_stdout [%d] len=%d", proc->pid, len);
+	log_debug(3, "hk_proc_stdout [%d] len=%d", proc->pid, len);
 
 	if (len > 0) {
 		if (proc->cb_stdout != NULL) {
@@ -165,7 +165,7 @@ static void hk_proc_stdout(hk_proc_t *proc, char *buf, int len)
 
 static void hk_proc_stderr(hk_proc_t *proc, char *buf, int len)
 {
-	log_debug(2, "hk_proc_stderr [%d] len=%d", proc->pid, len);
+	log_debug(3, "hk_proc_stderr [%d] len=%d", proc->pid, len);
 
 	if (len > 0) {
 		if (proc->cb_stderr != NULL) {
