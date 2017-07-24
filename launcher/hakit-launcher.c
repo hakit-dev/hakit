@@ -236,7 +236,7 @@ static void engine_start(hk_tab_t *apps)
         char debug[16];
         snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
 
-        char *bin = env_bindir("hakit");
+        char *bin = env_bindir("hakit-engine");
         HK_TAB_PUSH_VALUE(argv, (char *) bin);
         HK_TAB_PUSH_VALUE(argv, (char *) debug);
         for (i = 0; i < apps->nmemb; i++) {
