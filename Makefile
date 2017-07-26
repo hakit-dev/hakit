@@ -36,7 +36,7 @@ CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c hkcp.c mqtt.c comm.
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
-all:: submodules $(OUTDIR) lws $(ARCH_LIBS) $(ARCH_BINS)
+all:: submodules $(OUTDIR) lws mqtt $(ARCH_LIBS) $(ARCH_BINS)
 	for dir in $(SUBDIRS); do \
 	  make -C "$$dir" TARGET=$(TARGET) ;\
 	done
@@ -47,10 +47,6 @@ CHECK_PACKAGES_deb += libssl-dev
 endif
 
 all:: ssl
-endif
-
-ifneq ($(WITHOUT_MQTT),yes)
-all:: mqtt
 endif
 
 #
@@ -80,11 +76,17 @@ lws:
 #
 # MQTT
 #
+ifneq ($(WITHOUT_MQTT),yes)
 CFLAGS += -I$(MQTT_DIR)
+endif
 
 .PHONY: mqtt
 mqtt:
+ifneq ($(WITHOUT_MQTT),yes)
 	make -C mqtt TARGET=$(TARGET)
+else
+	@true
+endif
 
 #
 # HAKit libs and bins
@@ -99,10 +101,9 @@ $(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-engine: $(OUTDIR)/hakit-engine.o $(OBJS)
 
 clean::
-	for dir in $(SUBDIRS); do \
+	for dir in lws mqtt $(SUBDIRS); do \
 	  make -C "$$dir" clean ;\
 	done
-	make -C lws clean
 	$(RM) os/*~ core/*~
 
 
