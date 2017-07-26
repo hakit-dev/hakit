@@ -37,6 +37,7 @@
 #define APP_FILE_NAME "app.hk"
 
 #define HELLO_RETRY_DELAY (3*60)
+#define PING_DELAY (60*60)
 
 typedef enum {
 	ST_IDLE=0,
@@ -182,6 +183,58 @@ static int platform_get_status(char *buf, int len, char **errstr, int *pofs)
 
 
 //===================================================
+// Platform ping
+//==================================================
+
+static sys_tag_t ping_timeout_tag = 0;
+
+static void ping_start(void);
+
+
+static void ping_response(void *user_data, char *buf, int len)
+{
+	log_debug(2, "ping_response: len=%d", len);
+        //TODO: Restart engine if application changed
+        ping_start();
+}
+
+
+static int ping_request(void)
+{
+        buf_t header;
+
+	log_debug(2, "ping_request");
+        ping_timeout_tag = 0;
+
+	// API key
+        buf_init(&header);
+	platform_http_header(&header);
+
+	ws_client_get(&ws_client, PLATFORM_URL "hello.php", (char *) header.base, ping_response, NULL);
+
+        buf_cleanup(&header);
+
+	return 0;
+}
+
+
+static void ping_stop(void)
+{
+        if (ping_timeout_tag != 0) {
+                sys_remove(ping_timeout_tag);
+                ping_timeout_tag = 0;
+        }
+}
+
+static void ping_start(void)
+{
+        ping_stop();
+        ping_timeout_tag = sys_timeout(PING_DELAY*1000, (sys_func_t) ping_request, NULL);
+}
+
+
+
+//===================================================
 // HAKit Engine
 //==================================================
 
@@ -211,6 +264,7 @@ static void engine_terminated(void *user_data, int status)
 {
         log_str("WARNING: HAKit engine terminated with status %d", status);
         engine_proc = NULL;
+        ping_stop();
 	hello_retry();
 }
 
@@ -252,6 +306,9 @@ static void engine_start(hk_tab_t *apps)
         if (engine_proc != NULL) {
                 // Leave stdin stream to child
                 log_str("HAKit engine process started: pid=%d", engine_proc->pid);
+                if (!opt_offline) {
+                        ping_start();
+                }
         }
         else {
                 log_str("ERROR: HAKit engine start failed");
@@ -638,7 +695,7 @@ static int hello_request(void)
 	// API key
         buf_init(&header);
 	platform_http_header(&header);
-	
+
 	// HAKit version
         buf_append_str(&header, "HAKit-Version: " VERSION "\r\n");
 
@@ -772,9 +829,13 @@ int main(int argc, char *argv[])
 
         /* If a local application is given in command line arguments, force off-line mode */
         app = env_app();
+        if (app == NULL) {
+                log_str("Using local application: off-line mode forced");
+                opt_offline = 1;
+        }
 
         /* Get platform settings if working on-line */
-        if ((!opt_offline) && (app == NULL)) {
+        if (!opt_offline) {
                 options_conf_parse(api_auth_entries, "platform");
         }
 
