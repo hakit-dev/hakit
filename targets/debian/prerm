@@ -1,2 +1,6 @@
 #!/bin/sh
-update-rc.d -f hakit remove
+
+NAME=hakit
+
+service $NAME stop
+update-rc.d -f $NAME remove

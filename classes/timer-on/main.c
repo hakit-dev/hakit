@@ -56,11 +56,23 @@ static int _new(hk_obj_t *obj)
 }
 
 
+static void set_output(ctx_t *ctx)
+{
+	hk_pad_update_int(ctx->output, ctx->output->state ^ ctx->inv);
+}
+
+
+static void _start(hk_obj_t *obj)
+{
+	set_output(obj->ctx);
+}
+
+
 static int timeout(ctx_t *ctx)
 {
 	ctx->timeout_tag = 0;
 	ctx->output->state = 1;
-	hk_pad_update_int(ctx->output, 1 ^ ctx->inv);
+	set_output(ctx);
 	return 0;
 }
 
@@ -89,7 +101,7 @@ static void _input(hk_pad_t *pad, char *value)
 
 		if (ctx->output->state) {
 			ctx->output->state = 0;
-			hk_pad_update_int(ctx->output, ctx->inv);
+			set_output(ctx);
 		}
 	}
 }
@@ -99,5 +111,6 @@ hk_class_t _class = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
+	.start = _start,
 	.input = _input,
 };

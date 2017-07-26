@@ -25,6 +25,40 @@ static char *env_appdir_ = NULL;
 static char *env_app_ = NULL;
 
 
+static char *env_which(char *pgm)
+{
+	int pgmlen = strlen(pgm);
+	char *_path_ = getenv("PATH");
+	if (_path_ == NULL) {
+		return NULL;
+	}
+	_path_ = strdup(_path_);
+
+	char *dir = _path_;
+	char *ret = NULL;
+	while ((dir != NULL) && (ret == NULL)) {
+		char *sep = strchr(dir, ':');
+		if (sep != NULL) {
+			*(sep++) = '\0';
+		}
+
+		{
+			char path[strlen(dir)+pgmlen+2];
+			snprintf(path, sizeof(path), "%s/%s", dir, pgm);
+			if (access(path, X_OK) == 0) {
+				ret = realpath(dir, NULL);
+			}
+		}
+
+		dir = sep;
+	}
+
+	free(_path_);
+
+	return ret;
+}
+
+
 void env_init(int argc, char *argv[])
 {
 	char *path;
@@ -34,7 +68,12 @@ void env_init(int argc, char *argv[])
 		free(env_bindir_);
 	}
 	path = strdup(argv[0]);
-	env_bindir_ = realpath(dirname(path), NULL);
+	if (strchr(path, '/') != NULL) {
+		env_bindir_ = realpath(dirname(path), NULL);
+	}
+	else {
+		env_bindir_ = env_which(argv[0]);
+	}
 	free(path);
 
 	/* Probe for development environment */

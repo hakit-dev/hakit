@@ -74,16 +74,24 @@ void ws_log_init(int debug)
 
 static int ws_callback_poll(struct lws_context *context, struct pollfd *pollfd)
 {
-	int ret;
+        int ret = (pollfd->revents & (POLLHUP|POLLNVAL)) ? 0:1;
+	int err;
 
-	log_debug(3, "ws_callback_poll: %d %02X", pollfd->fd, pollfd->revents);
+	log_debug(3, "ws_callback_poll: fd=%d revents=%02X", pollfd->fd, pollfd->revents);
 
-	ret = lws_service_fd(context, pollfd);
-	if (ret < 0) {
-		log_debug(3, "  => %d", ret);
+	err = lws_service_fd(context, pollfd);
+	if (err < 0) {
+		log_str("PANIC: lws service returned error %d", err);
+                return 0;
 	}
 
-	return 1;
+        /* if needed, force-service wsis that may not have read all input */
+        while (!lws_service_adjust_timeout(context, 1, 0)) {
+                lwsl_notice("extpoll doing forced service!\n");
+                lws_service_tsi(context, -1, 0);
+        }
+
+	return ret;
 }
 
 
@@ -96,6 +104,13 @@ void ws_poll(struct lws_context *context, struct lws_pollargs *pa)
 void ws_poll_remove(struct lws_pollargs *pa)
 {
 	sys_remove_fd(pa->fd);
+}
+
+
+int ws_tick(struct lws_context *context)
+{
+	lws_service_fd(context, NULL);
+        return 1;
 }
 
 

@@ -17,7 +17,7 @@ OUTDIR = out/$(ARCH)
 ARCH_LIB = $(OUTDIR)/libhakit.a
 ARCH_LIBS = $(ARCH_LIB)
 
-BINS = hakit
+BINS = hakit-engine
 ifdef BUILD_TEST
 BINS += hakit-test-proc hakit-test-comm hakit-test-usb
 endif
@@ -96,7 +96,7 @@ $(ARCH_LIB): $(OBJS)
 $(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIBS)
 $(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o $(ARCH_LIBS)
-$(OUTDIR)/hakit: $(OUTDIR)/hakit.o $(OBJS)
+$(OUTDIR)/hakit-engine: $(OUTDIR)/hakit-engine.o $(OBJS)
 
 clean::
 	for dir in $(SUBDIRS); do \
@@ -115,20 +115,22 @@ INSTALL_DESTDIR = $(abspath $(HAKIT_DIR)$(DESTDIR))
 INSTALL_BIN = $(DESTDIR)/usr/bin
 INSTALL_SHARE = $(DESTDIR)/usr/share/hakit
 INSTALL_INIT = $(DESTDIR)/etc/init.d
-
-ifeq ($(ARCH),mips)
-INIT_SCRIPT = hakit-openwrt.sh
-else
-INIT_SCRIPT = hakit.sh
-endif
+INSTALL_SYSTEMD = $(DESTDIR)/etc/systemd/system
 
 install:: all
-	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE) $(INSTALL_INIT)
+	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE) $(INSTALL_INIT) $(INSTALL_SYSTEMD)
 	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
 	$(CP) -a test/timer.hk $(INSTALL_SHARE)/test.hk
 	$(CP) -a targets/$(DISTRO)/hakit.sh $(INSTALL_INIT)/hakit
-	make -C classes DESTDIR=$(INSTALL_DESTDIR) install
-	make -C ui DESTDIR=$(INSTALL_DESTDIR) install
+	for dir in $(SUBDIRS); do \
+	  make -C "$$dir" DESTDIR=$(INSTALL_DESTDIR) install ;\
+	done
 ifneq ($(WITHOUT_SSL),yes)
 	make -C ssl DESTDIR=$(INSTALL_DESTDIR) install
+endif
+
+ifneq ($(wildcard targets/$(DISTRO)/hakit.service),)
+install::
+	$(MKDIR) $(INSTALL_SYSTEMD)
+	$(CP) -a targets/$(DISTRO)/hakit.service $(INSTALL_SYSTEMD)/
 endif

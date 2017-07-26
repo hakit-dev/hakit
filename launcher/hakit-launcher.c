@@ -27,14 +27,17 @@
 #include "hakit_version.h"
 
 
+#define VERSION HAKIT_VERSION
 #define NAME "hakit-launcher"
-//#define PLATFORM_URL "https://hakit.net/api/"
-#define PLATFORM_URL "http://localhost/api/"
+#define PLATFORM_URL "https://hakit.net/api/"
+//#define PLATFORM_URL "http://localhost/api/"
 
+#define PID_FILE "/var/run/hakit.pid"
 #define LIB_DIR "/var/lib/hakit"
-#define APPS_DIR LIB_DIR "/apps"
+#define APP_FILE_NAME "app.hk"
 
 #define HELLO_RETRY_DELAY (3*60)
+#define PING_DELAY (60*60)
 
 typedef enum {
 	ST_IDLE=0,
@@ -48,6 +51,7 @@ typedef enum {
 static platform_state_t platform_state = ST_HELLO;
 
 static ws_client_t ws_client;
+static io_channel_t io_stdin;
 
 static void hello_retry(void);
 
@@ -56,15 +60,18 @@ static void hello_retry(void);
 // Command line arguments
 //==================================================
 
-#define VERSION HAKIT_VERSION
 const char *options_summary = "HAKit launcher " VERSION " (" ARCH ")";
 
-static const char *opt_lib_dir = LIB_DIR;
+static char *opt_pid_file = PID_FILE;
+static char *opt_lib_dir = LIB_DIR;
+static int opt_offline = 0;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
 	{ "daemon", 'D', 0,    OPTIONS_TYPE_NONE, &opt_daemon,  "Run in background as a daemon" },
-	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store application and config files", "DIR" },
+	{ "pid-file", 'P', 0,  OPTIONS_TYPE_STRING, &opt_pid_file,  "Daemon PID file name (default: " PID_FILE ")", "FILE" },
+	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store application and config files (default: " LIB_DIR ")", "DIR" },
+	{ "offline", 'l', 0,   OPTIONS_TYPE_NONE,  &opt_offline,  "Work off-line. Do not access the HAKit platform server" },
 	{ NULL }
 };
 
@@ -89,38 +96,6 @@ static int create_dir(const char *dir)
 }
 
 
-static char *app_dir(char *app_name)
-{
-        static char *apps_dir = NULL;
-        int size;
-        char *dir;
-
-        // Create apps directory
-        if (apps_dir == NULL) {
-                size = strlen(opt_lib_dir) + 8;
-                apps_dir = malloc(size);
-                snprintf(apps_dir, size, "%s/apps", opt_lib_dir);
-
-                if (create_dir(apps_dir) != 0) {
-                        free(apps_dir);
-                        apps_dir = NULL;
-                        return NULL;
-                }
-        }
-
-        size = strlen(apps_dir) + strlen(app_name) + 2;
-        dir = malloc(size);
-        snprintf(dir, size, "%s/%s", apps_dir, app_name);
-
-        if (create_dir(dir) != 0) {
-                free(dir);
-                return NULL;
-        }
-
-        return dir;
-}
-
-
 //===================================================
 // Platform access
 //==================================================
@@ -134,9 +109,7 @@ static const options_entry_t api_auth_entries[] = {
 static void platform_http_header(buf_t *header)
 {
         // API key
-        if (opt_api_key != NULL) {
-                buf_append_fmt(header, "HAKit-Api-Key: %s\r\n", opt_api_key);
-        }
+        buf_append_fmt(header, "HAKit-Api-Key: %s\r\n", opt_api_key);
 }
 
 
@@ -209,29 +182,56 @@ static int platform_get_status(char *buf, int len, char **errstr, int *pofs)
 }
 
 
-static char *platform_get_prop(char **argv, char *key)
+//===================================================
+// Platform ping
+//==================================================
+
+static sys_tag_t ping_timeout_tag = 0;
+
+static void ping_start(void);
+
+
+static void ping_response(void *user_data, char *buf, int len)
 {
-	char *value = NULL;
-	int i;
-
-	for (i = 0; (argv[i] != NULL) && (value == NULL); i++) {
-		char *args = argv[i];
-		char *s = strchr(args, ':');
-		if (s != NULL) {
-			char c = *s;
-			*s = '\0';
-			if (strcmp(args, key) == 0) {
-				value = s+1;
-				while ((*value != '\0') && (*value <= ' ')) {
-					value++;
-				}
-			}
-			*s = c;
-		}
-	}
-
-	return value;
+	log_debug(2, "ping_response: len=%d", len);
+        //TODO: Restart engine if application changed
+        ping_start();
 }
+
+
+static int ping_request(void)
+{
+        buf_t header;
+
+	log_debug(2, "ping_request");
+        ping_timeout_tag = 0;
+
+	// API key
+        buf_init(&header);
+	platform_http_header(&header);
+
+	ws_client_get(&ws_client, PLATFORM_URL "hello.php", (char *) header.base, ping_response, NULL);
+
+        buf_cleanup(&header);
+
+	return 0;
+}
+
+
+static void ping_stop(void)
+{
+        if (ping_timeout_tag != 0) {
+                sys_remove(ping_timeout_tag);
+                ping_timeout_tag = 0;
+        }
+}
+
+static void ping_start(void)
+{
+        ping_stop();
+        ping_timeout_tag = sys_timeout(PING_DELAY*1000, (sys_func_t) ping_request, NULL);
+}
+
 
 
 //===================================================
@@ -240,30 +240,58 @@ static char *platform_get_prop(char **argv, char *key)
 
 typedef struct {
         char *name;
+        char *rev;
         char *path;
+        char *basename;
+        int ready;
 } app_t;
+
+static hk_proc_t *engine_proc = NULL;
+
+static void engine_stdout(void *user_data, char *buf, int size)
+{
+        fwrite(buf, 1, size, stdout);
+}
+
+
+static void engine_stderr(void *user_data, char *buf, int size)
+{
+        log_put(buf, size);
+}
 
 
 static void engine_terminated(void *user_data, int status)
 {
         log_str("WARNING: HAKit engine terminated with status %d", status);
+        engine_proc = NULL;
+        ping_stop();
 	hello_retry();
 }
 
 
-static int engine_start(hk_tab_t *apps)
+static void engine_start(hk_tab_t *apps)
 {
-        char *bin = env_bindir("hakit");
-        hk_proc_t *proc;
-        char debug[16];
         HK_TAB_DECLARE(argv, char *);
         int i;
 
         log_debug(2, "engine_start");
 	platform_state = ST_ENGINE;
 
+        // Check all application are ready
+        for (i = 0; i < apps->nmemb; i++) {
+                app_t *app = HK_TAB_PTR(*apps, app_t, i);
+                if (!app->ready) {
+                        log_str("ERROR: Cannot start engine: application '%s' is not up to date.");
+                        hello_retry();
+                        return;
+                }
+        }
+
+        // Prepare HAKit engine command
+        char debug[16];
         snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
 
+        char *bin = env_bindir("hakit-engine");
         HK_TAB_PUSH_VALUE(argv, (char *) bin);
         HK_TAB_PUSH_VALUE(argv, (char *) debug);
         for (i = 0; i < apps->nmemb; i++) {
@@ -272,12 +300,15 @@ static int engine_start(hk_tab_t *apps)
         }
         HK_TAB_PUSH_VALUE(argv, (char *) NULL);
 
-        proc = hk_proc_start_nopipe(argv.buf, NULL, engine_terminated, NULL);
+        // Sart HAKit engine
+        engine_proc = hk_proc_start(argv.buf, NULL, engine_stdout, engine_stderr, engine_terminated, NULL);
 
-        if (proc != NULL) {
+        if (engine_proc != NULL) {
                 // Leave stdin stream to child
-                close(STDIN_FILENO);
-                log_str("HAKit engine process started: pid=%d", proc->pid);
+                log_str("HAKit engine process started: pid=%d", engine_proc->pid);
+                if (!opt_offline) {
+                        ping_start();
+                }
         }
         else {
                 log_str("ERROR: HAKit engine start failed");
@@ -285,8 +316,6 @@ static int engine_start(hk_tab_t *apps)
         }
 
         free(bin);
-
-	return 0;
 }
 
 
@@ -300,7 +329,7 @@ typedef struct {
 } app_ctx_t;
 
 
-static void app_request_send(app_ctx_t *ctx);
+static void app_request(app_ctx_t *ctx);
 
 
 static app_ctx_t *app_ctx_alloc(void)
@@ -316,25 +345,90 @@ static app_ctx_t *app_ctx_alloc(void)
 static void app_ctx_feed(app_ctx_t *ctx, char *str)
 {
         app_t *app = hk_tab_push(&ctx->apps);
+
         app->name = strdup(str);
+        app->rev = NULL;
         app->path = NULL;
+        app->ready = 0;
+
+        char *s = strchr(app->name, ' ');
+        if (s != NULL) {
+                *(s++) = '\0';
+                while ((*s != '\0') && (*s <= ' ')) {
+                        s++;
+                }
+                app->rev = s;
+        }
+
+        int size = strlen(opt_lib_dir) + strlen(app->name) + 20;
+        app->path = malloc(size);
+        int ofs = snprintf(app->path, size, "%s/apps", opt_lib_dir);
+        create_dir(app->path);
+        ofs += snprintf(app->path+ofs, size-ofs, "/%s", app->name);
+        create_dir(app->path);
+        app->path[ofs++] = '/';
+        app->basename = &app->path[ofs];
+
+        if (app->rev != NULL) {
+                strcpy(app->basename, "REVISION");
+
+                // Check if app is already downloaded and up-to-date
+                FILE *f = fopen(app->path, "r");
+                if (f != NULL) {
+                        char buf[128];
+                        int len = fread(buf, 1, sizeof(buf)-1, f);
+                        fclose(f);
+
+                        if (len > 0) {
+                                buf[len] = '\0';
+                                if (strcmp(buf, app->rev) == 0) {
+                                        app->ready = 1;
+                                }
+                        }
+                }
+        }
+
+        strcpy(app->basename, APP_FILE_NAME);
 }
 
 
-static void app_ctx_cleanup(app_ctx_t *ctx)
+static void app_ctx_feed_local(app_ctx_t *ctx, char *path)
+{
+        app_t *app = hk_tab_push(&ctx->apps);
+        int ofs;
+
+        app->name = NULL;
+        app->rev = NULL;
+        app->path = realpath(path, NULL);
+        app->ready = 1;
+
+        ofs = strlen(app->path);
+        while ((ofs > 0) && (app->path[ofs-1] != '/')) {
+                ofs--;
+        }
+
+        app->basename = &app->path[ofs];
+
+        log_debug(2, "Preparing to start local application: %s", app->path);
+}
+
+
+static void app_ctx_free(app_ctx_t *ctx)
 {
         int i;
 
         for (i = 0; i < ctx->apps.nmemb; i++) {
                 app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
 
-                free(app->name);
-                app->name = NULL;
+                if (app->name != NULL) {
+                        free(app->name);
+                }
 
                 if (app->path != NULL) {
                         free(app->path);
-                        app->path = NULL;
                 }
+
+                memset(app, 0, sizeof(app_t));
         }
 
         hk_tab_cleanup(&ctx->apps);
@@ -347,24 +441,25 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
 {
 	log_debug(2, "app_response: index=%d len=%d", ctx->index, len);
 
-        // Get error code
-        char *errstr = NULL;
-        int ofs = 0;
-        int errcode = platform_get_status(buf, len, &errstr, &ofs);
+        if (len < 0) {
+                log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
+                hello_retry();
+        }
+        else {
+                // Get error code
+                char *errstr = NULL;
+                int ofs = 0;
+                int errcode = platform_get_status(buf, len, &errstr, &ofs);
 
-        if (errcode == 0) {
-                app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
-
-                // Store application data
-                char *dir = app_dir(app->name);
-
-                if (dir != NULL) {
-                        int size = strlen(dir)+8;
+                if (errcode == 0) {
+                        app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
                         FILE *f;
 
-                        app->path = malloc(size);
-                        snprintf(app->path, size, "%s/app.hk", dir);
+                        log_str("INFO: Application '%s' downloaded successfully", app->name);
 
+                        // Store application data
+                        strcpy(app->basename, APP_FILE_NAME);
+                        log_str("Writing app file: %s", app->path);
                         f = fopen(app->path, "w");
                         if (f != NULL) {
                                 char *buf1 = buf + ofs;
@@ -381,24 +476,56 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
                                 errcode = -1;
                         }
 
-                        free(dir);
-                }
-        }
+                        // Store revision tag
+                        if (errcode == 0) {
+                                strcpy(app->basename, "REVISION");
 
-        if (errcode == 0) {
-                // Ask for next application
-                ctx->index++;
-                app_request_send(ctx);
-        }
-        else {
-                hello_retry();
+                                log_str("Writing app revision tag: %s", app->path);
+                                f = fopen(app->path, "w");
+                                if (f != NULL) {
+                                        fprintf(f, "%s", app->rev);
+                                        fclose(f);
+
+                                        app->ready = 1;
+                                }
+                                else {
+                                        log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
+                                        errcode = -1;
+                                }
+
+                                strcpy(app->basename, APP_FILE_NAME);
+                        }
+                }
+
+                if (errcode == 0) {
+                        // Ask for next application
+                        ctx->index++;
+                        app_request(ctx);
+                }
+                else {
+                        hello_retry();
+                }
         }
 }
 
 
-static void app_request_send(app_ctx_t *ctx)
+static void app_request(app_ctx_t *ctx)
 {
-	log_debug(2, "app_request_send [%d]", ctx->index);
+	log_debug(2, "app_request %d/%d", ctx->index, ctx->apps.nmemb);
+	platform_state = ST_APP;
+
+        // Seek next appliation to download
+        while (ctx->index < ctx->apps.nmemb) {
+                app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
+                if (app->ready) {
+                        log_str("INFO: Application '%s' is up to date: %s", app->name, app->rev);
+                        ctx->index++;
+                }
+                else {
+                        log_str("INFO: Application '%s' will be downloaded: %s", app->name, app->rev);
+                        break;
+                }
+        }
 
         if (ctx->index < ctx->apps.nmemb) {
                 app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
@@ -417,48 +544,8 @@ static void app_request_send(app_ctx_t *ctx)
         }
         else {
 		engine_start(&ctx->apps);
-                app_ctx_cleanup(ctx);
-		return;
+                app_ctx_free(ctx);
 	}
-
-}
-
-
-static int app_request(char *app_list)
-{
-	app_ctx_t *ctx;
-
-	log_debug(2, "app_request app_list='%s'", app_list);
-	platform_state = ST_APP;
-
-	ctx = app_ctx_alloc();
-
-	while ((app_list != NULL) && (*app_list != '\0')) {
-		char *s = strchr(app_list, ' ');
-		if (s != NULL) {
-			*s = '\0';
-		}
-
-		while ((*app_list != '\0') && (*app_list <= ' ')) {
-			app_list++;
-		}
-		if (*app_list != '\0') {
-                        app_ctx_feed(ctx, app_list);
-		}
-
-		if (s != NULL) {
-			*s = ' ';
-			while ((*s != '\0') && (*s <= ' ')) {
-				s++;
-			}
-		}
-
-		app_list = s;
-	}
-
-	app_request_send(ctx);
-
-	return 0;
 } 
 
 
@@ -466,11 +553,101 @@ static int app_request(char *app_list)
 // Device identification
 //==================================================
 
+static int hello_cache_save(char **argv)
+{
+        char fname[strlen(opt_lib_dir) + 8];
+        FILE *f;
+        int i;
+
+        snprintf(fname, sizeof(fname), "%s/HELLO", opt_lib_dir);
+
+        f = fopen(fname, "w");
+        if (f == NULL) {
+                log_str("WARNING: Cannot save HELLO cache file '%s': %s", fname, strerror(errno));
+                return -1;
+        }
+
+        for (i = 0; argv[i] != NULL; i++) {
+                fputs(argv[i], f);
+                fputc('\n', f);
+        }
+
+        fclose(f);
+
+        return 0;
+}
+
+
+static void hello_response_parse(char *str, app_ctx_t *ctx)
+{
+        char *value = strchr(str, ':');
+
+        if (value != NULL) {
+                *(value++) = '\0';
+                while ((*value != '\0') && (*value <= ' ')) {
+                        value++;
+                }
+
+                if (strcmp(str, "Application") == 0) {
+                        app_ctx_feed(ctx, value);
+                }
+        }
+}
+
+
+static app_ctx_t *hello_cache_load(void)
+{
+        char fname[strlen(opt_lib_dir) + 8];
+        app_ctx_t *ctx = NULL;
+        FILE *f;
+
+        snprintf(fname, sizeof(fname), "%s/HELLO", opt_lib_dir);
+
+        f = fopen(fname, "r");
+        if (f == NULL) {
+                log_str("WARNING: Cannot load HELLO cache file '%s': %s", fname, strerror(errno));
+                return NULL;
+        }
+
+        log_str("INFO: Loading HELLO cache file");
+        ctx = app_ctx_alloc();
+
+        while (!feof(f)) {
+                char buf[128];
+                if (fgets(buf, sizeof(buf), f) != NULL) {
+                        int len = strlen(buf);
+                        while ((len > 0) && (buf[len-1] <= ' ')) {
+                                len--;
+                        }
+                        buf[len] = '\0';
+
+                        hello_response_parse(buf, ctx);
+                }
+        }
+
+        fclose(f);
+
+        return ctx;
+}
+
+
 static void hello_response(void *user_data, char *buf, int len)
 {
 	log_debug(2, "hello_response: len=%d", len);
 
-	if (len > 0) {
+        if (len < 0) {
+                log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
+
+                app_ctx_t *ctx = hello_cache_load();
+                if (ctx != NULL) {
+                        engine_start(&ctx->apps);
+                        app_ctx_free(ctx);
+                }
+                else {
+                        hello_retry();
+                }
+        }
+	else if (len > 0) {
 		char *errstr = NULL;
                 int ofs = 0;
 		int errcode = platform_get_status(buf, len, &errstr, &ofs);
@@ -479,11 +656,18 @@ static void hello_response(void *user_data, char *buf, int len)
 			if (errcode == 0) {
 				log_str("INFO    : Device accepted by platform server");
                                 char **argv = platform_get_lines(buf+ofs, len-ofs);
-				char *app_list = platform_get_prop(argv, "Applications");
-				if (app_list != NULL) {
-					app_request(app_list);
-				}
+                                app_ctx_t *ctx = app_ctx_alloc();
+                                int i;
+
+                                hello_cache_save(argv);
+
+                                for (i = 0; argv[i] != NULL; i++) {
+                                        hello_response_parse(argv[i], ctx);
+                                }
+
                                 free(argv);
+
+                                app_request(ctx);
 			}
 			else {
 				log_str("WARNING : Access denied by platform server: %s", errstr);
@@ -511,7 +695,7 @@ static int hello_request(void)
 	// API key
         buf_init(&header);
 	platform_http_header(&header);
-	
+
 	// HAKit version
         buf_append_str(&header, "HAKit-Version: " VERSION "\r\n");
 
@@ -531,18 +715,47 @@ static int hello_request(void)
 	return 0;
 }
 
-	
+
 static void hello_retry(void)
 {
-	platform_state = ST_RETRY;
-        log_str("INFO    : New HELLO attempt in %d seconds", HELLO_RETRY_DELAY);
-        sys_timeout(HELLO_RETRY_DELAY*1000, (sys_func_t) hello_request, NULL);
+        if (opt_api_key != NULL) {
+                platform_state = ST_RETRY;
+                log_str("INFO    : New HELLO attempt in %d seconds", HELLO_RETRY_DELAY);
+                sys_timeout(HELLO_RETRY_DELAY*1000, (sys_func_t) hello_request, NULL);
+        }
+        else {
+                log_str("ERROR: Engine terminated in off-line mode: exiting.");
+                exit(2);
+        }
 }
 
 
 //===================================================
 // Program body
 //===================================================
+
+static void goodbye(void *user_data)
+{
+        log_debug(3, "Deleting PID file '%s'", opt_pid_file);
+        if (unlink(opt_pid_file) < 0) {
+                log_str("ERROR: Cannot delete pid file '%s': %s\n", opt_pid_file, strerror(errno));
+        }
+}
+
+
+static void write_pid_file(pid_t pid)
+{
+        FILE *f = fopen(opt_pid_file, "w");
+        if (f != NULL) {
+                fprintf(f, "%d\n", pid);
+                fclose(f);
+                log_debug(3, "PID file '%s' created", opt_pid_file);
+        }
+        else {
+                log_str("ERROR: Cannot create pid file '%s': %s\n", opt_pid_file, strerror(errno));
+        }
+}
+
 
 static void run_as_daemon(void)
 {
@@ -555,8 +768,11 @@ static void run_as_daemon(void)
 	}
 
 	if (pid > 0) {
+                write_pid_file(pid);
 		exit(0);
 	}
+
+        sys_quit_handler((sys_func_t) goodbye, NULL);
 
 	if (setsid() < 0) {
 		log_str("ERROR: Setsid failed: %s", strerror(errno));
@@ -569,20 +785,39 @@ static void run_as_daemon(void)
 }
 
 
+static int stdin_recv(void *user_data, char *buf, int len)
+{
+	if (buf == NULL) {
+		/* Quit if hangup from stdin */
+		sys_quit();
+                return 0;
+        }
+
+        if (engine_proc != NULL) {
+                hk_proc_write(engine_proc, buf, len);
+
+                while ((len > 0) && (buf[len-1] < ' ')) {
+                        buf[len--] = '\0';
+                }
+        }
+        else {
+                log_str("WARNING: Engine not running - Input data ignored");
+        }
+
+        return 1;
+}
+
 
 int main(int argc, char *argv[])
 {
+        char *app;
+
 	if (options_parse(options_entries, &argc, argv) != 0) {
 		exit(1);
 	}
 
+	/* Init exec environment */
         env_init(argc, argv);
-
-        // Create lib directory
-        log_debug(1, "Library path = '%s'", opt_lib_dir);
-        if (create_dir(opt_lib_dir) != 0) {
-		exit(2);
-        }
 
 	if (opt_daemon) {
 		run_as_daemon();
@@ -592,20 +827,64 @@ int main(int argc, char *argv[])
 	log_init(NAME);
 	log_str(options_summary);
 
-	options_conf_parse(api_auth_entries, "platform");
+        /* If a local application is given in command line arguments, force off-line mode */
+        app = env_app();
+        if (app == NULL) {
+                log_str("Using local application: off-line mode forced");
+                opt_offline = 1;
+        }
+
+        /* Get platform settings if working on-line */
+        if (!opt_offline) {
+                options_conf_parse(api_auth_entries, "platform");
+        }
+
+        /* Enable per-line output buffering */
+        setlinebuf(stdout);
 
 	/* Init system runtime */
 	sys_init();
+
+	/* Setup stdin command handler if not running as a daemon */
+	if (!opt_daemon) {
+		io_channel_setup(&io_stdin, STDIN_FILENO, (io_func_t) stdin_recv, NULL);
+	}
 
 	// Setup WS HTTP client
 	memset(&ws_client, 0, sizeof(ws_client));
 	if (ws_client_init(&ws_client, 1) < 0) {
 		log_str("ERROR: Failed to init HTTP client");
-		return 1;
+		exit(1);
 	}
 
-	/* Advertise device */
-	hello_request();
+        /* Start it all, either on- or off-line */
+        if (app != NULL) {
+                /* Start local application, if any */
+                app_ctx_t *ctx = app_ctx_alloc();
+                app_ctx_feed_local(ctx, app);
+		engine_start(&ctx->apps);
+                app_ctx_free(ctx);
+        }
+        else {
+                /* Create lib directory */
+                log_debug(1, "Library path = '%s'", opt_lib_dir);
+                if (create_dir(opt_lib_dir) != 0) {
+                        exit(2);
+                }
+
+                if (opt_api_key != NULL) {
+                        /* Advertise device */
+                        hello_request();
+                }
+                else {
+                        /* Off-line mode: try to get application from the cache */
+                        app_ctx_t *ctx = hello_cache_load();
+                        if (ctx == NULL) {
+                                log_str("ERROR: No API-Key provided, No application found in the cache: exiting.");
+                                exit(2);
+                        }
+                }
+        }
 
 	sys_run();
 

@@ -10,6 +10,7 @@
 #ifndef __HAKIT_WS_H__
 #define __HAKIT_WS_H__
 
+#include "sys.h"
 #include "buf.h"
 #include "tab.h"
 #include "ws_client.h"
@@ -32,6 +33,7 @@ typedef struct {
 	ws_command_handler_t command_handler;
 	void *command_user_data;
 	int salt;
+        sys_tag_t tick;
 } ws_server_t;
 
 typedef struct {

@@ -140,6 +140,13 @@ static int _new(hk_obj_t *obj)
 }
 
 
+static void _start(hk_obj_t *obj)
+{
+	ctx_t *ctx = obj->ctx;
+	hk_pad_update_int(ctx->output, 0);
+}
+
+
 static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
@@ -170,5 +177,6 @@ hk_class_t _class = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
+	.start = _start,
 	.input = _input,
 };

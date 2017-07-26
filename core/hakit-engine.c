@@ -9,10 +9,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <libgen.h>
-#include <errno.h>
-#include <unistd.h>
 
 #include "types.h"
 #include "options.h"
@@ -30,6 +26,9 @@
 #include "hakit_version.h"
 
 
+#define PID_FILE "/var/run/hakit.pid"
+
+
 //===================================================
 // Command line arguments
 //===================================================
@@ -42,13 +41,10 @@ static char *opt_hosts = NULL;
 static int opt_no_hkcp = 0;
 static int opt_no_ssl = 0;
 static int opt_insecure_ssl = 0;
-static char *opt_api_key = NULL;
 static char *opt_auth = NULL;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
-	{ "daemon",  'D', 0, OPTIONS_TYPE_NONE,   &opt_daemon,  "Run in background as a daemon" },
-	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
 	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable HKCP monitor mode" },
@@ -56,7 +52,6 @@ static const options_entry_t options_entries[] = {
 #ifdef WITH_SSL
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
 	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure SSL client connections (self-signed certificates)" },
-	{ "api-key", 'K', 0,   OPTIONS_TYPE_STRING,   &opt_api_key,  "API key for accessing hakit.net web platform" },
 #endif
 #ifdef WITH_MQTT
 	{ "mqtt-user",      'u', 0, OPTIONS_TYPE_STRING, &mqtt_user,      "MQTT user and password", "USER[:PASSWORD]" },
@@ -89,31 +84,6 @@ static void monitor_sink_event(void *user_data, char *name, char *value)
 // Program body
 //===================================================
 
-static void run_as_daemon(void)
-{
-	pid_t pid;
-
-	pid = fork();
-	if (pid < 0) {
-		log_str("ERROR: Fork failed: %s", strerror(errno));
-		exit(3);
-	}
-
-	if (pid > 0) {
-		exit(0);
-	}
-
-	if (setsid() < 0) {
-		log_str("ERROR: Setsid failed: %s", strerror(errno));
-		exit(3);
- 	}
-
-	close(STDIN_FILENO);
-
-	log_str("Starting in daemon mode: pid=%d", getpid());
-}
-
-
 int main(int argc, char *argv[])
 {
 	char *app;
@@ -123,10 +93,6 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	if (opt_daemon) {
-		run_as_daemon();
-	}
-
 	/* Init exec environment */
 	env_init(argc, argv);
 
@@ -134,6 +100,9 @@ int main(int argc, char *argv[])
 	log_init("hakit");
 	log_str(options_summary);
 	log_str("Using libwebsockets version " LWS_LIBRARY_VERSION " build " LWS_BUILD_HASH);
+
+        /* Enable per-line output buffering */
+        setlinebuf(stdout);
 
 	/* Init system runtime */
 	sys_init();
