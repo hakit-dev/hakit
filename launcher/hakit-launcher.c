@@ -829,7 +829,7 @@ int main(int argc, char *argv[])
 
         /* If a local application is given in command line arguments, force off-line mode */
         app = env_app();
-        if (app == NULL) {
+        if (app != NULL) {
                 log_str("Using local application: off-line mode forced");
                 opt_offline = 1;
         }
