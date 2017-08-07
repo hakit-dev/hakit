@@ -22,15 +22,11 @@
 #include "mqtt.h"
 
 
-/* MQTT default ports */
-#define MQTT_PORT 1883
-#define MQTT_SSL_PORT 8883
-
 /* MQTT config options */
 char *mqtt_user = NULL;
 char *mqtt_host = NULL;
 int mqtt_port = 0;
-int mqtt_keepalive = 60;
+int mqtt_keepalive = MQTT_DEFAULT_KEEPALIVE;
 int mqtt_qos = 0;
 
 /* Message queue */
@@ -182,12 +178,12 @@ int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
 
 	// Setup SSL
 	if (ssl_dir != NULL) {
-		port = MQTT_SSL_PORT;
+		port = MQTT_DEFAULT_SSL_PORT;
 
 		//TODO: mosquitto_tls_set();
 	}
 	else {
-		port = MQTT_PORT;
+		port = MQTT_DEFAULT_PORT;
 	}
 
 	// Parse broker specification

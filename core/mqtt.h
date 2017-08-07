@@ -16,6 +16,20 @@
 #include "sys.h"
 #include "mosquitto.h"
 
+/* MQTT default settings */
+#define MQTT_DEFAULT_PORT 1883
+#define MQTT_DEFAULT_SSL_PORT 8883
+#define MQTT_DEFAULT_KEEPALIVE 60
+
+/* MQTT current settings */
+extern char *mqtt_user;
+extern char *mqtt_host;
+extern int mqtt_port;
+extern int mqtt_keepalive;
+extern int mqtt_qos;
+
+
+/* MQTT instance descriptor */
 typedef void (*mqtt_update_func_t)(void *user_data, char *name, char *value);
 
 typedef enum {
@@ -32,12 +46,8 @@ typedef struct {
 	sys_tag_t mq_tag;
 } mqtt_t;
 
-extern char *mqtt_user;
-extern char *mqtt_host;
-extern int mqtt_port;
-extern int mqtt_keepalive;
-extern int mqtt_qos;
 
+/* MQTT instance functions */
 extern int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
 		     mqtt_update_func_t update_func, void *user_data);
 extern int mqtt_publish(mqtt_t *mqtt, char *name, char *value, int retain);
