@@ -37,14 +37,14 @@
 #define APP_FILE_NAME "app.hk"
 
 #define HELLO_RETRY_DELAY (3*60)
-#define PING_DELAY (60*60)
+#define PING_DELAY (30*60)
 
 typedef enum {
 	ST_IDLE=0,
 	ST_HELLO,
 	ST_RETRY,
-	ST_APP,
-	ST_ENGINE,
+	ST_RUN,
+	ST_RESTART,
         NSTATES
 } platform_state_t;
 
@@ -53,6 +53,7 @@ static platform_state_t platform_state = ST_HELLO;
 static ws_client_t ws_client;
 static io_channel_t io_stdin;
 
+static int hello_request(void);
 static void hello_retry(void);
 
 
@@ -190,34 +191,6 @@ static sys_tag_t ping_timeout_tag = 0;
 
 static void ping_start(void);
 
-
-static void ping_response(void *user_data, char *buf, int len)
-{
-	log_debug(2, "ping_response: len=%d", len);
-        //TODO: Restart engine if application changed
-        ping_start();
-}
-
-
-static int ping_request(void)
-{
-        buf_t header;
-
-	log_debug(2, "ping_request");
-        ping_timeout_tag = 0;
-
-	// API key
-        buf_init(&header);
-	platform_http_header(&header);
-
-	ws_client_get(&ws_client, PLATFORM_URL "hello.php", (char *) header.base, ping_response, NULL);
-
-        buf_cleanup(&header);
-
-	return 0;
-}
-
-
 static void ping_stop(void)
 {
         if (ping_timeout_tag != 0) {
@@ -229,9 +202,8 @@ static void ping_stop(void)
 static void ping_start(void)
 {
         ping_stop();
-        ping_timeout_tag = sys_timeout(PING_DELAY*1000, (sys_func_t) ping_request, NULL);
+        ping_timeout_tag = sys_timeout(PING_DELAY*1000, (sys_func_t) hello_request, NULL);
 }
-
 
 
 //===================================================
@@ -247,6 +219,12 @@ typedef struct {
 } app_t;
 
 static hk_proc_t *engine_proc = NULL;
+static HK_TAB_DECLARE(engine_argv, char *);
+
+
+// Forward declaration for engine process starter
+static void engine_start_now(void);
+
 
 static void engine_stdout(void *user_data, char *buf, int size)
 {
@@ -262,20 +240,60 @@ static void engine_stderr(void *user_data, char *buf, int size)
 
 static void engine_terminated(void *user_data, int status)
 {
-        log_str("WARNING: HAKit engine terminated with status %d", status);
-        engine_proc = NULL;
+        log_str("HAKit engine terminated with status %d", status);
         ping_stop();
-	hello_retry();
+
+        if (engine_proc == NULL) {
+                if (platform_state == ST_RUN) {
+                        engine_start_now();
+                }
+        }
+        else {
+                engine_proc = NULL;
+                hello_retry();
+        }
+}
+
+
+static void engine_start_now(void)
+{
+        log_debug(2, "engine_start_now");
+
+        // Start engine process
+        engine_proc = hk_proc_start(engine_argv.buf, NULL, engine_stdout, engine_stderr, engine_terminated, NULL);
+
+        if (engine_proc != NULL) {
+                platform_state = ST_RUN;
+
+                // Leave stdin stream to child
+                log_str("HAKit engine process started: pid=%d", engine_proc->pid);
+                if (!opt_offline) {
+                        ping_start();
+                }
+        }
+        else {
+                log_str("ERROR: HAKit engine start failed");
+                hello_retry();
+        }
+}
+
+
+static void engine_stop(void)
+{
+        log_debug(2, "engine_stop");
+
+        if (engine_proc != NULL) {
+                hk_proc_stop(engine_proc);
+                engine_proc = NULL;
+        }
 }
 
 
 static void engine_start(hk_tab_t *apps)
 {
-        HK_TAB_DECLARE(argv, char *);
         int i;
 
         log_debug(2, "engine_start");
-	platform_state = ST_ENGINE;
 
         // Check all application are ready
         for (i = 0; i < apps->nmemb; i++) {
@@ -287,35 +305,39 @@ static void engine_start(hk_tab_t *apps)
                 }
         }
 
-        // Prepare HAKit engine command
-        char debug[16];
-        snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
-
-        char *bin = env_bindir("hakit-engine");
-        HK_TAB_PUSH_VALUE(argv, (char *) bin);
-        HK_TAB_PUSH_VALUE(argv, (char *) debug);
-        for (i = 0; i < apps->nmemb; i++) {
-                app_t *app = HK_TAB_PTR(*apps, app_t, i);
-                HK_TAB_PUSH_VALUE(argv, app->path);
-        }
-        HK_TAB_PUSH_VALUE(argv, (char *) NULL);
-
-        // Sart HAKit engine
-        engine_proc = hk_proc_start(argv.buf, NULL, engine_stdout, engine_stderr, engine_terminated, NULL);
-
-        if (engine_proc != NULL) {
-                // Leave stdin stream to child
-                log_str("HAKit engine process started: pid=%d", engine_proc->pid);
-                if (!opt_offline) {
-                        ping_start();
+        // Free old command line arguments
+        for (i = 0; i < engine_argv.nmemb; i++) {
+                char *args = HK_TAB_VALUE(engine_argv, char *, i);
+                if (args != NULL) {
+                        free(args);
                 }
         }
-        else {
-                log_str("ERROR: HAKit engine start failed");
-                hello_retry();
-        }
 
-        free(bin);
+        hk_tab_cleanup(&engine_argv);
+
+        // Setup new command line arguments
+        char *bin = env_bindir("hakit-engine");
+        HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(bin));
+
+        char debug[16];
+        snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
+        HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(debug));
+
+        for (i = 0; i < apps->nmemb; i++) {
+                app_t *app = HK_TAB_PTR(*apps, app_t, i);
+                HK_TAB_PUSH_VALUE(engine_argv, strdup(app->path));
+        }
+        HK_TAB_PUSH_VALUE(engine_argv, (char *) NULL);
+
+        // Sart HAKit engine
+        if (engine_proc != NULL) {
+                log_str("Engine is already running: restarting");
+                platform_state = ST_RESTART;
+                engine_stop();
+        }
+        else {
+                engine_start_now();
+        }
 }
 
 
@@ -326,6 +348,7 @@ static void engine_start(hk_tab_t *apps)
 typedef struct {
         hk_tab_t apps;
 	int index;
+        int restart;
 } app_ctx_t;
 
 
@@ -335,8 +358,8 @@ static void app_request(app_ctx_t *ctx);
 static app_ctx_t *app_ctx_alloc(void)
 {
 	app_ctx_t *ctx = malloc(sizeof(app_ctx_t));
+        memset(ctx, 0, sizeof(app_ctx_t));
         hk_tab_init(&ctx->apps, sizeof(app_t));
-	ctx->index = 0;
 
         return ctx;
 }
@@ -512,7 +535,6 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
 static void app_request(app_ctx_t *ctx)
 {
 	log_debug(2, "app_request %d/%d", ctx->index, ctx->apps.nmemb);
-	platform_state = ST_APP;
 
         // Seek next appliation to download
         while (ctx->index < ctx->apps.nmemb) {
@@ -531,6 +553,10 @@ static void app_request(app_ctx_t *ctx)
                 app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
                 buf_t header;
 
+                // A new app will be downloaded, so we will need to restart the engine
+                // after downloads are completed
+                ctx->restart = 1;
+
                 // API key
                 buf_init(&header);
                 platform_http_header(&header);
@@ -543,7 +569,17 @@ static void app_request(app_ctx_t *ctx)
                 buf_cleanup(&header);
         }
         else {
-		engine_start(&ctx->apps);
+                // If engine is running and no restart is needed, keep it running
+                if ((platform_state != ST_RUN) || ctx->restart) {
+                        if (platform_state == ST_RUN) {
+                                log_str("Updates requested by platform: restarting engine");
+                        }
+                        engine_start(&ctx->apps);
+                }
+                else {
+                        log_str("No updates requested by platform: keep engine running");
+                        ping_start();
+                }
                 app_ctx_free(ctx);
 	}
 } 
@@ -640,7 +676,10 @@ static void hello_response(void *user_data, char *buf, int len)
 
                 app_ctx_t *ctx = hello_cache_load();
                 if (ctx != NULL) {
-                        engine_start(&ctx->apps);
+                        // Start engine from cached program, except if it is already running
+                        if (platform_state != ST_RUN) {
+                                engine_start(&ctx->apps);
+                        }
                         app_ctx_free(ctx);
                 }
                 else {
@@ -671,6 +710,10 @@ static void hello_response(void *user_data, char *buf, int len)
 			}
 			else {
 				log_str("WARNING : Access denied by platform server: %s", errstr);
+                                platform_state = ST_HELLO;
+
+                                // Kill currently running engine if access is denied by platform
+                                engine_stop();
 			}
 		}
 		else {
@@ -690,23 +733,26 @@ static int hello_request(void)
         buf_t header;
 
 	log_debug(2, "hello_request");
-	platform_state = ST_HELLO;
 
 	// API key
         buf_init(&header);
 	platform_http_header(&header);
 
-	// HAKit version
-        buf_append_str(&header, "HAKit-Version: " VERSION "\r\n");
+        if (platform_state != ST_RUN) {
+                platform_state = ST_HELLO;
 
-	// Get system information
-	if (uname(&u) == 0) {
-                buf_append_fmt(&header, "HAKit-OS: %s %s %s %s\r\n", u.sysname, u.release, u.version, u.machine);
-                buf_append_fmt(&header, "HAKit-Hostname: %s\r\n", u.nodename);
-	}
-	else {
-		log_str("WARNING: Cannot retrieve system identification: %s", strerror(errno));
-	}
+                // HAKit version
+                buf_append_str(&header, "HAKit-Version: " VERSION "\r\n");
+
+                // Get system information
+                if (uname(&u) == 0) {
+                        buf_append_fmt(&header, "HAKit-OS: %s %s %s %s\r\n", u.sysname, u.release, u.version, u.machine);
+                        buf_append_fmt(&header, "HAKit-Hostname: %s\r\n", u.nodename);
+                }
+                else {
+                        log_str("WARNING: Cannot retrieve system identification: %s", strerror(errno));
+                }
+        }
 
 	ws_client_get(&ws_client, PLATFORM_URL "hello.php", (char *) header.base, hello_response, NULL);
 
@@ -718,8 +764,9 @@ static int hello_request(void)
 
 static void hello_retry(void)
 {
+        platform_state = ST_RETRY;
+
         if (opt_api_key != NULL) {
-                platform_state = ST_RETRY;
                 log_str("INFO    : New HELLO attempt in %d seconds", HELLO_RETRY_DELAY);
                 sys_timeout(HELLO_RETRY_DELAY*1000, (sys_func_t) hello_request, NULL);
         }
