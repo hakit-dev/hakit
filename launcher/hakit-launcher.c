@@ -12,6 +12,7 @@
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/utsname.h>
 #include <sys/stat.h>
 
@@ -29,8 +30,8 @@
 
 #define VERSION HAKIT_VERSION
 #define NAME "hakit-launcher"
-//#define PLATFORM_URL "https://hakit.net/api/"
-#define PLATFORM_URL "http://localhost/api/"
+#define PLATFORM_URL "https://hakit.net/api/"
+//#define PLATFORM_URL "http://localhost/api/"
 
 #define PID_FILE "/var/run/hakit.pid"
 #define LIB_DIR "/var/lib/hakit"
@@ -633,21 +634,22 @@ static void cert_response(app_ctx_t *ctx, char *buf, int len)
 
                 if (errcode == 0) {
                         cert_req_t *req = HK_TAB_PTR(cert_reqs, cert_req_t, cert_req_index);
-                        FILE *f;
 
                         // Write cert data
-                        //TODO: chmod 600
-                        f = fopen(req->path, "w");
-                        if (f != NULL) {
-                                fwrite(buf+ofs, 1, len-ofs, f);
-                                fclose(f);
+			int fd = open(req->path, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR);
+			if (fd >= 0) {
+                                int ret = write(fd, buf+ofs, len-ofs);
+				if (ret < 0) {
+					log_str("ERROR: Cannot write file '%s': %s\n", req->path, strerror(errno));
+				}
+                                close(fd);
 
                                 // Write cert fingerprint (if any)
                                 if (req->fingerprint != NULL) {
                                         char *suffix = req->path + strlen(req->path);
                                         strcpy(suffix, ".fp");
 
-                                        f = fopen(req->path, "w");
+                                        FILE *f = fopen(req->path, "w");
                                         if (f != NULL) {
                                                 fwrite(req->fingerprint, 1, strlen(req->fingerprint), f);
                                                 fclose(f);
@@ -683,6 +685,8 @@ static void cert_request(app_ctx_t *ctx)
         if (cert_req_index < cert_reqs.nmemb) {
                 cert_req_t *req = HK_TAB_PTR(cert_reqs, cert_req_t, cert_req_index);
                 buf_t header;
+
+		log_str("Downloading SSL certificate '%s'", req->name);
 
                 // API key
                 buf_init(&header);
