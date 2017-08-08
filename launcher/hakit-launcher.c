@@ -29,8 +29,8 @@
 
 #define VERSION HAKIT_VERSION
 #define NAME "hakit-launcher"
-#define PLATFORM_URL "https://hakit.net/api/"
-//#define PLATFORM_URL "http://localhost/api/"
+//#define PLATFORM_URL "https://hakit.net/api/"
+#define PLATFORM_URL "http://localhost/api/"
 
 #define PID_FILE "/var/run/hakit.pid"
 #define LIB_DIR "/var/lib/hakit"
@@ -586,6 +586,184 @@ static void app_request(app_ctx_t *ctx)
 
 
 //===================================================
+// SSL certificates
+//==================================================
+
+typedef struct {
+        char *fingerprint;
+        char *name;
+        char *path;
+} cert_req_t;
+
+static HK_TAB_DECLARE(cert_reqs, cert_req_t);
+static int cert_req_index = 0;
+
+static void cert_request(app_ctx_t *ctx);
+
+
+static void cert_reqs_cleanup(void)
+{
+        int i;
+
+        for (i = 0; i < cert_reqs.nmemb; i++) {
+                cert_req_t *req = HK_TAB_PTR(cert_reqs, cert_req_t, i);
+                free(req->fingerprint);
+                free(req->path);
+        }
+
+        hk_tab_cleanup(&cert_reqs);
+
+        cert_req_index = 0;
+}
+
+
+static void cert_response(app_ctx_t *ctx, char *buf, int len)
+{
+	log_debug(2, "cert_response: len=%d", len);
+
+        if (len < 0) {
+                log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
+                hello_retry();
+        }
+        else {
+                // Get error code
+                char *errstr = NULL;
+                int ofs = 0;
+                int errcode = platform_get_status(buf, len, &errstr, &ofs);
+
+                if (errcode == 0) {
+                        cert_req_t *req = HK_TAB_PTR(cert_reqs, cert_req_t, cert_req_index);
+                        FILE *f;
+
+                        // Write cert data
+                        //TODO: chmod 600
+                        f = fopen(req->path, "w");
+                        if (f != NULL) {
+                                fwrite(buf+ofs, 1, len-ofs, f);
+                                fclose(f);
+
+                                // Write cert fingerprint (if any)
+                                if (req->fingerprint != NULL) {
+                                        char *suffix = req->path + strlen(req->path);
+                                        strcpy(suffix, ".fp");
+
+                                        f = fopen(req->path, "w");
+                                        if (f != NULL) {
+                                                fwrite(req->fingerprint, 1, strlen(req->fingerprint), f);
+                                                fclose(f);
+                                        }
+                                        else {
+                                                log_str("ERROR: Cannot create file '%s': %s\n", req->path, strerror(errno));
+                                        }
+
+                                        *suffix = '\0';
+                                }
+                        }
+                        else {
+                                log_str("ERROR: Cannot create file '%s': %s\n", req->path, strerror(errno));
+                        }
+                }
+
+                if (errcode == 0) {
+                        // Process next request
+                        cert_req_index++;
+                        cert_request(ctx);
+                }
+                else {
+                        hello_retry();
+                }
+        }
+}
+
+
+static void cert_request(app_ctx_t *ctx)
+{
+	log_debug(2, "cert_request %d/%d", cert_req_index, cert_reqs.nmemb);
+
+        if (cert_req_index < cert_reqs.nmemb) {
+                cert_req_t *req = HK_TAB_PTR(cert_reqs, cert_req_t, cert_req_index);
+                buf_t header;
+
+                // API key
+                buf_init(&header);
+                platform_http_header(&header);
+
+                // Certificate name
+                buf_append_fmt(&header, "HAKit-Cert: %s\r\n", req->name);
+
+                ws_client_get(&ws_client, PLATFORM_URL "cert.php", (char *) header.base, (ws_client_func_t *) cert_response, ctx);
+
+                buf_cleanup(&header);
+        }
+        else {
+                cert_reqs_cleanup();
+                app_request(ctx);
+        }
+}
+
+
+static int cert_check(char *str)
+{
+        // Extract cert name and fingerprint
+        char *fp = strchr(str, ' ');
+        if (fp == NULL) {
+                return 0;
+        }
+        *(fp++) = '\0';
+
+        // Build cert file path
+        int size = strlen(opt_lib_dir) + strlen(str) + 20;
+        char *path = malloc(size);
+        int ofs = snprintf(path, size, "%s/certs/", opt_lib_dir);
+        int dir_len = ofs;
+        create_dir(path);
+
+        ofs += snprintf(path+ofs, size-ofs, "%s", str);
+
+        // Check if cert fingerprint has changed
+        snprintf(path+ofs, size-ofs, ".fp");
+        FILE *f = fopen(path, "r");
+        if (f != NULL) {
+                char buf[128];
+                int len = fread(buf, 1, sizeof(buf)-1, f);
+                fclose(f);
+                buf[len] = '\0';
+
+                // If fingerprint is the same than previously, do not request cert download
+                if (strcmp(buf, fp) == 0) {
+                        log_str("SSL certificate '%s' is up to date", str);
+                        free(path);
+                        return 0;
+                }
+
+                // Fingerprint file is not up to date, so delete it
+                unlink(path);
+        }
+
+        path[ofs] = '\0';
+
+        // Cert is not present or fingerprint has changed: request download
+        log_str("SSL certificate '%s' needs to be downloaded", str);
+
+        cert_req_t *req = hk_tab_push(&cert_reqs);
+        req->fingerprint = strdup(fp);
+        req->path = path;
+        req->name = &path[dir_len];
+
+        // If the server certificate has changed, also request the server key
+        if (strcmp(str, "server.crt") == 0) {
+                cert_req_t *req = hk_tab_push(&cert_reqs);
+                req->fingerprint = NULL;
+                req->path = strdup(path);
+                req->name = &req->path[dir_len];
+                strcpy(req->name, "server.key");
+        }
+
+        return 1;
+}
+
+
+//===================================================
 // Device identification
 //==================================================
 
@@ -626,6 +804,9 @@ static void hello_response_parse(char *str, app_ctx_t *ctx)
 
                 if (strcmp(str, "Application") == 0) {
                         app_ctx_feed(ctx, value);
+                }
+                else if (strcmp(str, "Cert") == 0) {
+                        cert_check(value);
                 }
         }
 }
@@ -699,6 +880,7 @@ static void hello_response(void *user_data, char *buf, int len)
                                 int i;
 
                                 hello_cache_save(argv);
+                                cert_reqs_cleanup();
 
                                 for (i = 0; argv[i] != NULL; i++) {
                                         hello_response_parse(argv[i], ctx);
@@ -706,7 +888,7 @@ static void hello_response(void *user_data, char *buf, int len)
 
                                 free(argv);
 
-                                app_request(ctx);
+                                cert_request(ctx);
 			}
 			else {
 				log_str("WARNING : Access denied by platform server: %s", errstr);
