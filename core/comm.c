@@ -114,13 +114,16 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 	if (use_ssl) {
 		path = env_devdir("ssl");
 		if (path == NULL) {
-			path = HAKIT_SHARE_DIR "ssl";
+			path = strdup(HAKIT_SHARE_DIR "ssl");
 		}
 		log_debug(2, "SSL Certficate directory: %s", path);
 	}
 
 	/* Init HTTP/WebSocket server */
 	comm_ws = ws_new(HAKIT_HTTP_PORT, use_ssl, path);
+        if (path != NULL) {
+                free(path);
+        }
 	if (comm_ws == NULL) {
 		return -1;
 	}
@@ -129,16 +132,19 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 	path = env_appdir("ui");
 	if (path != NULL) {
 		ws_add_document_root(comm_ws, path);
+                free(path);
 	}
 
 	path = env_devdir("ui");
 	if (path != NULL) {
 		log_debug(2, "Running from development environment!");
-		ws_add_document_root(comm_ws, path);
 	}
 	else {
-		ws_add_document_root(comm_ws, HAKIT_SHARE_DIR "ui");
+		path = strdup(HAKIT_SHARE_DIR "ui");
 	}
+
+        ws_add_document_root(comm_ws, path);
+        free(path);
 
 	ws_set_command_handler(comm_ws, (ws_command_handler_t) hkcp_command, &comm_hkcp);
 
