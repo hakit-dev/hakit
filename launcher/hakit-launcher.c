@@ -185,6 +185,165 @@ static int platform_get_status(char *buf, int len, char **errstr, int *pofs)
 
 
 //===================================================
+// Context descriptors
+//==================================================
+
+typedef struct {
+        char *name;
+        char *rev;
+        char *path;
+        char *basename;
+        int ready;
+} app_t;
+
+typedef struct {
+        char *fingerprint;
+        char *name;
+        char *path;
+} cert_t;
+
+typedef struct {
+        hk_tab_t apps;
+        hk_tab_t certs;
+	int index;
+        int restart;
+} ctx_t;
+
+
+static ctx_t *ctx_alloc(void)
+{
+	ctx_t *ctx = malloc(sizeof(ctx_t));
+        memset(ctx, 0, sizeof(ctx_t));
+        hk_tab_init(&ctx->apps, sizeof(app_t));
+        hk_tab_init(&ctx->certs, sizeof(cert_t));
+
+        return ctx;
+}
+
+
+static void ctx_app_feed(ctx_t *ctx, char *str)
+{
+        app_t *app = hk_tab_push(&ctx->apps);
+
+        app->name = strdup(str);
+        app->rev = NULL;
+        app->path = NULL;
+        app->ready = 0;
+
+        char *s = strchr(app->name, ' ');
+        if (s != NULL) {
+                *(s++) = '\0';
+                while ((*s != '\0') && (*s <= ' ')) {
+                        s++;
+                }
+                app->rev = s;
+        }
+
+        int size = strlen(opt_lib_dir) + strlen(app->name) + 20;
+        app->path = malloc(size);
+        int ofs = snprintf(app->path, size, "%s/apps", opt_lib_dir);
+        create_dir(app->path);
+        ofs += snprintf(app->path+ofs, size-ofs, "/%s", app->name);
+        create_dir(app->path);
+        app->path[ofs++] = '/';
+        app->basename = &app->path[ofs];
+
+        if (app->rev != NULL) {
+                strcpy(app->basename, "REVISION");
+
+                // Check if app is already downloaded and up-to-date
+                FILE *f = fopen(app->path, "r");
+                if (f != NULL) {
+                        char buf[128];
+                        int len = fread(buf, 1, sizeof(buf)-1, f);
+                        fclose(f);
+
+                        if (len > 0) {
+                                buf[len] = '\0';
+                                if (strcmp(buf, app->rev) == 0) {
+                                        app->ready = 1;
+                                }
+                        }
+                }
+        }
+
+        strcpy(app->basename, APP_FILE_NAME);
+}
+
+
+static void ctx_app_feed_local(ctx_t *ctx, char *path)
+{
+        app_t *app = hk_tab_push(&ctx->apps);
+        int ofs;
+
+        app->name = NULL;
+        app->rev = NULL;
+        app->path = realpath(path, NULL);
+        app->ready = 1;
+
+        ofs = strlen(app->path);
+        while ((ofs > 0) && (app->path[ofs-1] != '/')) {
+                ofs--;
+        }
+
+        app->basename = &app->path[ofs];
+
+        log_debug(2, "Preparing to start local application: %s", app->path);
+}
+
+
+static void ctx_app_cleanup(ctx_t *ctx)
+{
+        int i;
+
+        for (i = 0; i < ctx->apps.nmemb; i++) {
+                app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
+
+                if (app->name != NULL) {
+                        free(app->name);
+                }
+
+                if (app->path != NULL) {
+                        free(app->path);
+                }
+
+                memset(app, 0, sizeof(app_t));
+        }
+
+        hk_tab_cleanup(&ctx->apps);
+}
+
+
+static void ctx_cert_cleanup(ctx_t *ctx)
+{
+        int i;
+
+        for (i = 0; i < ctx->certs.nmemb; i++) {
+                cert_t *crt = HK_TAB_PTR(ctx->certs, cert_t, i);
+
+                if (crt->fingerprint != NULL) {
+                        free(crt->fingerprint);
+                }
+
+                if (crt->path != NULL) {
+                        free(crt->path);
+                }
+        }
+
+        hk_tab_cleanup(&ctx->certs);
+}
+
+
+static void ctx_free(ctx_t *ctx)
+{
+        ctx_app_cleanup(ctx);
+        ctx_cert_cleanup(ctx);
+        memset(ctx, 0, sizeof(ctx_t));
+        free(ctx);
+}
+
+
+//===================================================
 // Platform ping
 //==================================================
 
@@ -210,14 +369,6 @@ static void ping_start(void)
 //===================================================
 // HAKit Engine
 //==================================================
-
-typedef struct {
-        char *name;
-        char *rev;
-        char *path;
-        char *basename;
-        int ready;
-} app_t;
 
 static hk_proc_t *engine_proc = NULL;
 static HK_TAB_DECLARE(engine_argv, char *);
@@ -346,122 +497,10 @@ static void engine_start(hk_tab_t *apps)
 // Application
 //==================================================
 
-typedef struct {
-        hk_tab_t apps;
-	int index;
-        int restart;
-} app_ctx_t;
+static void app_request(ctx_t *ctx);
 
 
-static void app_request(app_ctx_t *ctx);
-
-
-static app_ctx_t *app_ctx_alloc(void)
-{
-	app_ctx_t *ctx = malloc(sizeof(app_ctx_t));
-        memset(ctx, 0, sizeof(app_ctx_t));
-        hk_tab_init(&ctx->apps, sizeof(app_t));
-
-        return ctx;
-}
-
-
-static void app_ctx_feed(app_ctx_t *ctx, char *str)
-{
-        app_t *app = hk_tab_push(&ctx->apps);
-
-        app->name = strdup(str);
-        app->rev = NULL;
-        app->path = NULL;
-        app->ready = 0;
-
-        char *s = strchr(app->name, ' ');
-        if (s != NULL) {
-                *(s++) = '\0';
-                while ((*s != '\0') && (*s <= ' ')) {
-                        s++;
-                }
-                app->rev = s;
-        }
-
-        int size = strlen(opt_lib_dir) + strlen(app->name) + 20;
-        app->path = malloc(size);
-        int ofs = snprintf(app->path, size, "%s/apps", opt_lib_dir);
-        create_dir(app->path);
-        ofs += snprintf(app->path+ofs, size-ofs, "/%s", app->name);
-        create_dir(app->path);
-        app->path[ofs++] = '/';
-        app->basename = &app->path[ofs];
-
-        if (app->rev != NULL) {
-                strcpy(app->basename, "REVISION");
-
-                // Check if app is already downloaded and up-to-date
-                FILE *f = fopen(app->path, "r");
-                if (f != NULL) {
-                        char buf[128];
-                        int len = fread(buf, 1, sizeof(buf)-1, f);
-                        fclose(f);
-
-                        if (len > 0) {
-                                buf[len] = '\0';
-                                if (strcmp(buf, app->rev) == 0) {
-                                        app->ready = 1;
-                                }
-                        }
-                }
-        }
-
-        strcpy(app->basename, APP_FILE_NAME);
-}
-
-
-static void app_ctx_feed_local(app_ctx_t *ctx, char *path)
-{
-        app_t *app = hk_tab_push(&ctx->apps);
-        int ofs;
-
-        app->name = NULL;
-        app->rev = NULL;
-        app->path = realpath(path, NULL);
-        app->ready = 1;
-
-        ofs = strlen(app->path);
-        while ((ofs > 0) && (app->path[ofs-1] != '/')) {
-                ofs--;
-        }
-
-        app->basename = &app->path[ofs];
-
-        log_debug(2, "Preparing to start local application: %s", app->path);
-}
-
-
-static void app_ctx_free(app_ctx_t *ctx)
-{
-        int i;
-
-        for (i = 0; i < ctx->apps.nmemb; i++) {
-                app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
-
-                if (app->name != NULL) {
-                        free(app->name);
-                }
-
-                if (app->path != NULL) {
-                        free(app->path);
-                }
-
-                memset(app, 0, sizeof(app_t));
-        }
-
-        hk_tab_cleanup(&ctx->apps);
-
-        free(ctx);
-}
-
-
-static void app_response(app_ctx_t *ctx, char *buf, int len)
+static void app_response(ctx_t *ctx, char *buf, int len)
 {
 	log_debug(2, "app_response: index=%d len=%d", ctx->index, len);
 
@@ -533,7 +572,7 @@ static void app_response(app_ctx_t *ctx, char *buf, int len)
 }
 
 
-static void app_request(app_ctx_t *ctx)
+static void app_request(ctx_t *ctx)
 {
 	log_debug(2, "app_request %d/%d", ctx->index, ctx->apps.nmemb);
 
@@ -581,7 +620,7 @@ static void app_request(app_ctx_t *ctx)
                         log_str("No updates requested by platform: keep engine running");
                         ping_start();
                 }
-                app_ctx_free(ctx);
+                ctx_free(ctx);
 	}
 } 
 
@@ -590,37 +629,12 @@ static void app_request(app_ctx_t *ctx)
 // SSL certificates
 //==================================================
 
-typedef struct {
-        char *fingerprint;
-        char *name;
-        char *path;
-} cert_req_t;
-
-static HK_TAB_DECLARE(cert_reqs, cert_req_t);
-static int cert_req_index = 0;
-
-static void cert_request(app_ctx_t *ctx);
+static void cert_request(ctx_t *ctx);
 
 
-static void cert_reqs_cleanup(void)
+static void cert_response(ctx_t *ctx, char *buf, int len)
 {
-        int i;
-
-        for (i = 0; i < cert_reqs.nmemb; i++) {
-                cert_req_t *req = HK_TAB_PTR(cert_reqs, cert_req_t, i);
-                free(req->fingerprint);
-                free(req->path);
-        }
-
-        hk_tab_cleanup(&cert_reqs);
-
-        cert_req_index = 0;
-}
-
-
-static void cert_response(app_ctx_t *ctx, char *buf, int len)
-{
-	log_debug(2, "cert_response: len=%d", len);
+	log_debug(2, "cert_response: index=%d len=%d", ctx->index, len);
 
         if (len < 0) {
                 log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
@@ -633,42 +647,42 @@ static void cert_response(app_ctx_t *ctx, char *buf, int len)
                 int errcode = platform_get_status(buf, len, &errstr, &ofs);
 
                 if (errcode == 0) {
-                        cert_req_t *req = HK_TAB_PTR(cert_reqs, cert_req_t, cert_req_index);
+                        cert_t *crt = HK_TAB_PTR(ctx->certs, cert_t, ctx->index);
 
                         // Write cert data
-			int fd = open(req->path, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR);
+			int fd = open(crt->path, O_RDWR|O_CREAT, S_IRUSR|S_IWUSR);
 			if (fd >= 0) {
                                 int ret = write(fd, buf+ofs, len-ofs);
 				if (ret < 0) {
-					log_str("ERROR: Cannot write file '%s': %s\n", req->path, strerror(errno));
+					log_str("ERROR: Cannot write file '%s': %s\n", crt->path, strerror(errno));
 				}
                                 close(fd);
 
                                 // Write cert fingerprint (if any)
-                                if (req->fingerprint != NULL) {
-                                        char *suffix = req->path + strlen(req->path);
+                                if (crt->fingerprint != NULL) {
+                                        char *suffix = crt->path + strlen(crt->path);
                                         strcpy(suffix, ".fp");
 
-                                        FILE *f = fopen(req->path, "w");
+                                        FILE *f = fopen(crt->path, "w");
                                         if (f != NULL) {
-                                                fwrite(req->fingerprint, 1, strlen(req->fingerprint), f);
+                                                fwrite(crt->fingerprint, 1, strlen(crt->fingerprint), f);
                                                 fclose(f);
                                         }
                                         else {
-                                                log_str("ERROR: Cannot create file '%s': %s\n", req->path, strerror(errno));
+                                                log_str("ERROR: Cannot create file '%s': %s\n", crt->path, strerror(errno));
                                         }
 
                                         *suffix = '\0';
                                 }
                         }
                         else {
-                                log_str("ERROR: Cannot create file '%s': %s\n", req->path, strerror(errno));
+                                log_str("ERROR: Cannot create file '%s': %s\n", crt->path, strerror(errno));
                         }
                 }
 
                 if (errcode == 0) {
                         // Process next request
-                        cert_req_index++;
+                        ctx->index++;
                         cert_request(ctx);
                 }
                 else {
@@ -678,35 +692,35 @@ static void cert_response(app_ctx_t *ctx, char *buf, int len)
 }
 
 
-static void cert_request(app_ctx_t *ctx)
+static void cert_request(ctx_t *ctx)
 {
-	log_debug(2, "cert_request %d/%d", cert_req_index, cert_reqs.nmemb);
+	log_debug(2, "cert_request %d/%d", ctx->index, ctx->certs.nmemb);
 
-        if (cert_req_index < cert_reqs.nmemb) {
-                cert_req_t *req = HK_TAB_PTR(cert_reqs, cert_req_t, cert_req_index);
+        if (ctx->index < ctx->certs.nmemb) {
+                cert_t *crt = HK_TAB_PTR(ctx->certs, cert_t, ctx->index);
                 buf_t header;
 
-		log_str("Downloading SSL certificate '%s'", req->name);
+		log_str("Downloading SSL certificate '%s'", crt->name);
 
                 // API key
                 buf_init(&header);
                 platform_http_header(&header);
 
                 // Certificate name
-                buf_append_fmt(&header, "HAKit-Cert: %s\r\n", req->name);
+                buf_append_fmt(&header, "HAKit-Cert: %s\r\n", crt->name);
 
                 ws_client_get(&ws_client, PLATFORM_URL "cert.php", (char *) header.base, (ws_client_func_t *) cert_response, ctx);
 
                 buf_cleanup(&header);
         }
         else {
-                cert_reqs_cleanup();
+                ctx->index = 0;
                 app_request(ctx);
         }
 }
 
 
-static int cert_check(char *str)
+static int cert_check(ctx_t *ctx, char *str)
 {
         // Extract cert name and fingerprint
         char *fp = strchr(str, ' ');
@@ -749,18 +763,18 @@ static int cert_check(char *str)
         // Cert is not present or fingerprint has changed: request download
         log_str("SSL certificate '%s' needs to be downloaded", str);
 
-        cert_req_t *req = hk_tab_push(&cert_reqs);
-        req->fingerprint = strdup(fp);
-        req->path = path;
-        req->name = &path[dir_len];
+        cert_t *crt = hk_tab_push(&ctx->certs);
+        crt->fingerprint = strdup(fp);
+        crt->path = path;
+        crt->name = &path[dir_len];
 
         // If the server certificate has changed, also request the server key
         if (strcmp(str, "server.crt") == 0) {
-                cert_req_t *req = hk_tab_push(&cert_reqs);
-                req->fingerprint = NULL;
-                req->path = strdup(path);
-                req->name = &req->path[dir_len];
-                strcpy(req->name, "server.key");
+                cert_t *crt = hk_tab_push(&ctx->certs);
+                crt->fingerprint = NULL;
+                crt->path = strdup(path);
+                crt->name = &crt->path[dir_len];
+                strcpy(crt->name, "server.key");
         }
 
         return 1;
@@ -796,7 +810,7 @@ static int hello_cache_save(char **argv)
 }
 
 
-static void hello_response_parse(char *str, app_ctx_t *ctx)
+static void hello_response_parse(char *str, ctx_t *ctx)
 {
         char *value = strchr(str, ':');
 
@@ -807,19 +821,19 @@ static void hello_response_parse(char *str, app_ctx_t *ctx)
                 }
 
                 if (strcmp(str, "Application") == 0) {
-                        app_ctx_feed(ctx, value);
+                        ctx_app_feed(ctx, value);
                 }
                 else if (strcmp(str, "Cert") == 0) {
-                        cert_check(value);
+                        cert_check(ctx, value);
                 }
         }
 }
 
 
-static app_ctx_t *hello_cache_load(void)
+static ctx_t *hello_cache_load(void)
 {
         char fname[strlen(opt_lib_dir) + 8];
-        app_ctx_t *ctx = NULL;
+        ctx_t *ctx = NULL;
         FILE *f;
 
         snprintf(fname, sizeof(fname), "%s/HELLO", opt_lib_dir);
@@ -831,7 +845,7 @@ static app_ctx_t *hello_cache_load(void)
         }
 
         log_str("INFO: Loading HELLO cache file");
-        ctx = app_ctx_alloc();
+        ctx = ctx_alloc();
 
         while (!feof(f)) {
                 char buf[128];
@@ -859,13 +873,13 @@ static void hello_response(void *user_data, char *buf, int len)
         if (len < 0) {
                 log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
 
-                app_ctx_t *ctx = hello_cache_load();
+                ctx_t *ctx = hello_cache_load();
                 if (ctx != NULL) {
                         // Start engine from cached program, except if it is already running
                         if (platform_state != ST_RUN) {
                                 engine_start(&ctx->apps);
                         }
-                        app_ctx_free(ctx);
+                        ctx_free(ctx);
                 }
                 else {
                         hello_retry();
@@ -880,11 +894,10 @@ static void hello_response(void *user_data, char *buf, int len)
 			if (errcode == 0) {
 				log_str("INFO    : Device accepted by platform server");
                                 char **argv = platform_get_lines(buf+ofs, len-ofs);
-                                app_ctx_t *ctx = app_ctx_alloc();
+                                ctx_t *ctx = ctx_alloc();
                                 int i;
 
                                 hello_cache_save(argv);
-                                cert_reqs_cleanup();
 
                                 for (i = 0; argv[i] != NULL; i++) {
                                         hello_response_parse(argv[i], ctx);
@@ -892,6 +905,7 @@ static void hello_response(void *user_data, char *buf, int len)
 
                                 free(argv);
 
+                                ctx->index = 0;
                                 cert_request(ctx);
 			}
 			else {
@@ -1093,10 +1107,10 @@ int main(int argc, char *argv[])
         /* Start it all, either on- or off-line */
         if (app != NULL) {
                 /* Start local application, if any */
-                app_ctx_t *ctx = app_ctx_alloc();
-                app_ctx_feed_local(ctx, app);
+                ctx_t *ctx = ctx_alloc();
+                ctx_app_feed_local(ctx, app);
 		engine_start(&ctx->apps);
-                app_ctx_free(ctx);
+                ctx_free(ctx);
         }
         else {
                 /* Create lib directory */
@@ -1111,7 +1125,7 @@ int main(int argc, char *argv[])
                 }
                 else {
                         /* Off-line mode: try to get application from the cache */
-                        app_ctx_t *ctx = hello_cache_load();
+                        ctx_t *ctx = hello_cache_load();
                         if (ctx == NULL) {
                                 log_str("ERROR: No API-Key provided, No application found in the cache: exiting.");
                                 exit(2);
