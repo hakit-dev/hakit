@@ -145,9 +145,14 @@ static void _start(ctx_t *ctx)
 
 		argv[i] = NULL;
 
-		ctx->proc = hk_proc_start(argv, env_appdir(NULL),
+                char *dir = env_appdir(NULL);
+		ctx->proc = hk_proc_start(argv, dir,
 					  (hk_proc_out_func_t) _stdout, NULL,
 					  (hk_proc_term_func_t) _term, ctx);
+
+                if (dir != NULL) {
+                        free(dir);
+                }
 
 		if (ctx->proc != NULL) {
 			hk_pad_update_int(ctx->pad_run, 1);

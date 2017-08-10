@@ -19,13 +19,14 @@
 #include "env.h"
 
 
+static char *env_curdir_ = NULL;
 static char *env_bindir_ = NULL;
 static char *env_devdir_ = NULL;
 static char *env_appdir_ = NULL;
 static char *env_app_ = NULL;
 
 
-static char *env_which(char *pgm)
+char *env_which(char *pgm)
 {
 	int pgmlen = strlen(pgm);
 	char *_path_ = getenv("PATH");
@@ -62,6 +63,12 @@ static char *env_which(char *pgm)
 void env_init(int argc, char *argv[])
 {
 	char *path;
+
+	/* Get current directory */
+	if (env_curdir_ == NULL) {
+                char path[1024];
+                env_curdir_ = strdup(getcwd(path, sizeof(path)));
+        }
 
 	/* Probe for HAKit development environment */
 	if (env_bindir_ != NULL) {
@@ -109,32 +116,27 @@ void env_init(int argc, char *argv[])
 
 static char *env_dir(char *rootdir, char *subpath)
 {
-	static char *path = NULL;
+	char *path;
+        int size;
+        int len;
 
 	if (rootdir == NULL) {
-		rootdir = ".";
+		rootdir = env_curdir_;
 	}
 
-	if (path != NULL) {
-		free(path);
-		path = NULL;
-	}
+        /* Compute path length */
+        size = strlen(rootdir)+4;
+        if (subpath != NULL) {
+                size += strlen(subpath);
+        }
 
-	{
-		int size = strlen(rootdir)+4;
-		int len;
+        /* Alloc path buffer */
+        path = malloc(size);
 
-		if (subpath != NULL) {
-			size += strlen(subpath);
-		}
-
-		path = malloc(size);
-
-		len = snprintf(path, size, "%s", rootdir);
-		if (subpath != NULL) {
-			len += snprintf(path+len, size-len, "/%s", subpath);
-		}
-	}
+        len = snprintf(path, size, "%s", rootdir);
+        if (subpath != NULL) {
+                len += snprintf(path+len, size-len, "/%s", subpath);
+        }
 
 	return path;
 }
