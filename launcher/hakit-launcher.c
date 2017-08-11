@@ -82,9 +82,9 @@ static const options_entry_t options_entries[] = {
 // Environment
 //===================================================
 
-static int create_dir(const char *dir)
+static int create_dir(const char *dir, unsigned int mode)
 {
-        if (mkdir(dir, 0755) == 0) {
+        if (mkdir(dir, mode) == 0) {
                 log_str("INFO: Directory '%s' created", dir);
         }
         else {
@@ -242,9 +242,9 @@ static void ctx_app_feed(ctx_t *ctx, char *str)
         int size = strlen(opt_lib_dir) + strlen(app->name) + 20;
         app->path = malloc(size);
         int ofs = snprintf(app->path, size, "%s/apps", opt_lib_dir);
-        create_dir(app->path);
+        create_dir(app->path, 0755);
         ofs += snprintf(app->path+ofs, size-ofs, "/%s", app->name);
-        create_dir(app->path);
+        create_dir(app->path, 0755);
         app->path[ofs++] = '/';
         app->basename = &app->path[ofs];
 
@@ -734,7 +734,7 @@ static int cert_check(ctx_t *ctx, char *str)
         char *path = malloc(size);
         int ofs = snprintf(path, size, "%s/certs/", opt_lib_dir);
         int dir_len = ofs;
-        create_dir(path);
+        create_dir(path, 0700);
 
         ofs += snprintf(path+ofs, size-ofs, "%s", str);
 
@@ -1115,7 +1115,7 @@ int main(int argc, char *argv[])
         else {
                 /* Create lib directory */
                 log_debug(1, "Library path = '%s'", opt_lib_dir);
-                if (create_dir(opt_lib_dir) != 0) {
+                if (create_dir(opt_lib_dir, 0755) != 0) {
                         exit(2);
                 }
 
