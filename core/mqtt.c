@@ -7,6 +7,8 @@
  * directory for more details.
  */
 
+#ifdef WITH_MQTT
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -325,3 +327,5 @@ int mqtt_subscribe(mqtt_t *mqtt, char *name)
 
 	return 0;
 }
+
+#endif /* WITH_MQTT */

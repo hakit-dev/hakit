@@ -33,7 +33,9 @@
 
 typedef struct {
 	hkcp_t hkcp;
+#ifdef WITH_MQTT
 	mqtt_t mqtt;
+#endif
 	ws_t *ws;
 	io_channel_t stdin;
 } comm_t;
@@ -52,12 +54,15 @@ static void comm_ws_send(ws_t *ws, char *name, char *value)
 }
 
 
+#ifdef WITH_MQTT
+
 static void comm_mqtt_update(comm_t *comm, char *name, char *value)
 {
 	log_debug(2, "comm_mqtt_update %s='%s'", name, value);
 	hkcp_sink_update_by_name(&comm->hkcp, name, value);
 }
 
+#endif /* WITH_MQTT */
 
 static void comm_wget_recv(void *user_data, char *buf, int len)
 {
@@ -134,12 +139,14 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 		log_debug(2, "SSL Certficate directory: %s", path);
 	}
 
+#ifdef WITH_MQTT
 	/* Init MQTT gears */
 	if (mqtt_host != NULL) {
 		if (mqtt_init(&comm.mqtt, path, (mqtt_update_func_t) comm_mqtt_update, &comm.hkcp)) {
 			return -1;
 		}
 	}
+#endif /* WITH_MQTT */
 
 	/* Init HTTP/WebSocket server */
 	comm.ws = ws_new(HAKIT_HTTP_PORT, use_ssl, path);
@@ -193,7 +200,9 @@ int comm_sink_register(char *name, comm_sink_func_t func, void *user_data)
 	if (id >= 0) {
 		hkcp_sink_add_handler(&comm.hkcp, id, func, user_data);
 		hkcp_sink_add_handler(&comm.hkcp, id, (hkcp_sink_func_t) comm_ws_send, comm.ws);
+#ifdef WITH_MQTT
 		mqtt_subscribe(&comm.mqtt, name);
+#endif
 	}
 
 	return id;
@@ -253,9 +262,10 @@ void comm_source_update_str(int id, char *value)
 	char *name = hkcp_source_update(&comm.hkcp, id, value);
 
 	if (name != NULL) {
+#ifdef WITH_MQTT
 		int retain = hkcp_source_is_event(&comm.hkcp, id) ? 0:1;
 		mqtt_publish(&comm.mqtt, name, value, retain);
-
+#endif
 		comm_ws_send(comm.ws, name, value);
 	}
 }

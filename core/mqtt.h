@@ -12,6 +12,8 @@
 #ifndef __HAKIT_MQTT_H__
 #define __HAKIT_MQTT_H__
 
+#ifdef WITH_MQTT
+
 #include <mqueue.h>
 #include "sys.h"
 #include "mosquitto.h"
@@ -52,5 +54,7 @@ extern int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
 		     mqtt_update_func_t update_func, void *user_data);
 extern int mqtt_publish(mqtt_t *mqtt, char *name, char *value, int retain);
 extern int mqtt_subscribe(mqtt_t *mqtt, char *name);
+
+#endif /* WITH_MQTT */
 
 #endif /* __HAKIT_MQTT_H__ */
