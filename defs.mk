@@ -38,16 +38,6 @@ else
 CFLAGS += -O2
 endif
 
-ifdef CROSS_ROOT_PATH
-ifneq ($(wildcard $(CROSS_ROOT_PATH)/usr),)
-CFLAGS += -I$(CROSS_ROOT_PATH)/usr/include
-LDFLAGS += -L$(CROSS_ROOT_PATH)/usr/lib
-else
-CFLAGS += -I$(CROSS_ROOT_PATH)/include
-LDFLAGS += -L$(CROSS_ROOT_PATH)/lib
-endif
-endif
-
 ifdef HAKIT_BUILD
 VPATH = os:core
 CFLAGS  += -I. -Ios
@@ -150,8 +140,13 @@ endif
 # Standard cross-compile SDK path
 #
 ifdef CROSS_ROOT_PATH
+ifneq ($(wildcard $(CROSS_ROOT_PATH)/usr),)
 STD_CFLAGS += -I$(CROSS_ROOT_PATH)/usr/include
 STD_LDFLAGS += -L$(CROSS_ROOT_PATH)/usr/lib
+else
+STD_CFLAGS += -I$(CROSS_ROOT_PATH)/include
+STD_LDFLAGS += -L$(CROSS_ROOT_PATH)/lib
+endif
 endif
 
 #
