@@ -12,5 +12,5 @@ ARCH = armhf
 DISTRO = debian
 
 export CROSS_COMPILE := arm-linux-gnueabihf-
-export CROSS_PATH := $(shell readlink -f $(HAKIT_DIR)/..)/rpi/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64
+export CROSS_PATH := $(realpath $(HAKIT_DIR)/..)/rpi/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian-x64
 export CROSS_ROOT_PATH := $(CROSS_PATH)/arm-linux-gnueabihf

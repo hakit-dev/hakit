@@ -6,7 +6,7 @@ CLASSES := sink source and or not cmp history \
 all::
 	for dir in $(CLASSES); do \
 	  [ -f $$dir/Makefile ] && MK=Makefile || MK=../classes.mk ;\
-	  make -C $$dir -f $$MK NAME=$$dir all ;\
+	  make -C $$dir -f $$MK NAME=$$dir all || exit 1;\
 	done
 
 clean::
@@ -18,5 +18,5 @@ clean::
 install::
 	for dir in $(CLASSES); do \
 	  [ -f $$dir/Makefile ] && MK=Makefile || MK=../classes.mk ;\
-	  make -C $$dir -f $$MK NAME=$$dir DESTDIR=$(DESTDIR) install ;\
+	  make -C $$dir -f $$MK NAME=$$dir DESTDIR=$(DESTDIR) install || exit 1 ;\
 	done

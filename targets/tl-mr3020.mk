@@ -13,6 +13,6 @@ DISTRO = openwrt
 
 export CROSS_COMPILE := mips-openwrt-linux-
 
-export STAGING_DIR := $(shell readlink -f $(HAKIT_DIR)/..)/openwrt/OpenWrt-SDK-ar71xx-for-linux-i486-gcc-4.6-linaro_uClibc-0.9.33.2/staging_dir
+export STAGING_DIR := $(realpath $(HAKIT_DIR)/..)/openwrt/OpenWrt-SDK-ar71xx-for-linux-i486-gcc-4.6-linaro_uClibc-0.9.33.2/staging_dir
 export CROSS_PATH := $(STAGING_DIR)/toolchain-mips_r2_gcc-4.6-linaro_uClibc-0.9.33.2
 export CROSS_ROOT_PATH := $(STAGING_DIR)/target-mips_r2_uClibc-0.9.33.2

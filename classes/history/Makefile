@@ -1,9 +1,15 @@
+NAME := history
+
+ARCH ?= $(shell arch)
+OUTDIR = device/$(ARCH)
+
+HISTORY_TOOL = $(OUTDIR)/hakit-history
+ARCH_BINS = $(HISTORY_TOOL)
+
 SRCS = main.c history.c
 OBJS = $(SRCS:%.c=%.o)
 
 include ../classes.mk
-
-HISTORY_TOOL = $(OUTDIR)/hakit-history
 
 all:: $(HISTORY_TOOL)
 
