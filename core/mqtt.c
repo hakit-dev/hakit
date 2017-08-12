@@ -243,7 +243,7 @@ int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
 
 	/* Create private messaging queue */
 	snprintf(id, sizeof(id), "/hakit-%d", getpid());
-	int flags = O_RDWR | O_CLOEXEC | O_CREAT | O_EXCL | O_NONBLOCK;
+	int flags = O_RDWR | O_CREAT | O_EXCL | O_NONBLOCK;
 	struct mq_attr attr = {
 		.mq_flags   = O_NONBLOCK,
 		.mq_maxmsg  = 8,
