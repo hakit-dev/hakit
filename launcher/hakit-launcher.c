@@ -16,22 +16,22 @@
 #include <sys/utsname.h>
 #include <sys/stat.h>
 
+#include "types.h"
 #include "options.h"
 #include "log.h"
 #include "sys.h"
 #include "env.h"
 #include "buf.h"
 #include "tab.h"
-#include "ws_client.h"
 #include "proc.h"
+#include "ws_client.h"
 
 #include "hakit_version.h"
 
 
 #define VERSION HAKIT_VERSION
 #define NAME "hakit-launcher"
-#define PLATFORM_URL "https://hakit.net/api/"
-//#define PLATFORM_URL "http://localhost/api/"
+#define PLATFORM_URL "https://hakit.net"
 
 #define PID_FILE "/var/run/hakit.pid"
 #define LIB_DIR "/var/lib/hakit"
@@ -47,9 +47,9 @@ typedef enum {
 	ST_RUN,
 	ST_RESTART,
         NSTATES
-} platform_state_t;
+} state_t;
 
-static platform_state_t platform_state = ST_HELLO;
+static state_t state = ST_HELLO;
 
 static ws_client_t ws_client;
 static io_channel_t io_stdin;
@@ -65,6 +65,7 @@ static void hello_retry(void);
 const char *options_summary = "HAKit launcher " VERSION " (" ARCH ")";
 
 static char *opt_pid_file = PID_FILE;
+static char *opt_platform_url = PLATFORM_URL;
 static char *opt_lib_dir = LIB_DIR;
 static int opt_offline = 0;
 
@@ -72,6 +73,7 @@ static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
 	{ "daemon", 'D', 0,    OPTIONS_TYPE_NONE, &opt_daemon,  "Run in background as a daemon" },
 	{ "pid-file", 'P', 0,  OPTIONS_TYPE_STRING, &opt_pid_file,  "Daemon PID file name (default: " PID_FILE ")", "FILE" },
+	{ "platform-url", 'U', 0, OPTIONS_TYPE_STRING,   &opt_platform_url,  "HAKit web platform URL (default: " PLATFORM_URL ")", "URL" },
 	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store application and config files (default: " LIB_DIR ")", "DIR" },
 	{ "offline", 'l', 0,   OPTIONS_TYPE_NONE,  &opt_offline,  "Work off-line. Do not access the HAKit platform server" },
 	{ NULL }
@@ -105,13 +107,22 @@ static int create_dir(const char *dir, unsigned int mode)
 static char *opt_api_key = NULL;
 
 static const options_entry_t api_auth_entries[] = {
-	{ "api-key", 'K', 0,   OPTIONS_TYPE_STRING,   &opt_api_key,  "API key for accessing hakit.net web platform" },
+	{ "api-key", 'K', 0,   OPTIONS_TYPE_STRING,   &opt_api_key,  "API key for accessing HAKit web platform" },
 };
 
-static void platform_http_header(buf_t *header)
+
+static void platform_request(char *script, buf_t *header, ws_client_func_t *callback, void *callback_data)
 {
-        // API key
+	// Construct request URL
+	char url[strlen(opt_platform_url) + strlen(script) + 8];
+	snprintf(url, sizeof(url), "%s/api/%s", opt_platform_url, script);
+
+        // Add API key in HTTP header
         buf_append_fmt(header, "HAKit-Api-Key: %s\r\n", opt_api_key);
+
+	ws_client_get(&ws_client, url, (char *) header->base, callback, callback_data);
+
+	buf_cleanup(header);
 }
 
 
@@ -396,7 +407,7 @@ static void engine_terminated(void *user_data, int status)
         ping_stop();
 
         if (engine_proc == NULL) {
-                if (platform_state == ST_RUN) {
+                if (state == ST_RUN) {
                         engine_start_now();
                 }
         }
@@ -415,7 +426,7 @@ static void engine_start_now(void)
         engine_proc = hk_proc_start(engine_argv.buf, NULL, engine_stdout, engine_stderr, engine_terminated, NULL);
 
         if (engine_proc != NULL) {
-                platform_state = ST_RUN;
+                state = ST_RUN;
 
                 // Leave stdin stream to child
                 log_str("HAKit engine process started: pid=%d", engine_proc->pid);
@@ -484,7 +495,7 @@ static void engine_start(hk_tab_t *apps)
         // Sart HAKit engine
         if (engine_proc != NULL) {
                 log_str("Engine is already running: restarting");
-                platform_state = ST_RESTART;
+                state = ST_RESTART;
                 engine_stop();
         }
         else {
@@ -597,21 +608,17 @@ static void app_request(ctx_t *ctx)
                 // after downloads are completed
                 ctx->restart = 1;
 
-                // API key
                 buf_init(&header);
-                platform_http_header(&header);
 
                 // Application name
                 buf_append_fmt(&header, "HAKit-Application: %s\r\n", app->name);
 
-                ws_client_get(&ws_client, PLATFORM_URL "app.php", (char *) header.base, (ws_client_func_t *) app_response, ctx);
-
-                buf_cleanup(&header);
+		platform_request("app.php", &header, (ws_client_func_t *) app_response, ctx);
         }
         else {
                 // If engine is running and no restart is needed, keep it running
-                if ((platform_state != ST_RUN) || ctx->restart) {
-                        if (platform_state == ST_RUN) {
+                if ((state != ST_RUN) || ctx->restart) {
+                        if (state == ST_RUN) {
                                 log_str("Updates requested by platform: restarting engine");
                         }
                         engine_start(&ctx->apps);
@@ -702,16 +709,12 @@ static void cert_request(ctx_t *ctx)
 
 		log_str("Downloading SSL certificate '%s'", crt->name);
 
-                // API key
                 buf_init(&header);
-                platform_http_header(&header);
 
                 // Certificate name
                 buf_append_fmt(&header, "HAKit-Cert: %s\r\n", crt->name);
 
-                ws_client_get(&ws_client, PLATFORM_URL "cert.php", (char *) header.base, (ws_client_func_t *) cert_response, ctx);
-
-                buf_cleanup(&header);
+		platform_request("cert.php", &header, (ws_client_func_t *) cert_response, ctx);
         }
         else {
                 ctx->index = 0;
@@ -820,13 +823,13 @@ static void hello_response_parse(char *str, ctx_t *ctx)
                         value++;
                 }
 
-                if (strcmp(str, "Application") == 0) {
-                        ctx_app_feed(ctx, value);
-                }
-                else if (strcmp(str, "Cert") == 0) {
-                        cert_check(ctx, value);
-                }
-        }
+		if (strcmp(str, "Application") == 0) {
+			ctx_app_feed(ctx, value);
+		}
+		else if (strcmp(str, "Cert") == 0) {
+			cert_check(ctx, value);
+		}
+	}
 }
 
 
@@ -876,7 +879,7 @@ static void hello_response(void *user_data, char *buf, int len)
                 ctx_t *ctx = hello_cache_load();
                 if (ctx != NULL) {
                         // Start engine from cached program, except if it is already running
-                        if (platform_state != ST_RUN) {
+                        if (state != ST_RUN) {
                                 engine_start(&ctx->apps);
                         }
                         ctx_free(ctx);
@@ -910,7 +913,7 @@ static void hello_response(void *user_data, char *buf, int len)
 			}
 			else {
 				log_str("WARNING : Access denied by platform server: %s", errstr);
-                                platform_state = ST_HELLO;
+                                state = ST_HELLO;
 
                                 // Kill currently running engine if access is denied by platform
                                 engine_stop();
@@ -936,10 +939,9 @@ static int hello_request(void)
 
 	// API key
         buf_init(&header);
-	platform_http_header(&header);
 
-        if (platform_state != ST_RUN) {
-                platform_state = ST_HELLO;
+        if (state != ST_RUN) {
+                state = ST_HELLO;
 
                 // HAKit version
                 buf_append_str(&header, "HAKit-Version: " VERSION "\r\n");
@@ -954,9 +956,7 @@ static int hello_request(void)
                 }
         }
 
-	ws_client_get(&ws_client, PLATFORM_URL "hello.php", (char *) header.base, hello_response, NULL);
-
-        buf_cleanup(&header);
+	platform_request("hello.php", &header, (ws_client_func_t *) hello_response, NULL);
 
 	return 0;
 }
@@ -964,7 +964,7 @@ static int hello_request(void)
 
 static void hello_retry(void)
 {
-        platform_state = ST_RETRY;
+        state = ST_RETRY;
 
         if (opt_api_key != NULL) {
                 log_str("INFO    : New HELLO attempt in %d seconds", HELLO_RETRY_DELAY);
