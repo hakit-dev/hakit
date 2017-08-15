@@ -39,6 +39,9 @@
 
 #define HELLO_RETRY_DELAY (3*60)
 #define PING_DELAY (30*60)
+#define MQTT_RETRY_DELAY 10
+#define MQTT_MAX_RETRIES 3
+#define MQTT_PORT 8883
 
 typedef enum {
 	ST_IDLE=0,
@@ -68,6 +71,7 @@ static char *opt_pid_file = PID_FILE;
 static char *opt_platform_url = PLATFORM_URL;
 static char *opt_lib_dir = LIB_DIR;
 static int opt_offline = 0;
+static int opt_mqtt_port = MQTT_PORT;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
@@ -76,6 +80,9 @@ static const options_entry_t options_entries[] = {
 	{ "platform-url", 'U', 0, OPTIONS_TYPE_STRING,   &opt_platform_url,  "HAKit web platform URL (default: " PLATFORM_URL ")", "URL" },
 	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store application and config files (default: " LIB_DIR ")", "DIR" },
 	{ "offline", 'l', 0,   OPTIONS_TYPE_NONE,  &opt_offline,  "Work off-line. Do not access the HAKit platform server" },
+#ifdef WITH_MQTT
+	{ "mqtt-port", 'p', 0, OPTIONS_TYPE_INT, &opt_mqtt_port, "MQTT broker port number (default: " xstr(MQTT_PORT) ")", "PORT" },
+#endif
 	{ NULL }
 };
 
@@ -218,6 +225,7 @@ typedef struct {
         hk_tab_t certs;
 	int index;
         int restart;
+        int is_broker;
 } ctx_t;
 
 
@@ -492,7 +500,7 @@ static void engine_start(hk_tab_t *apps)
         }
         HK_TAB_PUSH_VALUE(engine_argv, (char *) NULL);
 
-        // Sart HAKit engine
+        // Start engine. Restart if it is already running
         if (engine_proc != NULL) {
                 log_str("Engine is already running: restarting");
                 state = ST_RESTART;
@@ -633,6 +641,143 @@ static void app_request(ctx_t *ctx)
 
 
 //===================================================
+// MQTT Broker
+//==================================================
+
+#ifdef WITH_MQTT
+
+static hk_proc_t *mqtt_proc = NULL;
+static int mqtt_restart = 0;
+static int mqtt_retry_count = 0;
+
+static int mqtt_start_now(void);
+
+static char *mqtt_dir(char *filename)
+{
+	int size = strlen(opt_lib_dir) + strlen(filename) + 8;
+	char *path = malloc(size);
+	snprintf(path, size, "%s/mqtt/%s", opt_lib_dir, filename);
+	return path;
+}
+
+
+static char *mqtt_config(void)
+{
+	return mqtt_dir("mosquitto.conf");
+}
+
+
+static void mqtt_stdxxx(void *user_data, char *buf, int size)
+{
+        log_put(buf, size);
+}
+
+
+static void mqtt_terminated(void *user_data, int status)
+{
+        log_str("MQTT broker terminated with status %d", status);
+
+        if (mqtt_proc == NULL) {
+		// Broker intentionally killed for restart
+		if (mqtt_restart) {
+			mqtt_restart = 0;
+			mqtt_start_now();
+		}
+        }
+        else {
+		// Broker terminated without being intentionally killed
+		mqtt_proc = NULL;
+
+		mqtt_retry_count++;
+		if (mqtt_retry_count <= MQTT_MAX_RETRIES) {
+			log_str("PANIC: MQTT broker terminated (%d/%d). Restarting in %d seconds ...", mqtt_retry_count, MQTT_MAX_RETRIES, MQTT_RETRY_DELAY);
+			sys_timeout(MQTT_RETRY_DELAY*1000, (sys_func_t) mqtt_start_now, NULL);
+		}
+		else {
+			log_str("PANIC: MQTT broker terminated after %d restart attempts. Giving up.", MQTT_MAX_RETRIES);
+		}
+        }
+}
+
+
+static int mqtt_start_now(void)
+{
+	char *config = mqtt_config();
+	char *argv[] = {
+		"mosquitto",
+		"-c", config,
+		NULL
+	};
+        log_debug(2, "mqtt_start_now");
+
+        // Start broker process
+        mqtt_proc = hk_proc_start(argv, NULL, mqtt_stdxxx, mqtt_stdxxx, mqtt_terminated, NULL);
+
+        if (mqtt_proc != NULL) {
+                // Leave stdin stream to child
+                log_str("MQTT broker process started: pid=%d", mqtt_proc->pid);
+        }
+        else {
+                log_str("ERROR: MQTT broker start failed");
+        }
+
+	free(config);
+
+	return 0;
+}
+
+
+static void mqtt_stop(int restart)
+{
+        log_debug(2, "mqtt_stop");
+
+        if (mqtt_proc != NULL) {
+		mqtt_restart = restart;
+                hk_proc_stop(mqtt_proc);
+                mqtt_proc = NULL;
+        }
+}
+
+
+static void mqtt_start(void)
+{
+        log_debug(2, "mqtt_start");
+
+        // Start broker. Restart if it is already running
+        if (mqtt_proc != NULL) {
+                log_str("MQTT broker is already running: restarting");
+                mqtt_stop(1);
+        }
+        else {
+                mqtt_start_now();
+        }
+}
+
+
+void mqtt_write_config(ctx_t *ctx)
+{
+	char *dir = mqtt_dir("");
+        create_dir(dir, 0755);
+
+	char *config = mqtt_config();
+        log_str("Writing MQTT broker config file: %s", config);
+
+        FILE *f = fopen(config, "w");
+        fprintf(f, "port %d\n", opt_mqtt_port);
+        fprintf(f, "persistence_location %s\n", dir);
+        fprintf(f, "cafile %s/certs/ca.crt\n", opt_lib_dir);
+        fprintf(f, "keyfile %s/certs/server.key\n", opt_lib_dir);
+        fprintf(f, "certfile %s/certs/server.crt\n", opt_lib_dir);
+        fclose(f);
+
+	free(config);
+	free(dir);
+}
+
+#endif /* WITH_MQTT */
+
+
+//===================================================
 // SSL certificates
 //==================================================
 
@@ -717,6 +862,17 @@ static void cert_request(ctx_t *ctx)
 		platform_request("cert.php", &header, (ws_client_func_t *) cert_response, ctx);
         }
         else {
+#ifdef WITH_MQTT
+		// Start MQTT broker
+		if (ctx->is_broker) {
+			mqtt_start();
+		}
+		else {
+			mqtt_stop(0);
+		}
+#endif /* WITH_MQTT */
+		
+		// Fetch applications
                 ctx->index = 0;
                 app_request(ctx);
         }
@@ -822,14 +978,24 @@ static void hello_response_parse(char *str, ctx_t *ctx)
                 while ((*value != '\0') && (*value <= ' ')) {
                         value++;
                 }
+        }
 
-		if (strcmp(str, "Application") == 0) {
-			ctx_app_feed(ctx, value);
-		}
-		else if (strcmp(str, "Cert") == 0) {
-			cert_check(ctx, value);
-		}
-	}
+        if (strcmp(str, "Application") == 0) {
+                if (value != NULL) {
+                        ctx_app_feed(ctx, value);
+                }
+        }
+        else if (strcmp(str, "Cert") == 0) {
+                if (value != NULL) {
+                        cert_check(ctx, value);
+                }
+        }
+#ifdef WITH_MQTT
+        else if (strcmp(str, "MQTT-broker") == 0) {
+                ctx->is_broker = 1;
+                mqtt_write_config(ctx);
+        }
+#endif /* WITH_MQTT */
 }
 
 
