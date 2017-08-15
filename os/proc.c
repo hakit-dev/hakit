@@ -23,8 +23,13 @@
 #include "sys.h"
 #include "proc.h"
 
+typedef struct {
+	int in[2];
+	int out[2];
+	int err[2];
+} hk_proc_start_pipes_t;
 
-static hk_proc_t *procs = NULL;
+static hk_proc_t **procs = NULL;
 static int nprocs = 0;
 
 
@@ -34,8 +39,9 @@ static hk_proc_t *hk_proc_find_free(void)
 
 	/* Find a free entry in proc table */
 	for (i = 0; i < nprocs; i++) {
-		if (procs[i].state == HK_PROC_ST_FREE) {
-			return &procs[i];
+		hk_proc_t *proc = procs[i];
+		if (proc->state == HK_PROC_ST_FREE) {
+			return proc;
 		}
 	}
 
@@ -49,7 +55,7 @@ static int hk_proc_quit(void *user_data)
 
 	/* Find a free entry in proc table */
 	for (i = 0; i < nprocs; i++) {
-                hk_proc_stop(&procs[i]);
+                hk_proc_stop(procs[i]);
 	}
 
         return 0;
@@ -69,8 +75,9 @@ static hk_proc_t *hk_proc_add(void)
 	/* If none found, allocate a new one */
 	if (proc == NULL) {
 		nprocs++;
-		procs = (hk_proc_t *) realloc(procs, nprocs * sizeof(hk_proc_t));
-		proc = &procs[nprocs-1];
+		procs = (hk_proc_t **) realloc(procs, nprocs * sizeof(hk_proc_t *));
+		proc = malloc(sizeof(hk_proc_t));
+		procs[nprocs-1] = proc;
 	}
 
 	memset(proc, 0, sizeof(hk_proc_t));
@@ -180,7 +187,7 @@ static void hk_proc_stderr(hk_proc_t *proc, char *buf, int len)
 
 static int hk_proc_sigchld(hk_proc_t *proc, pid_t pid, int status)
 {
-	log_debug(2, "hk_proc_sigchld [%d] status=%d", pid, status);
+	log_debug(2, "hk_proc_sigchld pid=%d status=%d", pid, WEXITSTATUS(status));
 
 	if (pid == proc->pid) {
 		proc->pid = 0;
@@ -189,7 +196,7 @@ static int hk_proc_sigchld(hk_proc_t *proc, pid_t pid, int status)
 		hk_proc_timeout_cancel(proc);
 
 		if (proc->cb_term != NULL) {
-			proc->cb_term(proc->user_data, status);
+			proc->cb_term(proc->user_data, WEXITSTATUS(status));
 		}
 
 		hk_proc_term(proc);
@@ -203,13 +210,6 @@ static int hk_proc_sigchld(hk_proc_t *proc, pid_t pid, int status)
 }
 
 
-typedef struct {
-	int in[2];
-	int out[2];
-	int err[2];
-} hk_proc_start_pipes_t;
-
-
 static hk_proc_t *hk_proc_start_(char *argv[], char *cwd,
                                  hk_proc_start_pipes_t *p,
                                  hk_proc_out_func_t cb_stdout,
@@ -220,27 +220,12 @@ static hk_proc_t *hk_proc_start_(char *argv[], char *cwd,
 	hk_proc_t *proc = NULL;
 	pid_t pid;
 
+	fprintf(stderr, "\n\n");
 	log_debug(2, "hk_proc_start %s ...", argv[0]);
 
 	pid = fork();
 	switch (pid) {
 	case 0: /* Child */
-		/* Change working directory, if provided */
-		if (cwd != NULL) {
-			if (chdir(cwd) == 0) {
-				log_debug(2, "hk_proc_start: chdir to '%s'", cwd);
-			}
-			else {
-				log_str("WARNING: Cannot chdir to '%s': %s", cwd, strerror(errno));
-			}
-		}
-
-		/* Check access to command */
-		if (access(argv[0], X_OK) == -1) {
-			log_str("ERROR: Cannot access proc command '%s': %s", argv[0], strerror(errno));
-			exit(254);
-		}
-
                 if (p != NULL) {
                         /* Redirect stdin to input pipe */
                         if (dup2(p->in[0], STDIN_FILENO) == -1) {
@@ -267,11 +252,21 @@ static hk_proc_t *hk_proc_start_(char *argv[], char *cwd,
                         close(p->err[1]);
                 }
 
+		/* Change working directory, if provided */
+		if (cwd != NULL) {
+			if (chdir(cwd) == 0) {
+				log_debug(2, "hk_proc_start: chdir to '%s'", cwd);
+			}
+			else {
+				log_str("WARNING: Cannot chdir to '%s': %s", cwd, strerror(errno));
+			}
+		}
+
 		/* Perform exec (returnless call if success) */
 		execvp(argv[0], argv);
 
 		/* Return from exec: something went wrong */
-		fprintf(stderr, "ERROR: execvp(%s) [pid=%d]: %s\n", argv[0], getpid(), strerror(errno));
+		log_str("ERROR: execvp(%s) [pid=%d]: %s", argv[0], getpid(), strerror(errno));
 		exit(255);
 		break;
 
