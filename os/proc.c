@@ -220,7 +220,6 @@ static hk_proc_t *hk_proc_start_(char *argv[], char *cwd,
 	hk_proc_t *proc = NULL;
 	pid_t pid;
 
-	fprintf(stderr, "\n\n");
 	log_debug(2, "hk_proc_start %s ...", argv[0]);
 
 	pid = fork();
