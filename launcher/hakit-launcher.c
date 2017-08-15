@@ -69,7 +69,7 @@ const char *options_summary = "HAKit launcher " VERSION " (" ARCH ")";
 
 static char *opt_pid_file = PID_FILE;
 static char *opt_platform_url = PLATFORM_URL;
-static char *opt_lib_dir = LIB_DIR;
+static char *opt_lib_dir = NULL;
 static int opt_offline = 0;
 static int opt_mqtt_port = MQTT_PORT;
 
@@ -1231,6 +1231,17 @@ int main(int argc, char *argv[])
 
 	/* Init exec environment */
         env_init(argc, argv);
+
+	if (opt_lib_dir == NULL) {
+		char *dir = env_devdir("lib");
+		if (dir == NULL) {
+			opt_lib_dir = LIB_DIR;
+		}
+		else {
+			opt_lib_dir = dir;
+			log_str("Running in development enviroment: lib directory = '%s'", dir);
+		}
+	}
 
 	if (opt_daemon) {
 		run_as_daemon();
