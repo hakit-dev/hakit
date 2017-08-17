@@ -130,6 +130,15 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 		return ret;
 	}
 
+#ifdef WITH_MQTT
+	/* Init MQTT gears */
+	if (mqtt_broker != NULL) {
+		if (mqtt_init(&comm.mqtt, use_ssl, (mqtt_update_func_t) comm_mqtt_update, &comm.hkcp)) {
+			return -1;
+		}
+	}
+#endif /* WITH_MQTT */
+
 	/* Search for SSL cert directory */
 	if (use_ssl) {
 		path = env_devdir("ssl");
@@ -138,15 +147,6 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 		}
 		log_debug(2, "SSL Certficate directory: %s", path);
 	}
-
-#ifdef WITH_MQTT
-	/* Init MQTT gears */
-	if (mqtt_host != NULL) {
-		if (mqtt_init(&comm.mqtt, path, (mqtt_update_func_t) comm_mqtt_update, &comm.hkcp)) {
-			return -1;
-		}
-	}
-#endif /* WITH_MQTT */
 
 	/* Init HTTP/WebSocket server */
 	comm.ws = ws_new(HAKIT_HTTP_PORT, use_ssl, path);

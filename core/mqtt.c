@@ -25,11 +25,10 @@
 
 
 /* MQTT config options */
-char *mqtt_user = NULL;
-char *mqtt_host = NULL;
-int mqtt_port = 0;
+char *mqtt_broker = NULL;
 int mqtt_keepalive = MQTT_DEFAULT_KEEPALIVE;
 int mqtt_qos = 0;
+char *mqtt_cafile = NULL;
 
 /* Message queue */
 #define MSG_MAXSIZE 1024
@@ -94,16 +93,16 @@ static void mqtt_on_log(struct mosquitto *mosq, void *obj, int level, const char
 	char *tag;
 
 	switch (level) {
-	case MOSQ_LOG_INFO:    tag = "INFO"; break;
-	case MOSQ_LOG_NOTICE:  tag = "NOTICE"; break;
+	case MOSQ_LOG_INFO:    tag = "INFO   "; break;
+	case MOSQ_LOG_NOTICE:  tag = "NOTICE "; break;
 	case MOSQ_LOG_WARNING: tag = "WARNING"; break;
-	case MOSQ_LOG_ERR:     tag = "ERROR"; break;
-	case MOSQ_LOG_DEBUG:   tag = (opt_debug > 0) ? "DEBUG":NULL; break;
+	case MOSQ_LOG_ERR:     tag = "ERROR  "; break;
+	case MOSQ_LOG_DEBUG:   tag = (opt_debug > 0) ? "DEBUG  ":NULL; break;
 	default:               tag = NULL; break;
 	}
 
 	if (tag != NULL) {
-		log_str("MQTT [%s] %s", tag, str);
+		log_str("MQTT-client %s %s", tag, str);
 	}
 }
 
@@ -139,7 +138,7 @@ static int mqtt_msg_recv(mqtt_t *mqtt, int fd)
 }
 
 
-int mqtt_init(mqtt_t *mqtt, char *ssl_dir, 
+int mqtt_init(mqtt_t *mqtt, int use_ssl, 
 	      mqtt_update_func_t update_func, void *user_data)
 {
 	int major, minor, revision;
@@ -179,17 +178,25 @@ int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
 	mqtt->user_data = user_data;
 
 	// Setup SSL
-	if (ssl_dir != NULL) {
+	if (use_ssl) {
 		port = MQTT_DEFAULT_SSL_PORT;
-
-		//TODO: mosquitto_tls_set();
+		if (mqtt_cafile != NULL) {
+			mosquitto_tls_set(mqtt->mosq, mqtt_cafile, NULL,
+					  NULL, NULL,
+					  NULL);
+		}
+		else {
+			mosquitto_tls_set(mqtt->mosq, NULL, "/etc/ssl/certs",
+					  NULL, NULL,
+					  NULL);
+		}
 	}
 	else {
 		port = MQTT_DEFAULT_PORT;
 	}
 
 	// Parse broker specification
-	char *str = strdup(mqtt_host);
+	char *str = strdup(mqtt_broker);
 	char *host = strchr(str, '@');
 	char *user = NULL;
 	char *password = NULL;
@@ -214,20 +221,13 @@ int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
 		port = atoi(p);
 	}
 
-	// Setup MQTT user and password
-	if (mqtt_user != NULL) {
-		user = mqtt_user;
-
-		char *p = strchr(user, ':');
-		if (p != NULL) {
-			*(p++) = '\0';
-			password = p;
-		}
-	}
-
 	if (user != NULL) {
 		log_debug(1, "MQTT user: '%s'", user);
 		mosquitto_username_pw_set(mqtt->mosq, user, password);
+	}
+
+	if (*host == '\0') {
+		host = "localhost";
 	}
 
 	// Connect to broker

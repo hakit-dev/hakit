@@ -224,8 +224,11 @@ typedef struct {
         hk_tab_t apps;
         hk_tab_t certs;
 	int index;
-        int restart;
+        int restart_engine;
+#ifdef WITH_MQTT
         int is_broker;
+        int restart_broker;
+#endif /* WITH_MQTT */
 } ctx_t;
 
 
@@ -460,15 +463,15 @@ static void engine_stop(void)
 }
 
 
-static void engine_start(hk_tab_t *apps)
+static void engine_start(ctx_t *ctx)
 {
         int i;
 
         log_debug(2, "engine_start");
 
         // Check all application are ready
-        for (i = 0; i < apps->nmemb; i++) {
-                app_t *app = HK_TAB_PTR(*apps, app_t, i);
+        for (i = 0; i < ctx->apps.nmemb; i++) {
+                app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
                 if (!app->ready) {
                         log_str("ERROR: Cannot start engine: application '%s' is not up to date.");
                         hello_retry();
@@ -494,8 +497,23 @@ static void engine_start(hk_tab_t *apps)
         snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
         HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(debug));
 
-        for (i = 0; i < apps->nmemb; i++) {
-                app_t *app = HK_TAB_PTR(*apps, app_t, i);
+#ifdef WITH_MQTT
+	if (ctx->is_broker) {
+		char args[64];
+		char hostname[64];
+
+		gethostname(hostname, sizeof(hostname));
+
+		snprintf(args, sizeof(args), "--mqtt-broker=%s:%d", hostname, opt_mqtt_port);
+		HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
+
+		snprintf(args, sizeof(args), "--mqtt-cafile=%s/certs/ca.crt", opt_lib_dir);
+		HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
+	}
+#endif
+
+        for (i = 0; i < ctx->apps.nmemb; i++) {
+                app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
                 HK_TAB_PUSH_VALUE(engine_argv, strdup(app->path));
         }
         HK_TAB_PUSH_VALUE(engine_argv, (char *) NULL);
@@ -614,7 +632,7 @@ static void app_request(ctx_t *ctx)
 
                 // A new app will be downloaded, so we will need to restart the engine
                 // after downloads are completed
-                ctx->restart = 1;
+                ctx->restart_engine = 1;
 
                 buf_init(&header);
 
@@ -625,14 +643,14 @@ static void app_request(ctx_t *ctx)
         }
         else {
                 // If engine is running and no restart is needed, keep it running
-                if ((state != ST_RUN) || ctx->restart) {
+                if ((state != ST_RUN) || ctx->restart_engine) {
                         if (state == ST_RUN) {
                                 log_str("Updates requested by platform: restarting engine");
                         }
-                        engine_start(&ctx->apps);
+                        engine_start(ctx);
                 }
                 else {
-                        log_str("No updates requested by platform: keep engine running");
+                        log_str("No updates requested by platform: keeping engine running");
                         ping_start();
                 }
                 ctx_free(ctx);
@@ -667,9 +685,52 @@ static char *mqtt_config(void)
 }
 
 
-static void mqtt_stdxxx(void *user_data, char *buf, int size)
+static void mqtt_stdxxx(char *tag, char *buf, int size)
 {
-        log_put(buf, size);
+	char tag_str[9];
+	int len;
+	int i;
+
+	len = strlen(tag);
+	for (i = 0; i < (sizeof(tag_str)-1); i++) {
+		if (i < len) {
+			tag_str[i] = tag[i];
+		}
+		else {
+			tag_str[i] = ' ';
+		}
+	}
+	len = i;
+	tag_str[len] = '\0';
+	
+	i = 0;
+	while (i < size) {
+		int i0 = i;
+
+		log_tstamp();
+		log_put("MQTT-broker ", 12);
+		log_put(tag_str, len);
+
+		while ((i < size) && (buf[i] != '\n')) {
+			i++;
+		}
+		if (buf[i] == '\n') {
+			i++;
+		}
+		log_put(&buf[i0], i-i0);
+	}
+}
+
+
+static void mqtt_stdout(void *user_data, char *buf, int size)
+{
+	mqtt_stdxxx("STDOUT", buf, size);
+}
+
+
+static void mqtt_stderr(void *user_data, char *buf, int size)
+{
+	mqtt_stdxxx("STDERR", buf, size);
 }
 
 
@@ -706,12 +767,18 @@ static int mqtt_start_now(void)
 	char *argv[] = {
 		"mosquitto",
 		"-c", config,
+		NULL,
 		NULL
 	};
+
         log_debug(2, "mqtt_start_now");
 
+	if (opt_debug > 0) {
+		argv[3] = "-v";
+	}
+
         // Start broker process
-        mqtt_proc = hk_proc_start(argv, NULL, mqtt_stdxxx, mqtt_stdxxx, mqtt_terminated, NULL);
+        mqtt_proc = hk_proc_start(argv, NULL, mqtt_stdout, mqtt_stderr, mqtt_terminated, NULL);
 
         if (mqtt_proc != NULL) {
                 // Leave stdin stream to child
@@ -854,6 +921,12 @@ static void cert_request(ctx_t *ctx)
 
 		log_str("Downloading SSL certificate '%s'", crt->name);
 
+#ifdef WITH_MQTT
+		if (ctx->is_broker) {
+			ctx->restart_broker = 1;
+		}
+#endif /* WITH_MQTT */
+
                 buf_init(&header);
 
                 // Certificate name
@@ -865,7 +938,19 @@ static void cert_request(ctx_t *ctx)
 #ifdef WITH_MQTT
 		// Start MQTT broker
 		if (ctx->is_broker) {
-			mqtt_start();
+			if (mqtt_proc == NULL) {
+				log_str("Starting MQTT broker");
+				mqtt_start();
+			}
+			else {
+				if (ctx->restart_broker) {
+					log_str("SSL certificates updated: restarting MQTT broker");
+					mqtt_stop(1);
+				}
+				else {
+					log_str("SSL certificates unchanged: keeping MQTT broker running");
+				}
+			}
 		}
 		else {
 			mqtt_stop(0);
@@ -1046,7 +1131,7 @@ static void hello_response(void *user_data, char *buf, int len)
                 if (ctx != NULL) {
                         // Start engine from cached program, except if it is already running
                         if (state != ST_RUN) {
-                                engine_start(&ctx->apps);
+                                engine_start(ctx);
                         }
                         ctx_free(ctx);
                 }
@@ -1286,7 +1371,7 @@ int main(int argc, char *argv[])
                 /* Start local application, if any */
                 ctx_t *ctx = ctx_alloc();
                 ctx_app_feed_local(ctx, app);
-		engine_start(&ctx->apps);
+		engine_start(ctx);
                 ctx_free(ctx);
         }
         else {

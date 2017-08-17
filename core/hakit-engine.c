@@ -55,9 +55,8 @@ static const options_entry_t options_entries[] = {
 #endif
 	{ "http-auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
 #ifdef WITH_MQTT
-	{ "mqtt-user",      'u', 0, OPTIONS_TYPE_STRING, &mqtt_user,      "MQTT user and password", "USER[:PASSWORD]" },
-	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &mqtt_host,      "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
-	{ "mqtt-port",      'p', 0, OPTIONS_TYPE_INT,    &mqtt_port,      "MQTT broker port number (default: ssl=" xstr(MQTT_DEFAULT_SSL_PORT) ", plain=" xstr(MQTT_DEFAULT_PORT) ")", "PORT" },
+	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &mqtt_broker,    "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
+	{ "mqtt-cafile",    'C', 0, OPTIONS_TYPE_STRING, &mqtt_cafile,    "MQTT Certificate Authority file", "FILE" },
 	{ "mqtt-keepalive", 'K', 0, OPTIONS_TYPE_INT,    &mqtt_keepalive, "MQTT keepalive delay in seconds (default: " xstr(MQTT_DEFAULT_KEEPALIVE) ")", "SECONDS" },
 	{ "mqtt-qos",       'q', 0, OPTIONS_TYPE_INT,    &mqtt_qos,       "MQTT QoS level (0,1,2)", "LEVEL" },
 #endif

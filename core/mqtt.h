@@ -24,11 +24,10 @@
 #define MQTT_DEFAULT_KEEPALIVE 60
 
 /* MQTT current settings */
-extern char *mqtt_user;
-extern char *mqtt_host;
-extern int mqtt_port;
+extern char *mqtt_broker;
 extern int mqtt_keepalive;
 extern int mqtt_qos;
+extern char *mqtt_cafile;
 
 
 /* MQTT instance descriptor */
@@ -50,7 +49,7 @@ typedef struct {
 
 
 /* MQTT instance functions */
-extern int mqtt_init(mqtt_t *mqtt, char *ssl_dir,
+extern int mqtt_init(mqtt_t *mqtt, int use_ssl,
 		     mqtt_update_func_t update_func, void *user_data);
 extern int mqtt_publish(mqtt_t *mqtt, char *name, char *value, int retain);
 extern int mqtt_subscribe(mqtt_t *mqtt, char *name);
