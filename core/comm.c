@@ -187,12 +187,6 @@ int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
 }
 
 
-void comm_monitor(comm_sink_func_t func, void *user_data)
-{
-	hkcp_monitor(&comm.hkcp, func, user_data);
-}
-
-
 int comm_sink_register(char *name, comm_sink_func_t func, void *user_data)
 {
 	int id = hkcp_sink_register(&comm.hkcp, name);

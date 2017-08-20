@@ -35,7 +35,6 @@
 
 const char *options_summary = "HAKit engine " HAKIT_VERSION " (" ARCH ")";
 
-static int opt_monitor = 0;
 static char *opt_class_path = NULL;
 static char *opt_hosts = NULL;
 static int opt_no_hkcp = 0;
@@ -47,7 +46,6 @@ static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
-	{ "monitor", 'm', 0, OPTIONS_TYPE_NONE,   &opt_monitor, "Enable HKCP monitor mode" },
 	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 #ifdef WITH_SSL
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
@@ -62,21 +60,6 @@ static const options_entry_t options_entries[] = {
 #endif
 	{ NULL }
 };
-
-
-//===================================================
-// Monitor mode management
-//===================================================
-
-static void monitor_sink_event(void *user_data, char *name, char *value)
-{
-	if (value == NULL) {
-		log_str("-- New sink: %s", name);
-	}
-	else {
-		log_str("-- %s='%s'", name, value);
-	}
-}
 
 
 //===================================================
@@ -115,10 +98,6 @@ int main(int argc, char *argv[])
 	}
 	if (comm_init(use_ssl, opt_no_hkcp ? 0:1, opt_hosts)) {
 		return 2;
-	}
-
-	if (opt_monitor) {
-		comm_monitor((comm_sink_func_t) monitor_sink_event, NULL);
 	}
 
 	if (opt_auth != NULL) {

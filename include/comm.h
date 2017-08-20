@@ -14,7 +14,6 @@
 typedef hkcp_sink_func_t comm_sink_func_t;
 
 extern int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts);
-extern void comm_monitor(comm_sink_func_t func, void *user_data);
 
 extern int comm_sink_register(char *name, comm_sink_func_t func, void *user_data);
 extern void comm_sink_set_local(int id);

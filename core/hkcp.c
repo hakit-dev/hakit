@@ -30,7 +30,6 @@
 #define UDP_SIGN        0xAC   // Advertising packet signature
 #define UDP_TYPE_SINK   0x01   // Advertising field type: sink
 #define UDP_TYPE_SOURCE 0x02   // Advertising field type: source
-#define UDP_TYPE_MONITOR 0x03  // Advertising field type: monitor
 
 /* TCP Command context */
 typedef struct {
@@ -324,13 +323,7 @@ static void hkcp_ep_set_widget(hkcp_ep_t *ep, char *widget_name)
 
 static void hkcp_ep_append_name(hkcp_ep_t *ep, buf_t *out_buf)
 {
-	if (ep->flag & HKCP_FLAG_MONITOR) {
-		buf_append_str(out_buf, "(");
-	}
 	buf_append_str(out_buf, ep->name);
-	if (ep->flag & HKCP_FLAG_MONITOR) {
-		buf_append_str(out_buf, ")");
-	}
 }
 
 
@@ -373,7 +366,7 @@ static void hkcp_sink_advertise(hkcp_t *hkcp, int reply)
 
 	for (i = 0; i < nsinks; i++) {
 		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
-		if ((sink->ep.name != NULL) && ((sink->ep.flag & (HKCP_FLAG_MONITOR|HKCP_FLAG_LOCAL)) == 0)) {
+		if ((sink->ep.name != NULL) && ((sink->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
 			if (buf.len == 0) {
 				buf_append_byte(&buf, UDP_SIGN);
 				buf_append_byte(&buf, UDP_TYPE_SINK);
@@ -520,24 +513,6 @@ void hkcp_sink_set_widget(hkcp_t *hkcp, int id, char *widget_name)
 }
 
 
-static hkcp_sink_t *hkcp_sink_monitor(hkcp_t *hkcp, char *name)
-{
-	hkcp_sink_t *sink;
-
-	sink = hkcp_sink_alloc(hkcp);
-	sink->ep.name = strdup(name);
-
-	log_debug(2, "hkcp_sink_monitor name='%s' (%d elements)", name, hkcp->sinks.nmemb);
-
-	buf_set_str(&sink->ep.value, "");
-	sink->ep.flag |= HKCP_FLAG_MONITOR;
-
-	hk_tab_init(&sink->handlers, sizeof(hkcp_sink_handler_t));
-
-	return sink;
-}
-
-
 #if 0
 static void hkcp_sink_unregister_(hkcp_t *hkcp, char *name)
 {
@@ -555,18 +530,16 @@ static void hkcp_sink_unregister_(hkcp_t *hkcp, char *name)
 
 static char *hkcp_sink_update_(hkcp_sink_t *sink, char *value)
 {
+	int i;
+
 	/* Update sink value */
 	buf_set_str(&sink->ep.value, value);
 
 	/* Invoke sink event callback */
-	if ((sink->ep.flag & HKCP_FLAG_MONITOR) == 0) {
-		int i;
-
-		for (i = 0; i < sink->handlers.nmemb; i++) {
-			hkcp_sink_handler_t *handler = HK_TAB_PTR(sink->handlers, hkcp_sink_handler_t, i);
-			if (handler->func != NULL) {
-				handler->func(handler->user_data, sink->ep.name, (char *) sink->ep.value.base);
-			}
+	for (i = 0; i < sink->handlers.nmemb; i++) {
+		hkcp_sink_handler_t *handler = HK_TAB_PTR(sink->handlers, hkcp_sink_handler_t, i);
+		if (handler->func != NULL) {
+			handler->func(handler->user_data, sink->ep.name, (char *) sink->ep.value.base);
 		}
 	}
 
@@ -627,7 +600,7 @@ static void hkcp_source_advertise(hkcp_t *hkcp, int reply)
 
 	for (i = 0; i < nsources; i++) {
 		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		if ((source->ep.name != NULL) && ((source->ep.flag & HKCP_FLAG_MONITOR) == 0)) {
+		if (source->ep.name != NULL) {
 			if (buf.len == 0) {
 				buf_append_byte(&buf, UDP_SIGN);
 				buf_append_byte(&buf, UDP_TYPE_SOURCE);
@@ -760,22 +733,6 @@ void hkcp_source_set_widget(hkcp_t *hkcp, int id, char *widget_name)
 }
 
 
-static hkcp_source_t *hkcp_source_monitor(hkcp_t *hkcp, char *name)
-{
-	hkcp_source_t *source;
-
-	source = hkcp_source_alloc(hkcp);
-	source->ep.name = strdup(name);
-
-	log_debug(2, "hkcp_source_monitor name='%s' (%d elements)", name, hkcp->sources.nmemb);
-
-	buf_set_str(&source->ep.value, "");
-	source->ep.flag |= HKCP_FLAG_MONITOR;
-
-	return source;
-}
-
-
 #if 0
 void hkcp_source_unregister(hkcp_t *hkcp, char *name)
 {
@@ -839,8 +796,8 @@ static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *n
 {
 	log_debug(3, "hkcp_source_send_initial_value source='%s' flag=%02X node=#%d='%s'", source->ep.name, source->ep.flag, node->id, node->name);
 
-	/* Do not send initial value if source is declared as an event or as a monitored source */
-	if (source->ep.flag & (HKCP_FLAG_EVENT | HKCP_FLAG_MONITOR)) {
+	/* Do not send initial value if source is declared as an event */
+	if (source->ep.flag & HKCP_FLAG_EVENT) {
 		return;
 	}
 
@@ -968,16 +925,6 @@ static void hkcp_udp_event_sink(hkcp_t *hkcp, int argc, char **argv)
 		char *sink_name = argv[i];
 		hkcp_source_t *source = hkcp_source_retrieve(hkcp, sink_name);
 
-		/* Special processing for monitor mode:
-		   If no source is registered matching the advertised sink,
-		   we automatically register this source as an event,
-		   so that it will be possible to update the remote sink */
-		if (hkcp->monitor.func != NULL) {
-			if (source == NULL) {
-				source = hkcp_source_monitor(hkcp, sink_name);
-			}
-		}
-
 		/* If matching source is found, check for requesting node connection */
 		if (source != NULL) {
 			log_debug(2, "  remote sink='%s', local source='%s'", sink_name, source->ep.name);
@@ -1084,32 +1031,7 @@ static void hkcp_udp_event(hkcp_t *hkcp, unsigned char *buf, int size)
 		hkcp_udp_event_sink(hkcp, argc, argv);
 		break;
 	case UDP_TYPE_SOURCE:
-		/* If monitor mode enabled, tell sender we need to receive all sources events from it */
-		if (hkcp->monitor.func != NULL) {
-			for (i = 0; i < argc; i++) {
-				char *source_name = argv[i];
-				hkcp_sink_t *sink = hkcp_sink_retrieve(hkcp, source_name);
-
-				/* If no sink is registered matching the advertised source,
-				   we automatically register this sink,
-				   so that it will be updated from remote sources */
-				if (sink == NULL) {
-					hkcp_sink_monitor(hkcp, source_name);
-				}
-
-				hkcp->monitor.func(hkcp, source_name, NULL);
-			}
-
-			buf[1] = UDP_TYPE_SINK;
-			udp_srv_send_reply(&hkcp->udp_srv, (char *) buf, size);
-		}
-		else {
-			hkcp_udp_event_source(hkcp, argc, argv);
-		}
-		break;
-	case UDP_TYPE_MONITOR:
-		hkcp_sink_advertise(hkcp, 1);
-		hkcp_source_advertise(hkcp, 1);
+		hkcp_udp_event_source(hkcp, argc, argv);
 		break;
 	default:
 		log_str("WARNING: Received UDP packet with unknown type (%02X)", buf[1]);
@@ -1171,17 +1093,10 @@ static void hkcp_command_set(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf
 				hkcp_sink_update_(sink, value);
 			}
 			else {
-				/* Send back error message if not in monitor mode */
-				if (hkcp->monitor.func == NULL) {
-					buf_append_str(out_buf, "ERROR: Unknown sink: ");
-					buf_append_str(out_buf, args);
-					buf_append_str(out_buf, "\n");
-				}
-			}
-
-			/* Invoke monitoring callback */
-			if (hkcp->monitor.func != NULL) {
-				hkcp->monitor.func(hkcp->monitor.user_data, args, value);
+				/* Send back error message */
+				buf_append_str(out_buf, "ERROR: Unknown sink: ");
+				buf_append_str(out_buf, args);
+				buf_append_str(out_buf, "\n");
 			}
 		}
 		else {
@@ -1440,29 +1355,11 @@ static void hkcp_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
  * Management engine
  */
 
-static void hkcp_monitor_advertise(hkcp_t *hkcp)
-{
-	buf_t buf;
-
-	log_debug(2, "Advertising monitor mode");
-
-	buf_init(&buf);
-	buf_append_byte(&buf, UDP_SIGN);
-	buf_append_byte(&buf, UDP_TYPE_MONITOR);
-	hkcp_udp_send(hkcp, &buf, 0);
-	buf_cleanup(&buf);
-}
-
-
 static int hkcp_advertise_now(hkcp_t *hkcp)
 {
 	hkcp->advertise_tag = 0;
 	hkcp_sink_advertise(hkcp, 0);
 	hkcp_source_advertise(hkcp, 0);
-
-	if (hkcp->monitor.func != NULL) {
-		hkcp_monitor_advertise(hkcp);
-	}
 
 	return 0;
 }
@@ -1549,15 +1446,4 @@ DONE:
 	}
 
 	return ret;
-}
-
-
-void hkcp_monitor(hkcp_t *hkcp, hkcp_sink_func_t func, void *user_data)
-{
-	/* Raise monitor mode flag */
-	hkcp->monitor.func = func;
-	hkcp->monitor.user_data = user_data;
-
-	/* Broadcast monitoring request */
-	hkcp_advertise(hkcp);
 }

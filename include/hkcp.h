@@ -29,7 +29,6 @@ typedef struct hkcp_s hkcp_t;
 
 #define HKCP_FLAG_EVENT   0x0001
 #define HKCP_FLAG_LOCAL   0x0002
-#define HKCP_FLAG_MONITOR 0x1000
 
 
 /*
@@ -108,11 +107,9 @@ struct hkcp_s {
 	hk_tab_t sinks;       // Table of (hkcp_sink_t)
 	hk_tab_t sources;     // Table of (hkcp_source_t)
 	sys_tag_t advertise_tag;
-	hkcp_sink_handler_t monitor;
 };
 
 extern int hkcp_init(hkcp_t *hkcp, int port, char *hosts);
-extern void hkcp_monitor(hkcp_t *hkcp, hkcp_sink_func_t func, void *user_data);
 extern void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf);
 
 extern int hkcp_sink_register(hkcp_t *hkcp, char *name);
