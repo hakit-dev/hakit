@@ -131,7 +131,7 @@ int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func
 	struct hostent *hp;
 	struct sockaddr_in iremote;
 	int sock;
-	char s_addr[64];
+	char s_addr[INET6_ADDRSTRLEN+1];
 
 	log_debug(2, "tcp_sock_connect: host='%s' port=%d", host, port);
 
@@ -160,7 +160,7 @@ int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func
 	}
 
 	/* Signal connection */
-	ip_addr((struct sockaddr *) &iremote, s_addr, INET_ADDRSTRLEN);
+	ip_addr((struct sockaddr *) &iremote, s_addr, sizeof(s_addr));
 	log_str("Outgoing connection [%d] established to %s:%d", sock, s_addr, port);
 
 	tcp_sock_setup(tcp_sock, sock, func, user_data);
@@ -220,7 +220,7 @@ static int tcp_srv_csock_accept(tcp_srv_t *srv)
 	int sock;
 	socklen_t size;
 	int dnum;
-	char s_addr[64];
+	char s_addr[INET6_ADDRSTRLEN+1];
 
 	/* Accept client connection */
 	size = sizeof(srv->iremote);

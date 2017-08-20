@@ -65,7 +65,7 @@ typedef struct {
 
 static int udp_send_bcast_addr(udp_send_bcast_ctx_t *ctx, struct ifaddrs* current)
 {
-	char s_addr[64];
+	char s_addr[INET6_ADDRSTRLEN+1];
 	struct sockaddr_in iremote;
 	int ret;
 
@@ -77,7 +77,7 @@ static int udp_send_bcast_addr(udp_send_bcast_ctx_t *ctx, struct ifaddrs* curren
 
 	ret = sendto(ctx->fd, ctx->buf, ctx->size, 0, (struct sockaddr *) &iremote, sizeof(iremote));
 	if (ret < 0) {
-		ip_addr((struct sockaddr *) &iremote, s_addr, INET_ADDRSTRLEN);
+		ip_addr((struct sockaddr *) &iremote, s_addr, sizeof(s_addr));
 		log_str("ERROR: sendto(%s:%d): %s", s_addr, ctx->port, strerror(errno));
 		return -1;
 	}
