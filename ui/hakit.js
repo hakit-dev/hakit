@@ -84,7 +84,7 @@ function hakit_recv_line(line)
     //console.log("hakit_recv_line('"+line+"')");
 
     if (line.substr(0,1) == "!") {
-	var i = line.indexOf(" ");
+	var i = line.indexOf("=");
 	if (i > 1) {
 	    var name = line.substr(1,i-1);
 	    var value = line.substr(i+1);

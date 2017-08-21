@@ -49,7 +49,7 @@ static void comm_ws_send(ws_t *ws, char *name, char *value)
 	char str[size];
 
 	/* Send WebSocket event */
-	snprintf(str, size, "!%s %s", name, value);
+	snprintf(str, size, "!%s=%s", name, value);
 	ws_events_send(ws, str);
 }
 
