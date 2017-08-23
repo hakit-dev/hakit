@@ -35,15 +35,27 @@ typedef struct hkcp_s hkcp_t;
  * Nodes
  */
 
+#define HKCP_NODE_CONNECT_RETRIES 4
+
+typedef enum {
+	HKCP_NODE_IDLE=0,
+	HKCP_NODE_CONNECT,
+	HKCP_NODE_VERSION,
+	HKCP_NODE_SINKS,
+	HKCP_NODE_READY,
+	HKCP_NODE_NSTATES
+} hkcp_node_state_t;
+
 typedef struct {
 	int id;
 	char *name;
 	tcp_sock_t tcp_sock;
+	hkcp_node_state_t state;
 	int connect_attempts;
 	sys_tag_t timeout_tag;
 	hkcp_t *hkcp;
-	command_t *cmd;
-	int watch;
+	char *version;
+	buf_t rbuf;
 } hkcp_node_t;
 
 

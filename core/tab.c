@@ -47,7 +47,7 @@ void *hk_tab_push(hk_tab_t *tab)
 }
 
 
-void hk_tab_foreach(hk_tab_t *tab, hk_tab_foreach_func func, char *user_data)
+void hk_tab_foreach(hk_tab_t *tab, hk_tab_foreach_func func, void *user_data)
 {
 	int i;
 

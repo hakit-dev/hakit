@@ -1,5 +1,5 @@
-input1: sink local
-input2: sink local
+input1: sink
+input2: sink
   widget=switch-push
 input3: sink
 input: or
@@ -16,6 +16,7 @@ pulse-output: source
 
 on: timer-on
   delay=1000
+  in=$input.out
 on-output: source
   in=$on.out
 
@@ -25,7 +26,7 @@ off: timer-off
 off-output: source
   in=$off.out
 
-meter: source local
+meter: source
   widget=meter:min=0,low=20,high=80,max=100
   in=$slider.out
 slider: sink local

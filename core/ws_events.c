@@ -36,9 +36,6 @@ static void ws_events_command(struct per_session_data__events *pss, int argc, ch
 	log_debug(2, "ws_events_command [%04X]: '%s'%s", pss->id, argv[0], (argc > 1) ? " ...":"");
 	ws_call_command_handler(pss->ws, argc, argv, &pss->out_buf);
 	log_debug_data(pss->out_buf.base, pss->out_buf.len);
-
-	/* Append end of response mark */
-	buf_append_str(&pss->out_buf, ".\n");
 }
 
 

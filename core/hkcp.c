@@ -17,6 +17,7 @@
 #include "log.h"
 #include "buf.h"
 #include "netif.h"
+#include "iputils.h"
 #include "tcpio.h"
 #include "udpio.h"
 #include "command.h"
@@ -28,8 +29,8 @@
 #define ADVERTISE_MAXLEN 1200  // Maxim advertising packet length
 
 #define UDP_SIGN        0xAC   // Advertising packet signature
-#define UDP_TYPE_SINK   0x01   // Advertising field type: sink
-#define UDP_TYPE_SOURCE 0x02   // Advertising field type: source
+#define UDP_TYPE_DISCOVER_REQUEST 0x04   // Advertising field type: discover request
+#define UDP_TYPE_DISCOVER_REPLY   0x05   // Advertising field type: discover reply
 
 /* TCP Command context */
 typedef struct {
@@ -41,12 +42,13 @@ typedef struct {
 
 
 /* Local functions forward declarations */
-static void hkcp_udp_send(hkcp_t *hkcp, buf_t *buf, int reply);
 static void hkcp_advertise(hkcp_t *hkcp);
-static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tcp_sock);
 static int hkcp_node_connect(hkcp_node_t *node);
+static void hkcp_node_remove(hkcp_node_t *node);
+
 static hkcp_source_t *hkcp_source_retrieve(hkcp_t *hkcp, char *name);
 static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *node);
+static void hkcp_source_attach_node(hkcp_source_t *source, hkcp_node_t *node);
 
 
 /*
@@ -67,12 +69,6 @@ static hkcp_node_t *hkcp_node_retrieve(hkcp_t *hkcp, char *name)
 	}
 
 	return NULL;
-}
-
-
-static void hkcp_node_command(hkcp_node_t *node, int argc, char **argv)
-{
-	hkcp_command_tcp(node->hkcp, argc, argv, &node->tcp_sock);
 }
 
 
@@ -111,9 +107,159 @@ static hkcp_node_t *hkcp_node_alloc(hkcp_t *hkcp)
 	node->id = i;
 	tcp_sock_clear(&node->tcp_sock);
 	node->hkcp = hkcp;
-	node->cmd = command_new((command_handler_t) hkcp_node_command, node);
+	buf_init(&node->rbuf);
 
 	return node;
+}
+
+
+static void hkcp_node_set_state(hkcp_node_t *node, hkcp_node_state_t state)
+{
+	log_debug(2, "hkcp_node_set_state node=#%d='%s' %d -> %d", node->id, node->name, node->state, state);
+	node->state = state;
+	node->rbuf.len = 0;
+}
+
+
+static int hkcp_node_attached_to_sources(hkcp_node_t *node)
+{
+	int i, j;
+
+	for (i = 0; i < node->hkcp->sources.nmemb; i++) {
+		hkcp_source_t *source = HK_TAB_PTR(node->hkcp->sources, hkcp_source_t, i);
+		if (source->ep.name != NULL) {
+			for (j = 0; j < source->nodes.nmemb; j++) {
+				hkcp_node_t **pnode = HK_TAB_PTR(source->nodes, hkcp_node_t *, j);
+				if (*pnode == node) {
+					return 1;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+
+static void hkcp_node_recv_version(hkcp_node_t *node, char *str)
+{
+	log_debug(2, "hkcp_node_recv_version node=#%d='%s' str='%s'", node->id, node->name, str);
+
+	if (*str == '.') {
+		/* Send command to get list of sinks */
+		hkcp_node_set_state(node, HKCP_NODE_SINKS);
+		tcp_sock_write(&node->tcp_sock, "sinks\n", 6);
+	}
+	else if (node->version == NULL) {
+		node->version = strdup(str);
+		log_debug(2, " => '%s'", node->version);
+	}
+}
+
+
+static void hkcp_node_recv_sinks(hkcp_node_t *node, char *str)
+{
+	log_debug(2, "hkcp_node_recv_sinks node=#%d='%s' str='%s'", node->id, node->name, str);
+
+	if (*str == '.') {
+		/* If no sources attached to this node, remove it */
+		if (hkcp_node_attached_to_sources(node)) {
+			hkcp_node_set_state(node, HKCP_NODE_READY);
+		}
+		else {
+			hkcp_node_remove(node);
+		}
+	}
+	else {
+		/* Mark sink name delimiter */
+		char *sp = strchr(str, ' ');
+		if (sp != NULL) {
+			*(sp++) = '\0';
+		}
+		
+		/* Check for local sources matching this remote sink */
+		hkcp_source_t *source = hkcp_source_retrieve(node->hkcp, str);
+
+		/* If matching source is found, check for requesting node connection */
+		if (source != NULL) {
+			if ((source->ep.flag & HKCP_FLAG_LOCAL) == 0) {
+				log_debug(2, "  remote sink='%s', matching source='%s'", str, source->ep.name);
+
+				/* Attach source to node (if not already done) */
+				hkcp_source_attach_node(source, node);
+
+				/* Send initial value */
+				hkcp_source_send_initial_value(source, node);
+			}
+			else {
+				log_debug(2, "  remote sink='%s', matching source='%s' (local)", str, source->ep.name);
+			}
+		}
+		else {
+			log_debug(2, "  remote sink='%s', no source found", str);
+		}
+	}
+}
+
+
+static void hkcp_node_recv_line(hkcp_node_t *node, char *str)
+{
+	log_debug(3, "hkcp_node_recv_line node=#%d='%s' state=%d str='%s'", node->id, node->name, node->state, str);
+
+	switch (node->state) {
+	case HKCP_NODE_VERSION:
+		hkcp_node_recv_version(node, str);
+		break;
+	case HKCP_NODE_SINKS:
+		hkcp_node_recv_sinks(node, str);
+		break;
+	default:
+		break;
+	}
+}
+
+
+static void hkcp_node_recv(hkcp_node_t *node, char *rbuf, int rsize)
+{
+	int i;
+
+	log_debug(2, "hkcp_node_recv node=#%d='%s' rsize=%d", node->id, node->name, rsize);
+
+	if (rsize <= 0) {
+		return;
+	}
+
+	i = 0;
+	while (i < rsize) {
+		int i0 = i;
+
+		/* Search end-of-line delimiter */
+		while ((i < rsize) && (rbuf[i] != '\n')) {
+			i++;
+		}
+
+		// If newline character reached, process this line
+		if (i < rsize) {
+			char *str = &rbuf[i0];
+			int len = i - i0;
+
+			rbuf[i++] = '\0';
+
+			if (node->rbuf.len > 0) {
+				buf_append(&node->rbuf, (unsigned char *) str, len);
+				str = (char *) node->rbuf.base;
+				len = node->rbuf.len;
+				node->rbuf.len = 0;
+			}
+
+			if (len > 0) {
+				hkcp_node_recv_line(node, str);
+			}
+		}
+		else {
+			buf_append(&node->rbuf, (unsigned char *) &rbuf[i0], i-i0);
+		}	
+	}
 }
 
 
@@ -129,15 +275,13 @@ static void hkcp_node_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int r
 		break;
 	case TCP_IO_DATA:
 		log_debug(2, "  DATA %d", rsize);
-		command_recv(node->cmd, rbuf, rsize);
+		hkcp_node_recv(node, rbuf, rsize);
 		break;
 	case TCP_IO_HUP:
 		log_debug(2, "  HUP");
 
-		/* Clear command context */
-		command_clear(node->cmd);
-
 		/* Try to reconnect immediately */
+		hkcp_node_set_state(node, HKCP_NODE_IDLE);
 		node->connect_attempts = 0;
 		hkcp_node_connect(node);
 		break;
@@ -190,12 +334,14 @@ static void hkcp_node_remove(hkcp_node_t *node)
 	tcp_sock_set_data(&node->tcp_sock, NULL);
 	tcp_sock_shutdown(&node->tcp_sock);
 
-	/* Clear command buffering context */
-	command_clear(node->cmd);
+	/* Clear data buffering */
+	if (node->version != NULL) {
+		free(node->version);
+	}
+	buf_cleanup(&node->rbuf);
 
 	/* Free node name */
 	free(node->name);
-	node->name = NULL;
 
 	/* Free node descriptor */
 	memset(node, 0, sizeof(hkcp_node_t));
@@ -203,30 +349,21 @@ static void hkcp_node_remove(hkcp_node_t *node)
 }
 
 
-static void hkcp_node_send_initial_values(hkcp_node_t *node)
-{
-	hkcp_t *hkcp = node->hkcp;
-	int i;
-
-	for (i = 0; i < hkcp->sources.nmemb; i++) {
-		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		hkcp_source_send_initial_value(source, node);
-	}
-}
-
-
 static int hkcp_node_connect(hkcp_node_t *node)
 {
 	node->connect_attempts++;
+	hkcp_node_set_state(node, HKCP_NODE_CONNECT);
 
-	log_str("Connecting to node #%d='%s' (%d/4)", node->id, node->name, node->connect_attempts);
+	log_str("Connecting to node #%d='%s' (%d/%d)", node->id, node->name, node->connect_attempts, HKCP_NODE_CONNECT_RETRIES);
 	if (tcp_sock_connect(&node->tcp_sock, node->name, node->hkcp->udp_srv.port, hkcp_node_event, node) > 0) {
 		node->timeout_tag = 0;
-		hkcp_node_send_initial_values(node);
+		/* Get list of sinks from this node */
+		hkcp_node_set_state(node, HKCP_NODE_VERSION);
+		tcp_sock_write(&node->tcp_sock, "version\n", 8);
 		return 0;
 	}
 
-	if (node->connect_attempts > 4) {
+	if (node->connect_attempts > HKCP_NODE_CONNECT_RETRIES) {
 		log_str("Too many connections attempted on node #%d='%s': giving up", node->id, node->name);
 		node->timeout_tag = 0;
 		hkcp_node_remove(node);
@@ -344,47 +481,19 @@ static void hkcp_ep_dump(hkcp_ep_t *ep, buf_t *out_buf)
  * Sinks
  */
 
-static void hkcp_sink_advertise(hkcp_t *hkcp, int reply)
+static int hkcp_sink_to_advertise(hkcp_t *hkcp)
 {
-	int nsinks = hkcp->sinks.nmemb;
-	buf_t buf;
+	int count = 0;
 	int i;
 
-	// Nothing to do in local mode
-	if (hkcp->udp_srv.chan.fd <= 0) {
-		return;
-	}
-
-	// Nothing to do if no sink registered
-	if (nsinks <= 0) {
-		return;
-	}
-
-	log_str("Advertising %d sink%s as %s", nsinks, (nsinks > 1) ? "s":"", reply ? "reply":"broadcast");
-
-	buf_init(&buf);
-
-	for (i = 0; i < nsinks; i++) {
+	for (i = 0; i < hkcp->sinks.nmemb; i++) {
 		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
 		if ((sink->ep.name != NULL) && ((sink->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
-			if (buf.len == 0) {
-				buf_append_byte(&buf, UDP_SIGN);
-				buf_append_byte(&buf, UDP_TYPE_SINK);
-			}
-			buf_append_str(&buf, sink->ep.name);
-			buf_append_byte(&buf, 0);
-
-			if (buf.len > ADVERTISE_MAXLEN) {
-				hkcp_udp_send(hkcp, &buf, reply);
-			}
+			count++;
 		}
 	}
 
-	if (buf.len > 0) {
-		hkcp_udp_send(hkcp, &buf, reply);
-	}
-
-	buf_cleanup(&buf);
+	return count;
 }
 
 
@@ -407,7 +516,7 @@ static hkcp_sink_t *hkcp_sink_retrieve(hkcp_t *hkcp, char *name)
 
 static hkcp_sink_t *hkcp_sink_alloc(hkcp_t *hkcp)
 {
-	hkcp_sink_t *sink = NULL;
+	hkcp_sink_t *sink;
 	int i;
 
 	for (i = 0; i < hkcp->sinks.nmemb; i++) {
@@ -578,47 +687,19 @@ void hkcp_sink_update_by_name(hkcp_t *hkcp, char *name, char *value)
  * Sources
  */
 
-static void hkcp_source_advertise(hkcp_t *hkcp, int reply)
+static int hkcp_source_to_advertise(hkcp_t *hkcp)
 {
-	int nsources = hkcp->sources.nmemb;
-	buf_t buf;
+	int count = 0;
 	int i;
 
-	// Nothing to do in local mode
-	if (hkcp->udp_srv.chan.fd <= 0) {
-		return;
-	}
-
-	// Nothing to do if no source registered
-	if (nsources <= 0) {
-		return;
-	}
-
-	log_str("Advertising %d source%s as %s", nsources, (nsources > 1) ? "s":"", reply ? "reply":"broadcast");
-
-	buf_init(&buf);
-
-	for (i = 0; i < nsources; i++) {
+	for (i = 0; i < hkcp->sources.nmemb; i++) {
 		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		if (source->ep.name != NULL) {
-			if (buf.len == 0) {
-				buf_append_byte(&buf, UDP_SIGN);
-				buf_append_byte(&buf, UDP_TYPE_SOURCE);
-			}
-			buf_append_str(&buf, source->ep.name);
-			buf_append_byte(&buf, 0);
-
-			if (buf.len > ADVERTISE_MAXLEN) {
-				hkcp_udp_send(hkcp, &buf, reply);
-			}
+		if ((source->ep.name != NULL) && ((source->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
+			count++;
 		}
 	}
 
-	if (buf.len > 0) {
-		hkcp_udp_send(hkcp, &buf, reply);
-	}
-
-	buf_cleanup(&buf);
+	return count;
 }
 
 
@@ -914,73 +995,54 @@ static void hkcp_udp_send(hkcp_t *hkcp, buf_t *buf, int reply)
 }
 
 
-static void hkcp_udp_event_sink(hkcp_t *hkcp, int argc, char **argv)
+static void hkcp_udp_send_discover_request(hkcp_t *hkcp)
 {
-	int i;
+	/* Count number of non-local endpoints */
+	int count = hkcp_sink_to_advertise(hkcp) + hkcp_source_to_advertise(hkcp);
 
-	log_debug(2, "hkcp_udp_event_sink (%d sinks)", argc);
+	// Broadcast DISCOVER request if we have non-local endpoints to advertise
+	if (count > 0) {
+		buf_t buf;
 
-	/* Check for local sources matching advertised sinks */
-	for (i = 0; i < argc; i++) {
-		char *sink_name = argv[i];
-		hkcp_source_t *source = hkcp_source_retrieve(hkcp, sink_name);
-
-		/* If matching source is found, check for requesting node connection */
-		if (source != NULL) {
-			log_debug(2, "  remote sink='%s', local source='%s'", sink_name, source->ep.name);
-
-			if ((source->ep.flag & HKCP_FLAG_LOCAL) == 0) {
-				struct sockaddr_in *addr = udp_srv_remote(&hkcp->udp_srv);
-				unsigned long addr_v = ntohl(addr->sin_addr.s_addr);
-				char name[32];
-				hkcp_node_t *node;
-
-				/* Get remote IP address as node name */
-				snprintf(name, sizeof(name), "%lu.%lu.%lu.%lu",
-					 (addr_v >> 24) & 0xFF, (addr_v >> 16) & 0xFF, (addr_v >> 8) & 0xFF, addr_v & 0xFF);
-
-				/* Connect to node (if not already done) */
-				node = hkcp_node_add(hkcp, name);
-
-				/* Attach source to node (if not already done) */
-				hkcp_source_attach_node(source, node);
-			}
-		}
-		else {
-			log_debug(2, "  remote sink='%s', no local source", sink_name);
-		}
+		buf_init(&buf);
+		buf_append_byte(&buf, UDP_SIGN);
+		buf_append_byte(&buf, UDP_TYPE_DISCOVER_REQUEST);
+		hkcp_udp_send(hkcp, &buf, 0);
+		buf_cleanup(&buf);
 	}
 }
 
 
-static void hkcp_udp_event_source(hkcp_t *hkcp, int argc, char **argv)
+static void hkcp_udp_send_discover_reply(hkcp_t *hkcp)
 {
-	int found = 0;
-	int i;
+	/* Count number of non-local sinks */
+	int count = hkcp_sink_to_advertise(hkcp);
 
-	log_debug(2, "hkcp_udp_event_source (%d sources)", argc);
+	// Send DISCOVER reply to request sender, but only if we have some non-local sinks to advertise
+	if (count > 0) {
+		buf_t buf;
 
-	/* Check for local sinks matching advertised sources */
-	for (i = 0; i < argc; i++) {
-		char *source_name = argv[i];
-		hkcp_sink_t *sink = hkcp_sink_retrieve(hkcp, source_name);
-
-		/* Check for non-local sinks matching sources in request list */
-		if ((sink != NULL) && ((sink->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
-			found = 1;
-			break;
-		}
+		buf_init(&buf);
+		buf_append_byte(&buf, UDP_SIGN);
+		buf_append_byte(&buf, UDP_TYPE_DISCOVER_REPLY);
+		hkcp_udp_send(hkcp, &buf, 1);
+		buf_cleanup(&buf);
 	}
+}
 
-	/* If matching source found, send back sink advertisement
-	   as a reply to the requesting node */
-	if (found) {
-		log_debug(2, "  Matching sink found");
-		hkcp_sink_advertise(hkcp, 1);
-	}
-	else {
-		log_debug(2, "  No matching sink found");
-	}
+
+static void hkcp_udp_event_discover(hkcp_t *hkcp)
+{
+	char remote_ip[64];
+
+	/* Get remote IP address */
+	ip_addr((struct sockaddr *) udp_srv_remote(&hkcp->udp_srv), remote_ip, sizeof(remote_ip));
+
+	log_debug(2, "hkcp_udp_event_discover from %s", remote_ip);
+
+	//TODO: Do not add node if we don't have any sources to export
+	/* Connect to node (if not already done) */
+	hkcp_node_add(hkcp, remote_ip);
 }
 
 
@@ -1027,11 +1089,12 @@ static void hkcp_udp_event(hkcp_t *hkcp, unsigned char *buf, int size)
 	}
 
 	switch (buf[1]) {
-	case UDP_TYPE_SINK:
-		hkcp_udp_event_sink(hkcp, argc, argv);
+	case UDP_TYPE_DISCOVER_REQUEST:
+		hkcp_udp_send_discover_reply(hkcp);
+		hkcp_udp_event_discover(hkcp);
 		break;
-	case UDP_TYPE_SOURCE:
-		hkcp_udp_event_source(hkcp, argc, argv);
+	case UDP_TYPE_DISCOVER_REPLY:
+		hkcp_udp_event_discover(hkcp);
 		break;
 	default:
 		log_str("WARNING: Received UDP packet with unknown type (%02X)", buf[1]);
@@ -1046,6 +1109,8 @@ static void hkcp_udp_event(hkcp_t *hkcp, unsigned char *buf, int size)
 /*
  * TCP/stdin/websocket commands
  */
+
+static int hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tcp_sock);
 
 static void hkcp_command_ctx_recv(hkcp_command_ctx_t *ctx, int argc, char **argv)
 {
@@ -1094,13 +1159,13 @@ static void hkcp_command_set(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf
 			}
 			else {
 				/* Send back error message */
-				buf_append_str(out_buf, "ERROR: Unknown sink: ");
+				buf_append_str(out_buf, ".ERROR: Unknown sink: ");
 				buf_append_str(out_buf, args);
 				buf_append_str(out_buf, "\n");
 			}
 		}
 		else {
-			buf_append_str(out_buf, "ERROR: Syntax error in command: ");
+			buf_append_str(out_buf, ".ERROR: Syntax error in command: ");
 			buf_append_str(out_buf, args);
 			buf_append_str(out_buf, "\n");
 		}
@@ -1140,26 +1205,23 @@ static void hkcp_command_get(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf
 			}
 		}
 	}
+
+	buf_append_str(out_buf, ".\n");
 }
 
 
-static void hkcp_command_status(hkcp_t *hkcp, buf_t *out_buf)
+static void hkcp_command_nodes(hkcp_t *hkcp, buf_t *out_buf)
 {
-	int i;
-
-	buf_append_fmt(out_buf, "Nodes: %d\n", hkcp->nodes.nmemb);
+	int i, j, k;
 
 	for (i = 0; i < hkcp->nodes.nmemb; i++) {
 		hkcp_node_t *node = HK_TAB_VALUE(hkcp->nodes, hkcp_node_t *, i);
-		int j;
 
 		if (node->name != NULL) {
-			buf_append_str(out_buf, "  ");
 			buf_append_str(out_buf, node->name);
 
 			for (j = 0; j < hkcp->sources.nmemb; j++) {
 				hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, j);
-				int k;
 
 				if (source->ep.name != NULL) {
 					for (k = 0; k < source->nodes.nmemb; k++) {
@@ -1176,13 +1238,18 @@ static void hkcp_command_status(hkcp_t *hkcp, buf_t *out_buf)
 		}
 	}
 
-	buf_append_fmt(out_buf, "Sources: %d\n", hkcp->sources.nmemb);
+	buf_append_str(out_buf, ".\n");
+}
+
+
+static void hkcp_command_sources(hkcp_t *hkcp, buf_t *out_buf)
+{
+	int i, j;
+
 	for (i = 0; i < hkcp->sources.nmemb; i++) {
 		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		int j;
 
 		if (source->ep.name != NULL) {
-			buf_append_str(out_buf, "  ");
 			hkcp_ep_append_name(HKCP_EP(source), out_buf);
 
 			buf_append_str(out_buf, " \"");
@@ -1201,21 +1268,26 @@ static void hkcp_command_status(hkcp_t *hkcp, buf_t *out_buf)
 		}
 	}
 
-	buf_append_fmt(out_buf, "Sinks: %d\n", hkcp->sinks.nmemb);
+	buf_append_str(out_buf, ".\n");
+}
+
+
+static void hkcp_command_sinks(hkcp_t *hkcp, buf_t *out_buf)
+{
+	int i;
+
 	for (i = 0; i < hkcp->sinks.nmemb; i++) {
 		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
 
 		if (sink->ep.name != NULL) {
-			buf_append_str(out_buf, "  ");
 			hkcp_ep_append_name(HKCP_EP(sink), out_buf);
-
 			buf_append_str(out_buf, " \"");
 			buf_append(out_buf, sink->ep.value.base, sink->ep.value.len);
-			buf_append_str(out_buf, "\"");
-
-			buf_append_str(out_buf, "\n");
+			buf_append_str(out_buf, "\"\n");
 		}
 	}
+
+	buf_append_str(out_buf, ".\n");
 }
 
 
@@ -1243,7 +1315,7 @@ static void hkcp_command_watch(hkcp_t *hkcp, int argc, char **argv, buf_t *out_b
 	}
 
 	if (err) {
-		buf_append_str(out_buf, "ERROR: watch: Syntax error");
+		buf_append_str(out_buf, ".ERROR: watch: Syntax error");
 	}
 	else if (show) {
 		int i;
@@ -1272,8 +1344,14 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 	else if (strcmp(argv[0], "get") == 0) {
 		hkcp_command_get(hkcp, argc, argv, out_buf);
 	}
-	else if (strcmp(argv[0], "status") == 0) {
-		hkcp_command_status(hkcp, out_buf);
+	else if (strcmp(argv[0], "nodes") == 0) {
+		hkcp_command_nodes(hkcp, out_buf);
+	}
+	else if (strcmp(argv[0], "sinks") == 0) {
+		hkcp_command_sinks(hkcp, out_buf);
+	}
+	else if (strcmp(argv[0], "sources") == 0) {
+		hkcp_command_sources(hkcp, out_buf);
 	}
 	else if (strcmp(argv[0], "echo") == 0) {
 		for (i = 1; i < argc; i++) {
@@ -1282,42 +1360,46 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 			}
 			buf_append_str(out_buf, argv[i]);
 		}
-		buf_append_str(out_buf, "\n");
+		buf_append_str(out_buf, "\n.\n");
 	}
 	else if (strcmp(argv[0], "version") == 0) {
-		buf_append_str(out_buf, HAKIT_VERSION " " ARCH "\n");
+		buf_append_str(out_buf, HAKIT_VERSION " " ARCH "\n.\n");
 	}
 	else {
-		buf_append_str(out_buf, "ERROR: Unknown command: ");
+		buf_append_str(out_buf, ".ERROR: Unknown command: ");
 		buf_append_str(out_buf, argv[0]);
 		buf_append_str(out_buf, "\n");
 	}
 }
 
 
-static void hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tcp_sock)
+static int hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tcp_sock)
 {
 	buf_t out_buf;
 
-	if (argc > 0) {
-		if (strcmp(argv[0], "ERROR:") == 0) {
-			return;
-		}
-
-		buf_init(&out_buf);
-
-		if (strcmp(argv[0], "watch") == 0) {
-			hkcp_command_ctx_t *ctx = tcp_sock_get_data(tcp_sock);
-			hkcp_command_watch(hkcp, argc, argv, &out_buf, ctx);
-		}
-		else {
-			hkcp_command(hkcp, argc, argv, &out_buf);
-		}
-
-		io_channel_write(&tcp_sock->chan, (char *) out_buf.base, out_buf.len);
-
-		buf_cleanup(&out_buf);
+	if (argc <= 0) {
+		return 0;
 	}
+
+	if (argv[0][0] == '.') {
+		return 1;
+	}
+
+	buf_init(&out_buf);
+
+	if (strcmp(argv[0], "watch") == 0) {
+		hkcp_command_ctx_t *ctx = tcp_sock_get_data(tcp_sock);
+		hkcp_command_watch(hkcp, argc, argv, &out_buf, ctx);
+	}
+	else {
+		hkcp_command(hkcp, argc, argv, &out_buf);
+	}
+
+	io_channel_write(&tcp_sock->chan, (char *) out_buf.base, out_buf.len);
+
+	buf_cleanup(&out_buf);
+
+	return 0;
 }
 
 
@@ -1358,8 +1440,11 @@ static void hkcp_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
 static int hkcp_advertise_now(hkcp_t *hkcp)
 {
 	hkcp->advertise_tag = 0;
-	hkcp_sink_advertise(hkcp, 0);
-	hkcp_source_advertise(hkcp, 0);
+
+	// Nothing to do in local mode
+	if (hkcp->udp_srv.chan.fd > 0) {
+		hkcp_udp_send_discover_request(hkcp);
+	}
 
 	return 0;
 }
