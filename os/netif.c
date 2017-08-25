@@ -227,6 +227,15 @@ int netif_init(netif_env_t *ifs, netif_watch_callback_t change_callback, void *u
 }
 
 
+void netif_shutdown(netif_env_t *ifs)
+{
+	ifs->callback = NULL;
+	ifs->user_data = NULL;
+
+	netif_watch_shutdown(&ifs->watch);
+}
+
+
 /*
  * Get HW addr from connected socket
  */

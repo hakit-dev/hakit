@@ -133,3 +133,25 @@ failed:
 
 	return -1;
 }
+
+
+void netif_watch_shutdown(netif_watch_t *w)
+{
+	w->callback = NULL;
+	w->user_data = NULL;
+
+	if (w->timeout_tag != 0) {
+		sys_remove(w->timeout_tag);
+		w->timeout_tag = 0;
+	}
+
+	if (w->io_tag != 0) {
+		sys_remove(w->io_tag);
+		w->io_tag = 0;
+	}
+
+	if (w->sock >= 0) {
+		close(w->sock);
+		w->sock = -1;
+	}
+}

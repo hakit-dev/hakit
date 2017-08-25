@@ -26,5 +26,6 @@ typedef struct {
 } netif_watch_t;
 
 extern int netif_watch_init(netif_watch_t *w, netif_watch_callback_t watch_callback, void *user_data);
+extern void netif_watch_shutdown(netif_watch_t *w);
 
 #endif // __HAKIT_NETIF_WATCH_H__

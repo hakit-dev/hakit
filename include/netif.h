@@ -42,5 +42,6 @@ typedef struct {
 } netif_env_t;
 
 extern int netif_init(netif_env_t *ifs, netif_change_callback_t change_callback, void *user_data);
+extern void netif_shutdown(netif_env_t *ifs);
 
 #endif /* __HAKIT_NETIF_H__ */
