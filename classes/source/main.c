@@ -29,20 +29,17 @@ typedef struct {
 static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
-	int event;
+	int local, event;
 
 	ctx = malloc(sizeof(ctx_t));
 	ctx->obj = obj;
 	obj->ctx = ctx;
 
 	ctx->input = hk_pad_create(obj, HK_PAD_IN, "in");
+	local = (hk_prop_get(&obj->props, "local") != NULL) ? 1:0;
 	event = (hk_prop_get(&obj->props, "event") != NULL) ? 1:0;
 
-	ctx->id = comm_source_register(obj->name, event);
-
-	if (hk_prop_get(&obj->props, "local") != NULL) {
-		comm_source_set_local(ctx->id);
-	}
+	ctx->id = comm_source_register(obj->name, local, event);
 
 	comm_source_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
 

@@ -187,25 +187,21 @@ int comm_init(int use_ssl, int use_hkcp)
 }
 
 
-int comm_sink_register(char *name, comm_sink_func_t func, void *user_data)
+int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_data)
 {
-	int id = hkcp_sink_register(&comm.hkcp, name);
+	int id = hkcp_sink_register(&comm.hkcp, name, local);
 
 	if (id >= 0) {
 		hkcp_sink_add_handler(&comm.hkcp, id, func, user_data);
 		hkcp_sink_add_handler(&comm.hkcp, id, (hkcp_sink_func_t) comm_ws_send, comm.ws);
 #ifdef WITH_MQTT
-		mqtt_subscribe(&comm.mqtt, name);
+		if (!local) {
+			mqtt_subscribe(&comm.mqtt, name);
+		}
 #endif
 	}
 
 	return id;
-}
-
-
-void comm_sink_set_local(int id)
-{
-	hkcp_sink_set_local(&comm.hkcp, id);
 }
 
 
@@ -233,15 +229,9 @@ void comm_sink_update_int(int id, int value)
 }
 
 
-int comm_source_register(char *name, int event)
+int comm_source_register(char *name, int local, int event)
 {
-	return hkcp_source_register(&comm.hkcp, name, event);
-}
-
-
-void comm_source_set_local(int id)
-{
-	hkcp_source_set_local(&comm.hkcp, id);
+	return hkcp_source_register(&comm.hkcp, name, local, event);
 }
 
 
@@ -257,8 +247,10 @@ void comm_source_update_str(int id, char *value)
 
 	if (name != NULL) {
 #ifdef WITH_MQTT
-		int retain = hkcp_source_is_event(&comm.hkcp, id) ? 0:1;
-		mqtt_publish(&comm.mqtt, name, value, retain);
+		if (!hkcp_source_is_local(&comm.hkcp, id)) {
+			int retain = hkcp_source_is_event(&comm.hkcp, id) ? 0:1;
+			mqtt_publish(&comm.mqtt, name, value, retain);
+		}
 #endif
 		comm_ws_send(comm.ws, name, value);
 	}

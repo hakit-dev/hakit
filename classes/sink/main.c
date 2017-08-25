@@ -37,6 +37,7 @@ static void _event(ctx_t *ctx, char *name, char *value)
 static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
+	int local;
 
 	ctx = malloc(sizeof(ctx_t));
 	ctx->obj = obj;
@@ -44,11 +45,8 @@ static int _new(hk_obj_t *obj)
 
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 
-	ctx->id = comm_sink_register(obj->name, (comm_sink_func_t) _event, ctx);
-
-	if (hk_prop_get(&obj->props, "local") != NULL) {
-		comm_sink_set_local(ctx->id);
-	}
+	local = (hk_prop_get(&obj->props, "local") != NULL) ? 1:0;
+	ctx->id = comm_sink_register(obj->name, local, (comm_sink_func_t) _event, ctx);
 
 	comm_sink_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
 

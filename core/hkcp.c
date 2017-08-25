@@ -429,17 +429,6 @@ static inline const char *hkcp_ep_type_str(hkcp_ep_t *ep)
 }
 
 
-static void hkcp_ep_set_local(hkcp_ep_t *ep)
-{
-	if (ep->name != NULL) {
-		ep->flag |= HKCP_FLAG_LOCAL;
-	}
-	else {
-		log_str("PANIC: Attempting to set LOCAL flag on unknown %s #%d\n", hkcp_ep_type_str(ep), ep->id);
-	}
-}
-
-
 static void hkcp_ep_set_widget(hkcp_ep_t *ep, char *widget_name)
 {
 	if (ep->name != NULL) {
@@ -566,7 +555,7 @@ void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_sink_func_t func, void *us
 }
 
 
-int hkcp_sink_register(hkcp_t *hkcp, char *name)
+int hkcp_sink_register(hkcp_t *hkcp, char *name, int local)
 {
 	hkcp_sink_t *sink;
 
@@ -591,22 +580,14 @@ int hkcp_sink_register(hkcp_t *hkcp, char *name)
 
 	hk_tab_init(&sink->handlers, sizeof(hkcp_sink_handler_t));
 
+	if (local) {
+		sink->ep.flag |= HKCP_FLAG_LOCAL;
+	}
+
 	/* Trigger advertising */
 	hkcp_advertise(hkcp);
 
 	return sink->ep.id;
-}
-
-
-void hkcp_sink_set_local(hkcp_t *hkcp, int id)
-{
-	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
-	if (sink != NULL) {
-		hkcp_ep_set_local(HKCP_EP(sink));
-	}
-	else {
-		log_str("PANIC: Attempting to set local flag on unknown sink #%d\n", id);
-	}
 }
 
 
@@ -756,7 +737,7 @@ static void hkcp_source_set_widget_name(hkcp_source_t *source, char *widget_name
 }
 
 
-int hkcp_source_register(hkcp_t *hkcp, char *name, int event)
+int hkcp_source_register(hkcp_t *hkcp, char *name, int local, int event)
 {
 	hkcp_source_t *source;
 
@@ -779,6 +760,10 @@ int hkcp_source_register(hkcp_t *hkcp, char *name, int event)
 	hkcp_source_set_widget_name(source, NULL);
 	buf_set_str(&source->ep.value, "");
 
+	if (local) {
+		source->ep.flag |= HKCP_FLAG_LOCAL;
+	}
+
 	if (event) {
 		source->ep.flag |= HKCP_FLAG_EVENT;
 	}
@@ -787,18 +772,6 @@ int hkcp_source_register(hkcp_t *hkcp, char *name, int event)
 	hkcp_advertise(hkcp);
 
 	return source->ep.id;
-}
-
-
-void hkcp_source_set_local(hkcp_t *hkcp, int id)
-{
-	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
-	if (source != NULL) {
-		hkcp_ep_set_local(HKCP_EP(source));
-	}
-	else {
-		log_str("PANIC: Attempting to set local flag on unknown source #%d\n", id);
-	}
 }
 
 
@@ -951,7 +924,7 @@ char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
 }
 
 
-int hkcp_source_is_event(hkcp_t *hkcp, int id)
+static int hkcp_source_is_(hkcp_t *hkcp, int id, unsigned int mask)
 {
 	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
 
@@ -960,7 +933,19 @@ int hkcp_source_is_event(hkcp_t *hkcp, int id)
 		return 0;
 	}
 
-	return (source->ep.flag & HKCP_FLAG_EVENT) ? 1:0;
+	return (source->ep.flag & mask) ? 1:0;
+}
+
+
+int hkcp_source_is_local(hkcp_t *hkcp, int id)
+{
+	return hkcp_source_is_(hkcp, id, HKCP_FLAG_LOCAL);
+}
+
+
+int hkcp_source_is_event(hkcp_t *hkcp, int id)
+{
+	return hkcp_source_is_(hkcp, id, HKCP_FLAG_EVENT);
 }
 
 

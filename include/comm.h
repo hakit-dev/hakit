@@ -15,14 +15,12 @@ typedef hkcp_sink_func_t comm_sink_func_t;
 
 extern int comm_init(int use_ssl, int use_hkcp);
 
-extern int comm_sink_register(char *name, comm_sink_func_t func, void *user_data);
-extern void comm_sink_set_local(int id);
+extern int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_data);
 extern void comm_sink_set_widget(int id, char *widget_name);
 extern void comm_sink_update_str(int id, char *value);
 extern void comm_sink_update_int(int id, int value);
 
-extern int comm_source_register(char *name, int event);
-extern void comm_source_set_local(int id);
+extern int comm_source_register(char *name, int local, int event);
 extern void comm_source_set_widget(int id, char *widget_name);
 extern void comm_source_update_str(int id, char *value);
 extern void comm_source_update_int(int id, int value);
