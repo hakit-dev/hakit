@@ -36,7 +36,6 @@
 const char *options_summary = "HAKit engine " HAKIT_VERSION " (" ARCH ")";
 
 static char *opt_class_path = NULL;
-static char *opt_hosts = NULL;
 static int opt_no_hkcp = 0;
 static int opt_no_ssl = 0;
 static int opt_insecure_ssl = 0;
@@ -45,7 +44,6 @@ static char *opt_auth = NULL;
 static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
-	{ "hosts",   'H', 0, OPTIONS_TYPE_STRING, &opt_hosts,   "Comma-separated list of explicit HKCP host names", "HOST" },
 	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 #ifdef WITH_SSL
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
@@ -96,7 +94,7 @@ int main(int argc, char *argv[])
 	else if (opt_insecure_ssl) {
 		use_ssl = 2;
 	}
-	if (comm_init(use_ssl, opt_no_hkcp ? 0:1, opt_hosts)) {
+	if (comm_init(use_ssl, opt_no_hkcp ? 0:1)) {
 		return 2;
 	}
 

@@ -970,8 +970,6 @@ int hkcp_source_is_event(hkcp_t *hkcp, int id)
 
 static void hkcp_udp_send(hkcp_t *hkcp, buf_t *buf, int reply)
 {
-	int i;
-
 	// Nothing to do in local mode
 	if (hkcp->udp_srv.chan.fd <= 0) {
 		return;
@@ -983,12 +981,6 @@ static void hkcp_udp_send(hkcp_t *hkcp, buf_t *buf, int reply)
 	else {
 		/* Send UDP packet as broadcast */
 		udp_srv_send_bcast(&hkcp->udp_srv, (char *) buf->base, buf->len);
-
-		/* Also send UDP packet to hosts provides with command option --hosts */
-		for (i = 0; i < hkcp->hosts.nmemb; i++) {
-			char *host = HK_TAB_VALUE(hkcp->hosts, char *, i);
-			udp_srv_send_to(&hkcp->udp_srv, (char *) buf->base, buf->len, host);
-		}
 	}
 
 	buf->len = 0;
@@ -1464,35 +1456,13 @@ static void hkcp_advertise(hkcp_t *hkcp)
 }
 
 
-static void hkcp_init_hosts(hkcp_t *hkcp, char *hosts)
-{
-	char *s1 = hosts;
-
-	while ((s1 != NULL) && (*s1 != '\0')) {
-		char *s2 = s1;
-		while ((*s2 != '\0') && (*s2 != ',')) {
-			s2++;
-		}
-		if (*s2 != '\0') {
-			*(s2++) = '\0';
-		}
-
-		char **s = hk_tab_push(&hkcp->hosts);
-		*s = s1;
-
-		s1 = s2;
-	}
-}
-
-
-int hkcp_init(hkcp_t *hkcp, int port, char *hosts)
+int hkcp_init(hkcp_t *hkcp, int port)
 {
 	int ret = -1;
 
 	memset(hkcp, 0, sizeof(hkcp_t));
 	udp_srv_clear(&hkcp->udp_srv);
 	tcp_srv_clear(&hkcp->tcp_srv);
-	hk_tab_init(&hkcp->hosts, sizeof(char *));
 	hk_tab_init(&hkcp->nodes, sizeof(hkcp_node_t *));
 	hk_tab_init(&hkcp->sinks, sizeof(hkcp_sink_t));
 	hk_tab_init(&hkcp->sources, sizeof(hkcp_source_t));
@@ -1506,9 +1476,6 @@ int hkcp_init(hkcp_t *hkcp, int port, char *hosts)
 			goto DONE;
 		}
 	}
-
-	/* Feed list of explicit host addresses */
-	hkcp_init_hosts(hkcp, hosts);
 
 	/* Init network interface check */
 	if (port > 0) {

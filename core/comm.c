@@ -118,14 +118,14 @@ static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 }
 
 
-int comm_init(int use_ssl, int use_hkcp, char *hkcp_hosts)
+int comm_init(int use_ssl, int use_hkcp)
 {
 	char *path = NULL;
 
 	memset(&comm, 0, sizeof(comm));
 
 	/* Init HKCP gears */
-	int ret = hkcp_init(&comm.hkcp, use_hkcp ? HAKIT_HKCP_PORT:0, hkcp_hosts);
+	int ret = hkcp_init(&comm.hkcp, use_hkcp ? HAKIT_HKCP_PORT:0);
 	if (ret != 0) {
 		return ret;
 	}

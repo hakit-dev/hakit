@@ -114,14 +114,13 @@ struct hkcp_s {
 	netif_env_t ifs;
 	udp_srv_t udp_srv;
 	tcp_srv_t tcp_srv;
-	hk_tab_t hosts;       // Table of (char *)
 	hk_tab_t nodes;       // Table of (hkcp_node_t *)
 	hk_tab_t sinks;       // Table of (hkcp_sink_t)
 	hk_tab_t sources;     // Table of (hkcp_source_t)
 	sys_tag_t advertise_tag;
 };
 
-extern int hkcp_init(hkcp_t *hkcp, int port, char *hosts);
+extern int hkcp_init(hkcp_t *hkcp, int port);
 extern void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf);
 
 extern int hkcp_sink_register(hkcp_t *hkcp, char *name);
