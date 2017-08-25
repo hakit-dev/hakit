@@ -1,6 +1,7 @@
 #ifndef __HAKIT_UDPIO_H__
 #define __HAKIT_UDPIO_H__
 
+#include <arpa/inet.h>
 #include "io.h"
 
 
