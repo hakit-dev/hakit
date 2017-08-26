@@ -14,11 +14,10 @@
 
 #include "sys.h"
 #include "buf.h"
-#include "netif.h"
 #include "tcpio.h"
-#include "udpio.h"
 #include "tab.h"
 #include "command.h"
+#include "advertise.h"
 
 typedef struct hkcp_s hkcp_t;
 
@@ -111,13 +110,12 @@ typedef struct {
  */
 
 struct hkcp_s {
-	netif_env_t ifs;
-	udp_srv_t udp_srv;
+	int port;
+	hk_advertise_t adv;
 	tcp_srv_t tcp_srv;
 	hk_tab_t nodes;       // Table of (hkcp_node_t *)
 	hk_tab_t sinks;       // Table of (hkcp_sink_t)
 	hk_tab_t sources;     // Table of (hkcp_source_t)
-	sys_tag_t advertise_tag;
 };
 
 extern int hkcp_init(hkcp_t *hkcp, int port);

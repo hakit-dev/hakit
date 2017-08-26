@@ -1,0 +1,11 @@
+input1_btn: sink local
+input1: source
+  in=$input1_btn.out
+
+input2_btn: sink local
+  widget=switch-push
+input2: source
+  in=$input2_btn.out
+
+meter: sink
+  widget=meter:min=0,low=20,high=80,max=100

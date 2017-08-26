@@ -22,15 +22,9 @@
 #include "udpio.h"
 #include "command.h"
 #include "hakit_version.h"
+#include "advertise.h"
 #include "hkcp.h"
 
-
-#define ADVERTISE_DELAY 1000   // Delay before advertising a newly registered sink/source
-#define ADVERTISE_MAXLEN 1200  // Maxim advertising packet length
-
-#define UDP_SIGN        0xAC   // Advertising packet signature
-#define UDP_TYPE_DISCOVER_REQUEST 0x04   // Advertising field type: discover request
-#define UDP_TYPE_DISCOVER_REPLY   0x05   // Advertising field type: discover reply
 
 /* TCP Command context */
 typedef struct {
@@ -42,7 +36,6 @@ typedef struct {
 
 
 /* Local functions forward declarations */
-static void hkcp_advertise(hkcp_t *hkcp);
 static int hkcp_node_connect(hkcp_node_t *node);
 static void hkcp_node_remove(hkcp_node_t *node);
 
@@ -355,7 +348,7 @@ static int hkcp_node_connect(hkcp_node_t *node)
 	hkcp_node_set_state(node, HKCP_NODE_CONNECT);
 
 	log_str("Connecting to node #%d='%s' (%d/%d)", node->id, node->name, node->connect_attempts, HKCP_NODE_CONNECT_RETRIES);
-	if (tcp_sock_connect(&node->tcp_sock, node->name, node->hkcp->udp_srv.port, hkcp_node_event, node) > 0) {
+	if (tcp_sock_connect(&node->tcp_sock, node->name, node->hkcp->port, hkcp_node_event, node) > 0) {
 		node->timeout_tag = 0;
 		/* Get list of sinks from this node */
 		hkcp_node_set_state(node, HKCP_NODE_VERSION);
@@ -470,22 +463,6 @@ static void hkcp_ep_dump(hkcp_ep_t *ep, buf_t *out_buf)
  * Sinks
  */
 
-static int hkcp_sink_to_advertise(hkcp_t *hkcp)
-{
-	int count = 0;
-	int i;
-
-	for (i = 0; i < hkcp->sinks.nmemb; i++) {
-		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
-		if ((sink->ep.name != NULL) && ((sink->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
-			count++;
-		}
-	}
-
-	return count;
-}
-
-
 static hkcp_sink_t *hkcp_sink_retrieve(hkcp_t *hkcp, char *name)
 {
 	int i;
@@ -585,7 +562,9 @@ int hkcp_sink_register(hkcp_t *hkcp, char *name, int local)
 	}
 
 	/* Trigger advertising */
-	hkcp_advertise(hkcp);
+	if (!local) {
+		hk_advertise_sink(&hkcp->adv);
+	}
 
 	return sink->ep.id;
 }
@@ -769,7 +748,9 @@ int hkcp_source_register(hkcp_t *hkcp, char *name, int local, int event)
 	}
 
 	/* Trigger advertising */
-	hkcp_advertise(hkcp);
+	if (!local) {
+		hk_advertise_source(&hkcp->adv);
+	}
 
 	return source->ep.id;
 }
@@ -950,140 +931,6 @@ int hkcp_source_is_event(hkcp_t *hkcp, int id)
 
 
 /*
- * UDP Commands
- */
-
-static void hkcp_udp_send(hkcp_t *hkcp, buf_t *buf, int reply)
-{
-	// Nothing to do in local mode
-	if (hkcp->udp_srv.chan.fd <= 0) {
-		return;
-	}
-
-	if (reply) {
-		udp_srv_send_reply(&hkcp->udp_srv, (char *) buf->base, buf->len);
-	}
-	else {
-		/* Send UDP packet as broadcast */
-		udp_srv_send_bcast(&hkcp->udp_srv, (char *) buf->base, buf->len);
-	}
-
-	buf->len = 0;
-}
-
-
-static void hkcp_udp_send_discover_request(hkcp_t *hkcp)
-{
-	/* Count number of non-local endpoints */
-	int count = hkcp_sink_to_advertise(hkcp) + hkcp_source_to_advertise(hkcp);
-
-	// Broadcast DISCOVER request if we have non-local endpoints to advertise
-	if (count > 0) {
-		buf_t buf;
-
-		buf_init(&buf);
-		buf_append_byte(&buf, UDP_SIGN);
-		buf_append_byte(&buf, UDP_TYPE_DISCOVER_REQUEST);
-		hkcp_udp_send(hkcp, &buf, 0);
-		buf_cleanup(&buf);
-	}
-}
-
-
-static void hkcp_udp_send_discover_reply(hkcp_t *hkcp)
-{
-	/* Count number of non-local sinks */
-	int count = hkcp_sink_to_advertise(hkcp);
-
-	// Send DISCOVER reply to request sender, but only if we have some non-local sinks to advertise
-	if (count > 0) {
-		buf_t buf;
-
-		buf_init(&buf);
-		buf_append_byte(&buf, UDP_SIGN);
-		buf_append_byte(&buf, UDP_TYPE_DISCOVER_REPLY);
-		hkcp_udp_send(hkcp, &buf, 1);
-		buf_cleanup(&buf);
-	}
-}
-
-
-static void hkcp_udp_event_discover(hkcp_t *hkcp)
-{
-	char remote_ip[64];
-
-	/* Get remote IP address */
-	ip_addr((struct sockaddr *) udp_srv_remote(&hkcp->udp_srv), remote_ip, sizeof(remote_ip));
-
-	log_debug(2, "hkcp_udp_event_discover from %s", remote_ip);
-
-	//TODO: Do not add node if we don't have any sources to export
-	/* Connect to node (if not already done) */
-	hkcp_node_add(hkcp, remote_ip);
-}
-
-
-static void hkcp_udp_event(hkcp_t *hkcp, unsigned char *buf, int size)
-{
-	int argc = 0;
-	char **argv = NULL;
-	int i;
-	int nl;
-
-	log_debug(2, "hkcp_udp_event: %d bytes", size);
-	log_debug_data(buf, size);
-
-	if (size < 2) {
-		log_str("WARNING: Received too short UDP packet");
-		return;
-	}
-
-	if (buf[0] != UDP_SIGN) {
-		log_str("WARNING: Received UDP packet with wrong magic number");
-		return;
-	}
-
-	/* Construct a list of received elements */
-	for (i = 2; i < size; i++) {
-		if (buf[i] == 0) {
-			argc++;
-		}
-	}
-
-	if (argc > 0) {
-		argv = (char **) malloc(argc*sizeof(char *));
-		argc = 0;
-		nl = 1;
-		for (i = 2; i < size; i++) {
-			if (nl) {
-				argv[argc++] = (char *) &buf[i];
-				nl = 0;
-			}
-			if (buf[i] == 0) {
-				nl = 1;
-			}
-		}
-	}
-
-	switch (buf[1]) {
-	case UDP_TYPE_DISCOVER_REQUEST:
-		hkcp_udp_send_discover_reply(hkcp);
-		hkcp_udp_event_discover(hkcp);
-		break;
-	case UDP_TYPE_DISCOVER_REPLY:
-		hkcp_udp_event_discover(hkcp);
-		break;
-	default:
-		log_str("WARNING: Received UDP packet with unknown type (%02X)", buf[1]);
-		break;
-	}
-
-	free(argv);
-	argv = NULL;
-}
-
-
-/*
  * TCP/stdin/websocket commands
  */
 
@@ -1226,7 +1073,7 @@ static void hkcp_command_sources(hkcp_t *hkcp, buf_t *out_buf)
 	for (i = 0; i < hkcp->sources.nmemb; i++) {
 		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
 
-		if (source->ep.name != NULL) {
+		if ((source->ep.name != NULL) && ((source->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
 			hkcp_ep_append_name(HKCP_EP(source), out_buf);
 
 			buf_append_str(out_buf, " \"");
@@ -1256,7 +1103,7 @@ static void hkcp_command_sinks(hkcp_t *hkcp, buf_t *out_buf)
 	for (i = 0; i < hkcp->sinks.nmemb; i++) {
 		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
 
-		if (sink->ep.name != NULL) {
+		if ((sink->ep.name != NULL) && ((sink->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
 			hkcp_ep_append_name(HKCP_EP(sink), out_buf);
 			buf_append_str(out_buf, " \"");
 			buf_append(out_buf, sink->ep.value.base, sink->ep.value.len);
@@ -1414,29 +1261,14 @@ static void hkcp_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
  * Management engine
  */
 
-static int hkcp_advertise_now(hkcp_t *hkcp)
+static void hkcp_discovered(hkcp_t *hkcp, char *remote_ip)
 {
-	hkcp->advertise_tag = 0;
+	log_debug(2, "hkcp_discovered %s", remote_ip);
 
-	// Nothing to do in local mode
-	if (hkcp->udp_srv.chan.fd > 0) {
-		hkcp_udp_send_discover_request(hkcp);
-	}
-
-	return 0;
-}
-
-
-static void hkcp_advertise(hkcp_t *hkcp)
-{
-	if (hkcp->advertise_tag != 0) {
-		sys_remove(hkcp->advertise_tag);
-		hkcp->advertise_tag = 0;
-	}
-
-	if (hkcp->udp_srv.chan.fd > 0) {
-		log_debug(2, "Will send advertisement request in %lu ms", ADVERTISE_DELAY);
-		hkcp->advertise_tag = sys_timeout(ADVERTISE_DELAY, (sys_func_t) hkcp_advertise_now, hkcp);
+	/* Add this node if we have some sources to export */
+	if (hkcp_source_to_advertise(hkcp)) {
+		/* Create node, if it does not already exist */
+		hkcp_node_add(hkcp, remote_ip);
 	}
 }
 
@@ -1446,34 +1278,29 @@ int hkcp_init(hkcp_t *hkcp, int port)
 	int ret = -1;
 
 	memset(hkcp, 0, sizeof(hkcp_t));
-	udp_srv_clear(&hkcp->udp_srv);
+	hkcp->port = port;
 	tcp_srv_clear(&hkcp->tcp_srv);
 	hk_tab_init(&hkcp->nodes, sizeof(hkcp_node_t *));
 	hk_tab_init(&hkcp->sinks, sizeof(hkcp_sink_t));
 	hk_tab_init(&hkcp->sources, sizeof(hkcp_source_t));
 
 	if (port > 0) {
-		if (udp_srv_init(&hkcp->udp_srv, port, (io_func_t) hkcp_udp_event, hkcp)) {
+		if (hk_advertise_init(&hkcp->adv, port)) {
 			goto DONE;
 		}
+
+		hk_advertise_handler(&hkcp->adv, DISCOVER_HKCP, (hk_advertise_func_t) hkcp_discovered, hkcp);
 
 		if (tcp_srv_init(&hkcp->tcp_srv, port, hkcp_tcp_event, hkcp)) {
 			goto DONE;
 		}
 	}
 
-	/* Init network interface check */
-	if (port > 0) {
-		netif_init(&hkcp->ifs, (netif_change_callback_t) hkcp_advertise, hkcp);
-	}
-
 	ret = 0;
 
 DONE:
 	if (ret < 0) {
-		if (hkcp->udp_srv.chan.fd > 0) {
-			udp_srv_shutdown(&hkcp->udp_srv);
-		}
+		hk_advertise_shutdown(&hkcp->adv);
 
 		if (hkcp->tcp_srv.csock.chan.fd > 0) {
 			tcp_srv_shutdown(&hkcp->tcp_srv);
