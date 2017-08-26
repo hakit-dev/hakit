@@ -17,7 +17,6 @@
 #include "tcpio.h"
 #include "tab.h"
 #include "command.h"
-#include "advertise.h"
 
 typedef struct hkcp_s hkcp_t;
 
@@ -111,7 +110,6 @@ typedef struct {
 
 struct hkcp_s {
 	int port;
-	hk_advertise_t adv;
 	tcp_srv_t tcp_srv;
 	hk_tab_t nodes;       // Table of (hkcp_node_t *)
 	hk_tab_t sinks;       // Table of (hkcp_sink_t)
@@ -119,6 +117,9 @@ struct hkcp_s {
 };
 
 extern int hkcp_init(hkcp_t *hkcp, int port);
+extern void hkcp_shutdown(hkcp_t *hkcp);
+extern void hkcp_node_add(hkcp_t *hkcp, char *remote_ip);
+
 extern void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf);
 
 extern int hkcp_sink_register(hkcp_t *hkcp, char *name, int local);

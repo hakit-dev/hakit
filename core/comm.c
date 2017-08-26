@@ -23,6 +23,7 @@
 #include "mqtt.h"
 #include "eventq.h"
 #include "command.h"
+#include "advertise.h"
 #include "comm.h"
 
 
@@ -32,6 +33,7 @@
 #define HAKIT_SHARE_DIR "/usr/share/hakit/"
 
 typedef struct {
+	hk_advertise_t adv;
 	hkcp_t hkcp;
 #ifdef WITH_MQTT
 	mqtt_t mqtt;
@@ -121,20 +123,30 @@ static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 int comm_init(int use_ssl, int use_hkcp)
 {
 	char *path = NULL;
+	int ret = 0;
 
 	memset(&comm, 0, sizeof(comm));
 
+	/* Init advertising protocol */
+	if (hk_advertise_init(&comm.adv, HAKIT_HKCP_PORT)) {
+		ret = -1;
+		goto DONE;
+	}
+
+	hk_advertise_handler(&comm.adv, DISCOVER_HKCP, (hk_advertise_func_t) hkcp_node_add, &comm.hkcp);
+
 	/* Init HKCP gears */
-	int ret = hkcp_init(&comm.hkcp, use_hkcp ? HAKIT_HKCP_PORT:0);
+	ret = hkcp_init(&comm.hkcp, use_hkcp ? HAKIT_HKCP_PORT:0);
 	if (ret != 0) {
-		return ret;
+		goto DONE;
 	}
 
 #ifdef WITH_MQTT
 	/* Init MQTT gears */
 	if (mqtt_broker != NULL) {
 		if (mqtt_init(&comm.mqtt, use_ssl, (mqtt_update_func_t) comm_mqtt_update, &comm.hkcp)) {
-			return -1;
+			ret = -1;
+			goto DONE;
 		}
 	}
 #endif /* WITH_MQTT */
@@ -154,7 +166,8 @@ int comm_init(int use_ssl, int use_hkcp)
                 free(path);
         }
 	if (comm.ws == NULL) {
-		return -1;
+		ret = -1;
+		goto DONE;
 	}
 
 	/* Setup document root directory stack */
@@ -183,7 +196,14 @@ int comm_init(int use_ssl, int use_hkcp)
 		io_channel_setup(&comm.stdin, fileno(stdin), (io_func_t) command_recv, cmd);
 	}
 
-	return 0;
+DONE:
+	if (ret != 0) {
+		//TODO: mqtt_shutdown(&comm.mqtt);
+		hkcp_shutdown(&comm.hkcp);
+		hk_advertise_shutdown(&comm.adv);
+	}
+
+	return ret;
 }
 
 
@@ -194,11 +214,14 @@ int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_
 	if (id >= 0) {
 		hkcp_sink_add_handler(&comm.hkcp, id, func, user_data);
 		hkcp_sink_add_handler(&comm.hkcp, id, (hkcp_sink_func_t) comm_ws_send, comm.ws);
-#ifdef WITH_MQTT
 		if (!local) {
+			/* Trigger advertising */
+			hk_advertise_sink(&comm.adv);
+
+#ifdef WITH_MQTT
 			mqtt_subscribe(&comm.mqtt, name);
-		}
 #endif
+		}
 	}
 
 	return id;
@@ -231,7 +254,16 @@ void comm_sink_update_int(int id, int value)
 
 int comm_source_register(char *name, int local, int event)
 {
-	return hkcp_source_register(&comm.hkcp, name, local, event);
+	int id = hkcp_source_register(&comm.hkcp, name, local, event);
+
+	if (id >= 0) {
+		if (!local) {
+			/* Trigger advertising */
+			hk_advertise_source(&comm.adv);
+		}
+	}
+
+	return id;
 }
 
 

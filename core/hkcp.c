@@ -22,7 +22,6 @@
 #include "udpio.h"
 #include "command.h"
 #include "hakit_version.h"
-#include "advertise.h"
 #include "hkcp.h"
 
 
@@ -39,6 +38,7 @@ typedef struct {
 static int hkcp_node_connect(hkcp_node_t *node);
 static void hkcp_node_remove(hkcp_node_t *node);
 
+static int hkcp_source_to_advertise(hkcp_t *hkcp);
 static hkcp_source_t *hkcp_source_retrieve(hkcp_t *hkcp, char *name);
 static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *node);
 static void hkcp_source_attach_node(hkcp_source_t *source, hkcp_node_t *node);
@@ -380,25 +380,31 @@ static int hkcp_node_connect_first(hkcp_node_t *node)
 }
 
 
-static hkcp_node_t *hkcp_node_add(hkcp_t *hkcp, char *name)
+void hkcp_node_add(hkcp_t *hkcp, char *remote_ip)
 {
-	log_debug(2, "hkcp_node_add node='%s'", name);
+	log_debug(2, "hkcp_node_add %s", remote_ip);
 
-	hkcp_node_t *node = hkcp_node_retrieve(hkcp, name);
-
-	/* Allocate entry */
-	if (node == NULL) {
-		node = hkcp_node_alloc(hkcp);
-		node->name = strdup(name);
+	/* Do nothing if we do not have any public source */
+	if (hkcp_source_to_advertise(hkcp) <= 0) {
+		log_debug(2, "  => No public source found");
+		return;
 	}
 
+	/* Try to recycle unused entry */
+	hkcp_node_t *node = hkcp_node_retrieve(hkcp, remote_ip);
+
+	/* Allocate new node if no recycled entry found */
+	if (node == NULL) {
+		node = hkcp_node_alloc(hkcp);
+		node->name = strdup(remote_ip);
+	}
+
+	/* Try to connect */
 	if (!tcp_sock_is_connected(&node->tcp_sock)) {
 		if (node->timeout_tag == 0) {
 			node->timeout_tag = sys_timeout(10, (sys_func_t) hkcp_node_connect_first, node);
 		}
 	}
-
-	return node;
 }
 
 
@@ -559,11 +565,6 @@ int hkcp_sink_register(hkcp_t *hkcp, char *name, int local)
 
 	if (local) {
 		sink->ep.flag |= HKCP_FLAG_LOCAL;
-	}
-
-	/* Trigger advertising */
-	if (!local) {
-		hk_advertise_sink(&hkcp->adv);
 	}
 
 	return sink->ep.id;
@@ -745,11 +746,6 @@ int hkcp_source_register(hkcp_t *hkcp, char *name, int local, int event)
 
 	if (event) {
 		source->ep.flag |= HKCP_FLAG_EVENT;
-	}
-
-	/* Trigger advertising */
-	if (!local) {
-		hk_advertise_source(&hkcp->adv);
 	}
 
 	return source->ep.id;
@@ -1261,18 +1257,6 @@ static void hkcp_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
  * Management engine
  */
 
-static void hkcp_discovered(hkcp_t *hkcp, char *remote_ip)
-{
-	log_debug(2, "hkcp_discovered %s", remote_ip);
-
-	/* Add this node if we have some sources to export */
-	if (hkcp_source_to_advertise(hkcp)) {
-		/* Create node, if it does not already exist */
-		hkcp_node_add(hkcp, remote_ip);
-	}
-}
-
-
 int hkcp_init(hkcp_t *hkcp, int port)
 {
 	int ret = -1;
@@ -1285,12 +1269,6 @@ int hkcp_init(hkcp_t *hkcp, int port)
 	hk_tab_init(&hkcp->sources, sizeof(hkcp_source_t));
 
 	if (port > 0) {
-		if (hk_advertise_init(&hkcp->adv, port)) {
-			goto DONE;
-		}
-
-		hk_advertise_handler(&hkcp->adv, DISCOVER_HKCP, (hk_advertise_func_t) hkcp_discovered, hkcp);
-
 		if (tcp_srv_init(&hkcp->tcp_srv, port, hkcp_tcp_event, hkcp)) {
 			goto DONE;
 		}
@@ -1300,14 +1278,22 @@ int hkcp_init(hkcp_t *hkcp, int port)
 
 DONE:
 	if (ret < 0) {
-		hk_advertise_shutdown(&hkcp->adv);
-
-		if (hkcp->tcp_srv.csock.chan.fd > 0) {
-			tcp_srv_shutdown(&hkcp->tcp_srv);
-		}
-
-		memset(hkcp, 0, sizeof(hkcp_t));
+		hkcp_shutdown(hkcp);
 	}
 
 	return ret;
+}
+
+
+void hkcp_shutdown(hkcp_t *hkcp)
+{
+	if (hkcp->tcp_srv.csock.chan.fd > 0) {
+		tcp_srv_shutdown(&hkcp->tcp_srv);
+	}
+
+	hk_tab_cleanup(&hkcp->nodes);
+	hk_tab_cleanup(&hkcp->sinks);
+	hk_tab_cleanup(&hkcp->sources);
+
+	memset(hkcp, 0, sizeof(hkcp_t));
 }
