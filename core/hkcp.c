@@ -384,6 +384,11 @@ void hkcp_node_add(hkcp_t *hkcp, char *remote_ip)
 {
 	log_debug(2, "hkcp_node_add %s", remote_ip);
 
+	/* Do nothing if HKCP is disabled */
+	if (hkcp->port <= 0) {
+		return;
+	}
+
 	/* Do nothing if we do not have any public source */
 	if (hkcp_source_to_advertise(hkcp) <= 0) {
 		log_debug(2, "  => No public source found");
@@ -523,7 +528,7 @@ static void hkcp_sink_set_widget_name(hkcp_sink_t *sink, char *widget_name)
 }
 
 
-void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_sink_func_t func, void *user_data)
+void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_func_t func, void *user_data)
 {
 	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
 
@@ -609,7 +614,8 @@ static char *hkcp_sink_update_(hkcp_sink_t *sink, char *value)
 	for (i = 0; i < sink->handlers.nmemb; i++) {
 		hkcp_sink_handler_t *handler = HK_TAB_PTR(sink->handlers, hkcp_sink_handler_t, i);
 		if (handler->func != NULL) {
-			handler->func(handler->user_data, sink->ep.name, (char *) sink->ep.value.base);
+			int event = (sink->ep.flag & HKCP_FLAG_EVENT) ? 1:0;
+			handler->func(handler->user_data, sink->ep.name, (char *) sink->ep.value.base, event);
 		}
 	}
 
@@ -640,6 +646,20 @@ void hkcp_sink_update_by_name(hkcp_t *hkcp, char *name, char *value)
 	}
 	else {
 		log_str("WARNING: Attempting to update unkown sink '%s'", name);
+	}
+}
+
+
+void hkcp_sink_foreach(hkcp_t *hkcp, hkcp_func_t func, void *user_data)
+{
+	int i;
+
+	for (i = 0; i < hkcp->sinks.nmemb; i++) {
+		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
+		if ((sink->ep.name != NULL) && ((sink->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
+			int event = (sink->ep.flag & HKCP_FLAG_EVENT) ? 1:0;
+			func(user_data, sink->ep.name, (char *) sink->ep.value.base, event);
+		}
 	}
 }
 
@@ -923,6 +943,20 @@ int hkcp_source_is_local(hkcp_t *hkcp, int id)
 int hkcp_source_is_event(hkcp_t *hkcp, int id)
 {
 	return hkcp_source_is_(hkcp, id, HKCP_FLAG_EVENT);
+}
+
+
+void hkcp_source_foreach(hkcp_t *hkcp, hkcp_func_t func, void *user_data)
+{
+	int i;
+
+	for (i = 0; i < hkcp->sources.nmemb; i++) {
+		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
+		if ((source->ep.name != NULL) && ((source->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
+			int event = (source->ep.flag & HKCP_FLAG_EVENT) ? 1:0;
+			func(user_data, source->ep.name, (char *) source->ep.value.base, event);
+		}
+	}
 }
 
 

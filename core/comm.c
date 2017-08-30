@@ -34,6 +34,7 @@
 
 typedef struct {
 	hk_advertise_t adv;
+	int use_hkcp;
 	hkcp_t hkcp;
 #ifdef WITH_MQTT
 	mqtt_t mqtt;
@@ -58,13 +59,51 @@ static void comm_ws_send(ws_t *ws, char *name, char *value)
 
 #ifdef WITH_MQTT
 
+static void comm_mqtt_publish(mqtt_t *mqtt, char *name, char *value, int event)
+{
+	int retain = event ? 0:1;
+	mqtt_publish(mqtt, name, value, retain);
+}
+
+
+static void comm_mqtt_subscribe(mqtt_t *mqtt, char *name, char *value, int event)
+{
+	mqtt_subscribe(mqtt, name);
+}
+
+
+static void comm_mqtt_connect(comm_t *comm)
+{
+}
+
+
+static void comm_mqtt_connected(comm_t *comm)
+{
+	hkcp_source_foreach(&comm->hkcp, (hkcp_func_t) comm_mqtt_publish, &comm->mqtt);
+	hkcp_sink_foreach(&comm->hkcp, (hkcp_func_t) comm_mqtt_subscribe, &comm->mqtt);
+}
+
+
 static void comm_mqtt_update(comm_t *comm, char *name, char *value)
 {
-	log_debug(2, "comm_mqtt_update %s='%s'", name, value);
-	hkcp_sink_update_by_name(&comm->hkcp, name, value);
+	if (name != NULL) {
+		log_debug(2, "comm_mqtt_update %s='%s'", name, value);
+		hkcp_sink_update_by_name(&comm->hkcp, name, value);
+	}
+	else {
+		log_debug(2, "comm_mqtt_update CONNECTED");
+		comm_mqtt_connected(comm);
+	}
+}
+
+static void comm_mqtt_discover(comm_t *comm, char *remote_ip, char *broker)
+{
+	log_debug(2, "comm_mqtt_discover %s '%s'", remote_ip, broker);
+	mqtt_connect(&comm->mqtt, broker);
 }
 
 #endif /* WITH_MQTT */
+
 
 static void comm_wget_recv(void *user_data, char *buf, int len)
 {
@@ -120,7 +159,7 @@ static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 }
 
 
-int comm_init(int use_ssl, int use_hkcp)
+int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
 {
 	char *path = NULL;
 	int ret = 0;
@@ -133,22 +172,39 @@ int comm_init(int use_ssl, int use_hkcp)
 		goto DONE;
 	}
 
-	hk_advertise_handler(&comm.adv, DISCOVER_HKCP, (hk_advertise_func_t) hkcp_node_add, &comm.hkcp);
-
 	/* Init HKCP gears */
+	comm.use_hkcp = use_hkcp;
 	ret = hkcp_init(&comm.hkcp, use_hkcp ? HAKIT_HKCP_PORT:0);
 	if (ret != 0) {
 		goto DONE;
 	}
 
+	if (use_hkcp) {
+		/* Handle HKCP advertisement */
+		hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_HKCP, (hk_advertise_func_t) hkcp_node_add, &comm.hkcp);
+	}
+
 #ifdef WITH_MQTT
 	/* Init MQTT gears */
+	if (mqtt_init(&comm.mqtt, use_ssl, (mqtt_update_func_t) comm_mqtt_update, &comm)) {
+		ret = -1;
+		goto DONE;
+	}
+
 	if (mqtt_broker != NULL) {
-		if (mqtt_init(&comm.mqtt, use_ssl, (mqtt_update_func_t) comm_mqtt_update, &comm.hkcp)) {
+		/* Connect to broker */
+		if (mqtt_connect(&comm.mqtt, mqtt_broker)) {
 			ret = -1;
 			goto DONE;
 		}
 	}
+	else {
+		/* Handle MQTT advertisement */
+		hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_MQTT, (hk_advertise_func_t) comm_mqtt_discover, &comm);
+	}
+
+	/* Advertise MQTT protocol */
+	hk_advertise_mqtt(&comm.adv, mqtt_broker);
 #endif /* WITH_MQTT */
 
 	/* Search for SSL cert directory */
@@ -198,7 +254,7 @@ int comm_init(int use_ssl, int use_hkcp)
 
 DONE:
 	if (ret != 0) {
-		//TODO: mqtt_shutdown(&comm.mqtt);
+		mqtt_shutdown(&comm.mqtt);
 		hkcp_shutdown(&comm.hkcp);
 		hk_advertise_shutdown(&comm.adv);
 	}
@@ -213,14 +269,10 @@ int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_
 
 	if (id >= 0) {
 		hkcp_sink_add_handler(&comm.hkcp, id, func, user_data);
-		hkcp_sink_add_handler(&comm.hkcp, id, (hkcp_sink_func_t) comm_ws_send, comm.ws);
-		if (!local) {
+		hkcp_sink_add_handler(&comm.hkcp, id, (hkcp_func_t) comm_ws_send, comm.ws);
+		if (comm.use_hkcp && (!local)) {
 			/* Trigger advertising */
-			hk_advertise_sink(&comm.adv);
-
-#ifdef WITH_MQTT
-			mqtt_subscribe(&comm.mqtt, name);
-#endif
+			hk_advertise_hkcp(&comm.adv);
 		}
 	}
 
@@ -257,9 +309,9 @@ int comm_source_register(char *name, int local, int event)
 	int id = hkcp_source_register(&comm.hkcp, name, local, event);
 
 	if (id >= 0) {
-		if (!local) {
+		if (comm.use_hkcp && (!local)) {
 			/* Trigger advertising */
-			hk_advertise_source(&comm.adv);
+			hk_advertise_hkcp(&comm.adv);
 		}
 	}
 

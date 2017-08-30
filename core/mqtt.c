@@ -25,13 +25,25 @@
 
 
 /* MQTT config options */
-char *mqtt_broker = NULL;
-int mqtt_keepalive = MQTT_DEFAULT_KEEPALIVE;
-int mqtt_qos = 0;
 char *mqtt_cafile = NULL;
 
 /* Message queue */
 #define MSG_MAXSIZE 1024
+
+/* Reconnect delay */
+#define MQTT_RECONNECT_DELAY 60
+
+
+static int mqtt_connect_now(mqtt_t *mqtt);
+
+
+static void mqtt_timeout_stop(mqtt_t *mqtt)
+{
+	if (mqtt->timeout_tag != 0) {
+		sys_remove(mqtt->timeout_tag);
+		mqtt->timeout_tag = 0;
+	}
+}
 
 
 static void mqtt_on_connect(struct mosquitto *mosq, void *obj, int rc)
@@ -40,6 +52,12 @@ static void mqtt_on_connect(struct mosquitto *mosq, void *obj, int rc)
 
 	log_debug(2, "MQTT connected: rc=%d", rc);
 	mqtt->state = MQTT_ST_CONNECTED;
+
+	mqtt_timeout_stop(mqtt);
+
+	if (mqtt->update_func != NULL) {
+		mqtt->update_func(mqtt->user_data, NULL, NULL);
+	}
 }
 
 
@@ -48,7 +66,15 @@ static void mqtt_on_disconnect(struct mosquitto *mosq, void *obj, int rc)
 	mqtt_t *mqtt = obj;
 
 	log_debug(2, "MQTT disconnected: rc=%d", rc);
-	mqtt->state = MQTT_ST_DISCONNECTED;
+
+	mqtt_timeout_stop(mqtt);
+
+	if (mqtt->state == MQTT_ST_RECONNECT) {
+		mqtt_connect_now(mqtt);
+	}
+	else if (mqtt->state == MQTT_ST_CONNECTED) {
+		mqtt->timeout_tag = sys_timeout(MQTT_RECONNECT_DELAY*1000, (sys_func_t) mqtt_connect_now, mqtt);
+	}
 }
 
 
@@ -138,11 +164,105 @@ static int mqtt_msg_recv(mqtt_t *mqtt, int fd)
 }
 
 
-int mqtt_init(mqtt_t *mqtt, int use_ssl, 
+static int mqtt_connect_now(mqtt_t *mqtt)
+{
+	log_debug(2, "mqtt_connect_now (state=%d)", mqtt->state);
+	mqtt->timeout_tag  = 0;
+	
+	// Parse broker specification
+	char *str = strdup(mqtt->broker);
+	char *host = strchr(str, '@');
+	char *user = NULL;
+	char *password = NULL;
+
+	if (host != NULL) {
+		*(host++) = '\0';
+
+		user = str;
+
+		password = strchr(user, ':');
+		if (password != NULL) {
+			*(password++) = '\0';
+		}
+	}
+	else {
+		host = str;
+	}
+
+	int port = mqtt->port;
+	char *p = strchr(host, ':');
+	if (p != NULL) {
+		*(p++) = '\0';
+		port = atoi(p);
+	}
+
+	if (user != NULL) {
+		log_debug(1, "MQTT user: '%s'", user);
+		mosquitto_username_pw_set(mqtt->mosq, user, password);
+	}
+
+	if (*host == '\0') {
+		host = "localhost";
+	}
+
+	// Connect to broker
+	log_str("MQTT connect: %s:%d", host, port);
+	int ret = mosquitto_connect_async(mqtt->mosq, host, port, MQTT_DEFAULT_KEEPALIVE);
+
+	free(str);
+
+	if (ret != MOSQ_ERR_SUCCESS) {
+		log_str("ERROR: Failed to connect to MQTT broker: %s", mosquitto_strerror(ret));
+
+		/* Try to reconnect later */
+		mqtt->timeout_tag = sys_timeout(MQTT_RECONNECT_DELAY*1000, (sys_func_t) mqtt_connect_now, mqtt);
+	}
+
+	return 0;
+}
+
+
+int mqtt_connect(mqtt_t *mqtt, char *broker)
+{
+	log_debug(2, "mqtt_connect (state=%d) %s", mqtt->state, broker);
+
+	/* Do nothing if already connected to this broker */
+	if (mqtt->broker != NULL) {
+		if (strcmp(mqtt->broker, broker) == 0) {
+			if (mqtt->state == MQTT_ST_CONNECTED) {
+				log_debug(1, "MQTT client already connected to %s", broker);
+			}
+		}
+		else {
+			free(mqtt->broker);
+			mqtt->broker = NULL;
+
+			if (mqtt->state == MQTT_ST_CONNECTED) {
+				mosquitto_disconnect(mqtt->mosq);
+				mqtt->state = MQTT_ST_RECONNECT;
+				log_debug(1, "MQTT client reconnecting to %s", broker);
+			}
+		}
+	}
+
+	if (mqtt->broker == NULL) {
+		mqtt->broker = strdup(broker);
+	}
+
+	if ((mqtt->state != MQTT_ST_CONNECTED) && (mqtt->state != MQTT_ST_RECONNECT)) {
+		mqtt_timeout_stop(mqtt);
+		mqtt->timeout_tag = sys_timeout(100, (sys_func_t) mqtt_connect_now, mqtt);
+		mqtt->state = MQTT_ST_CONNECTING;
+	}
+
+	return 0;
+}
+
+
+int mqtt_init(mqtt_t *mqtt, int use_ssl,
 	      mqtt_update_func_t update_func, void *user_data)
 {
 	int major, minor, revision;
-	int port;
 	char id[128] = "hakit/";
 	int ret;
 
@@ -179,7 +299,7 @@ int mqtt_init(mqtt_t *mqtt, int use_ssl,
 
 	// Setup SSL
 	if (use_ssl) {
-		port = MQTT_DEFAULT_SSL_PORT;
+		mqtt->port = MQTT_DEFAULT_SSL_PORT;
 		if (mqtt_cafile != NULL) {
 			mosquitto_tls_set(mqtt->mosq, mqtt_cafile, NULL,
 					  NULL, NULL,
@@ -192,53 +312,7 @@ int mqtt_init(mqtt_t *mqtt, int use_ssl,
 		}
 	}
 	else {
-		port = MQTT_DEFAULT_PORT;
-	}
-
-	// Parse broker specification
-	char *str = strdup(mqtt_broker);
-	char *host = strchr(str, '@');
-	char *user = NULL;
-	char *password = NULL;
-
-	if (host != NULL) {
-		*(host++) = '\0';
-
-		user = str;
-
-		password = strchr(user, ':');
-		if (password != NULL) {
-			*(password++) = '\0';
-		}
-	}
-	else {
-		host = str;
-	}
-
-	char *p = strchr(host, ':');
-	if (p != NULL) {
-		*(p++) = '\0';
-		port = atoi(p);
-	}
-
-	if (user != NULL) {
-		log_debug(1, "MQTT user: '%s'", user);
-		mosquitto_username_pw_set(mqtt->mosq, user, password);
-	}
-
-	if (*host == '\0') {
-		host = "localhost";
-	}
-
-	// Connect to broker
-	log_debug(1, "MQTT broker: %s:%d", host, port);
-	ret = mosquitto_connect_async(mqtt->mosq, host, port, mqtt_keepalive);
-
-	free(str);
-
-	if (ret != MOSQ_ERR_SUCCESS) {
-		log_str("ERROR: Failed to connect to MQTT broker: %s", mosquitto_strerror(ret));
-		goto failed;
+		mqtt->port = MQTT_DEFAULT_PORT;
 	}
 
 	/* Create private messaging queue */
@@ -258,20 +332,35 @@ int mqtt_init(mqtt_t *mqtt, int use_ssl,
 
 	mq_unlink(id);  // Hide message queue from other processes
 
-	// Start MQTT thread
+	/* Message queue receive callback */
+	mqtt->mq_tag = sys_io_watch(mqtt->mq, (sys_io_func_t) mqtt_msg_recv, mqtt);
+
+	/* Start MQTT thread */
 	ret = mosquitto_loop_start(mqtt->mosq);
 	if (ret != MOSQ_ERR_SUCCESS) {
 		log_str("ERROR: Failed to start MQTT: %s", mosquitto_strerror(ret));
 		goto failed;
 	}
 
-	/* Message queue receive callback */
-	mqtt->mq_tag = sys_io_watch(mqtt->mq, (sys_io_func_t) mqtt_msg_recv, mqtt);
-
 	return 0;
 
 failed:
+	mqtt_shutdown(mqtt);
+	return -1;
+}
+
+
+void mqtt_shutdown(mqtt_t *mqtt)
+{
+	/* Cancel running timer */
+	mqtt_timeout_stop(mqtt);
+
 	/* Close messaging pipe endpoints */
+	if (mqtt->mq_tag != 0) {
+		sys_remove(mqtt->mq_tag);
+		mqtt->mq_tag = 0;
+	}
+
 	if (mqtt->mq != -1) {
 		mq_close(mqtt->mq);
 		mqtt->mq = -1;
@@ -283,7 +372,10 @@ failed:
 		mqtt->mosq = NULL;
 	}
 
-	return -1;
+	if (mqtt->broker != NULL) {
+		free(mqtt->broker);
+		mqtt->broker = NULL;
+	}
 }
 
 
@@ -296,7 +388,11 @@ int mqtt_publish(mqtt_t *mqtt, char *name, char *value, int retain)
 		return -1;
 	}
 
-	ret = mosquitto_publish(mqtt->mosq, &mid, name, strlen(value), value, mqtt_qos, retain);
+	if (mqtt->state != MQTT_ST_CONNECTED) {
+		return -1;
+	}
+
+	ret = mosquitto_publish(mqtt->mosq, &mid, name, strlen(value), value, mqtt->qos, retain);
 	if (ret != MOSQ_ERR_SUCCESS) {
 		log_str("ERROR: Failed to publish MQTT signal '%s': %s", name, mosquitto_strerror(ret));
 		return -1;
@@ -317,7 +413,11 @@ int mqtt_subscribe(mqtt_t *mqtt, char *name)
 		return -1;
 	}
 
-	ret = mosquitto_subscribe(mqtt->mosq, &mid, name, mqtt_qos);
+	if (mqtt->state != MQTT_ST_CONNECTED) {
+		return -1;
+	}
+
+	ret = mosquitto_subscribe(mqtt->mosq, &mid, name, mqtt->qos);
 	if (ret != MOSQ_ERR_SUCCESS) {
 		log_str("ERROR: Failed to subscribe MQTT signal '%s': %s", name, mosquitto_strerror(ret));
 		return -1;

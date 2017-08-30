@@ -9,3 +9,7 @@ input2: source
 
 meter: sink
   widget=meter:min=0,low=20,high=80,max=100
+
+pulse-output: sink
+on-output: sink
+off-output: sink

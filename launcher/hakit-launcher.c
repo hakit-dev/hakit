@@ -72,6 +72,7 @@ static char *opt_platform_url = PLATFORM_URL;
 static char *opt_lib_dir = NULL;
 static int opt_offline = 0;
 static int opt_mqtt_port = MQTT_PORT;
+static int opt_no_hkcp = 0;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
@@ -80,6 +81,7 @@ static const options_entry_t options_entries[] = {
 	{ "platform-url", 'U', 0, OPTIONS_TYPE_STRING,   &opt_platform_url,  "HAKit web platform URL (default: " PLATFORM_URL ")", "URL" },
 	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store application and config files (default: " LIB_DIR ")", "DIR" },
 	{ "offline", 'l', 0,   OPTIONS_TYPE_NONE,  &opt_offline,  "Work off-line. Do not access the HAKit platform server" },
+	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 #ifdef WITH_MQTT
 	{ "mqtt-port", 'p', 0, OPTIONS_TYPE_INT, &opt_mqtt_port, "MQTT broker port number (default: " xstr(MQTT_PORT) ")", "PORT" },
 #endif
@@ -465,6 +467,7 @@ static void engine_stop(void)
 
 static void engine_start(ctx_t *ctx)
 {
+	char args[64];
         int i;
 
         log_debug(2, "engine_start");
@@ -499,18 +502,21 @@ static void engine_start(ctx_t *ctx)
 
 #ifdef WITH_MQTT
 	if (ctx->is_broker) {
-		char args[64];
 		char hostname[64];
 
 		gethostname(hostname, sizeof(hostname));
 
 		snprintf(args, sizeof(args), "--mqtt-broker=%s:%d", hostname, opt_mqtt_port);
 		HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
-
-		snprintf(args, sizeof(args), "--mqtt-cafile=%s/certs/ca.crt", opt_lib_dir);
-		HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
 	}
+
+	snprintf(args, sizeof(args), "--mqtt-cafile=%s/certs/ca.crt", opt_lib_dir);
+	HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
 #endif
+
+	if (opt_no_hkcp) {
+		HK_TAB_PUSH_VALUE(engine_argv, strdup("--no-hkcp"));
+	}
 
         for (i = 0; i < ctx->apps.nmemb; i++) {
                 app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);

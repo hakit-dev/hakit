@@ -40,6 +40,7 @@ static int opt_no_hkcp = 0;
 static int opt_no_ssl = 0;
 static int opt_insecure_ssl = 0;
 static char *opt_auth = NULL;
+static char *opt_mqtt_broker = NULL;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
@@ -51,10 +52,8 @@ static const options_entry_t options_entries[] = {
 #endif
 	{ "http-auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
 #ifdef WITH_MQTT
-	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &mqtt_broker,    "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
+	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &opt_mqtt_broker, "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
 	{ "mqtt-cafile",    'C', 0, OPTIONS_TYPE_STRING, &mqtt_cafile,    "MQTT Certificate Authority file", "FILE" },
-	{ "mqtt-keepalive", 'K', 0, OPTIONS_TYPE_INT,    &mqtt_keepalive, "MQTT keepalive delay in seconds (default: " xstr(MQTT_DEFAULT_KEEPALIVE) ")", "SECONDS" },
-	{ "mqtt-qos",       'q', 0, OPTIONS_TYPE_INT,    &mqtt_qos,       "MQTT QoS level (0,1,2)", "LEVEL" },
 #endif
 	{ NULL }
 };
@@ -94,7 +93,7 @@ int main(int argc, char *argv[])
 	else if (opt_insecure_ssl) {
 		use_ssl = 2;
 	}
-	if (comm_init(use_ssl, opt_no_hkcp ? 0:1)) {
+	if (comm_init(use_ssl, opt_no_hkcp ? 0:1, opt_mqtt_broker)) {
 		return 2;
 	}
 

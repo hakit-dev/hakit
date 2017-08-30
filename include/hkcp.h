@@ -81,10 +81,10 @@ typedef struct {
  * Sink endpoint
  */
 
-typedef void (*hkcp_sink_func_t)(void *user_data, char *name, char *value);
+typedef void (*hkcp_func_t)(void *user_data, char *name, char *value, int event);
 
 typedef struct {
-	hkcp_sink_func_t func;
+	hkcp_func_t func;
 	void *user_data;
 } hkcp_sink_handler_t;
 
@@ -123,15 +123,17 @@ extern void hkcp_node_add(hkcp_t *hkcp, char *remote_ip);
 extern void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf);
 
 extern int hkcp_sink_register(hkcp_t *hkcp, char *name, int local);
-extern void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_sink_func_t func, void *user_data);
+extern void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_func_t func, void *user_data);
 extern void hkcp_sink_set_widget(hkcp_t *hkcp, int id, char *widget_name);
 extern char *hkcp_sink_update(hkcp_t *hkcp, int id, char *value);
 extern void hkcp_sink_update_by_name(hkcp_t *hkcp, char *name, char *value);
+extern void hkcp_sink_foreach(hkcp_t *hkcp, hkcp_func_t func, void *user_data);
 
 extern int hkcp_source_register(hkcp_t *hkcp, char *name, int local, int event);
 extern void hkcp_source_set_widget(hkcp_t *hkcp, int id, char *widget_name);
 extern int hkcp_source_is_local(hkcp_t *hkcp, int id);
 extern int hkcp_source_is_event(hkcp_t *hkcp, int id);
 extern char *hkcp_source_update(hkcp_t *hkcp, int id, char *value);
+extern void hkcp_source_foreach(hkcp_t *hkcp, hkcp_func_t func, void *user_data);
 
 #endif /* __HAKIT_HKCP_H__ */
