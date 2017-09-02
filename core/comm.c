@@ -72,11 +72,6 @@ static void comm_mqtt_subscribe(mqtt_t *mqtt, char *name, char *value, int event
 }
 
 
-static void comm_mqtt_connect(comm_t *comm)
-{
-}
-
-
 static void comm_mqtt_connected(comm_t *comm)
 {
 	hkcp_source_foreach(&comm->hkcp, (hkcp_func_t) comm_mqtt_publish, &comm->mqtt);
