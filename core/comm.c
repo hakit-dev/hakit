@@ -254,7 +254,9 @@ int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
 
 DONE:
 	if (ret != 0) {
+#ifdef WITH_MQTT
 		mqtt_shutdown(&comm.mqtt);
+#endif
 		hkcp_shutdown(&comm.hkcp);
 		hk_advertise_shutdown(&comm.adv);
 	}

@@ -71,8 +71,10 @@ static char *opt_pid_file = PID_FILE;
 static char *opt_platform_url = PLATFORM_URL;
 static char *opt_lib_dir = NULL;
 static int opt_offline = 0;
-static int opt_mqtt_port = MQTT_PORT;
 static int opt_no_hkcp = 0;
+#ifdef WITH_MQTT
+static int opt_mqtt_port = MQTT_PORT;
+#endif
 
 static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
@@ -467,7 +469,6 @@ static void engine_stop(void)
 
 static void engine_start(ctx_t *ctx)
 {
-	char args[64];
         int i;
 
         log_debug(2, "engine_start");
@@ -503,6 +504,7 @@ static void engine_start(ctx_t *ctx)
 #ifdef WITH_MQTT
 	if (ctx->is_broker) {
 		char hostname[64];
+                char args[64];
 
 		gethostname(hostname, sizeof(hostname));
 
