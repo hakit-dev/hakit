@@ -11,7 +11,7 @@
 #define __HAKIT_COMM_H__
 
 #include "hkcp.h"
-typedef hkcp_func_t comm_sink_func_t;
+typedef hk_ep_func_t comm_sink_func_t;
 
 extern int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker);
 

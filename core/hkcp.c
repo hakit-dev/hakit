@@ -38,15 +38,63 @@ typedef struct {
 static int hkcp_node_connect(hkcp_node_t *node);
 static void hkcp_node_remove(hkcp_node_t *node);
 
-static int hkcp_source_to_advertise(hkcp_t *hkcp);
-static hkcp_source_t *hkcp_source_retrieve(hkcp_t *hkcp, char *name);
-static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *node);
-static void hkcp_source_attach_node(hkcp_source_t *source, hkcp_node_t *node);
+static void hkcp_node_send_initial_value(hkcp_node_t *node, hk_source_t *source);
 
 
 /*
  * Nodes
  */
+
+static int hkcp_node_source_attached(hkcp_node_t *node, hk_source_t *source)
+{
+	int count = 0;
+	int i;
+
+	for (i = 0; i < node->sources.nmemb; i++) {
+		hk_source_t *source2 = HK_TAB_VALUE(node->sources, hk_source_t *, i);
+		if ((source2 != NULL) && ((source == NULL) || (source2 == source))) {
+			count++;
+		}
+	}
+
+	return count;
+}
+
+
+static void hkcp_node_source_attach(hkcp_node_t *node, hk_source_t *source)
+{
+	if (hkcp_node_source_attached(node, source)) {
+		return;
+	}
+
+	hk_source_t **psource = hk_tab_push(&node->sources);
+	*psource = source;
+
+	log_debug(2, "hkcp_node_source_attach node=#%d='%s' source='%s' (%d elements)", node->id, node->name, source->ep.name, node->sources.nmemb);
+}
+
+
+#if 0
+static void hkcp_node_source_detach(hkcp_node_t *node, hk_source_t *source)
+{
+	int id = source->ep.id;
+	int i;
+
+	if (source == NULL) {
+		return;
+	}
+
+	log_debug(2, "hkcp_node_source_detach node=#%d='%s' source='%s'", node->id, node->name, source->ep.name);
+
+	for (i = 0; i < node->sources.nmemb; i++) {
+		hk_source_t **psource = HK_TAB_PTR(node->sources, hk_source_t *, i);
+		if ((*psource != NULL) && ((source == NULL) ||(*psource == source))) {
+			*psource = NULL;
+		}
+	}
+}
+#endif
+
 
 static hkcp_node_t *hkcp_node_retrieve(hkcp_t *hkcp, char *name)
 {
@@ -101,6 +149,7 @@ static hkcp_node_t *hkcp_node_alloc(hkcp_t *hkcp)
 	tcp_sock_clear(&node->tcp_sock);
 	node->hkcp = hkcp;
 	buf_init(&node->rbuf);
+	hk_tab_init(&node->sources, sizeof(hk_source_t *));
 
 	return node;
 }
@@ -111,26 +160,6 @@ static void hkcp_node_set_state(hkcp_node_t *node, hkcp_node_state_t state)
 	log_debug(2, "hkcp_node_set_state node=#%d='%s' %d -> %d", node->id, node->name, node->state, state);
 	node->state = state;
 	node->rbuf.len = 0;
-}
-
-
-static int hkcp_node_attached_to_sources(hkcp_node_t *node)
-{
-	int i, j;
-
-	for (i = 0; i < node->hkcp->sources.nmemb; i++) {
-		hkcp_source_t *source = HK_TAB_PTR(node->hkcp->sources, hkcp_source_t, i);
-		if (source->ep.name != NULL) {
-			for (j = 0; j < source->nodes.nmemb; j++) {
-				hkcp_node_t **pnode = HK_TAB_PTR(source->nodes, hkcp_node_t *, j);
-				if (*pnode == node) {
-					return 1;
-				}
-			}
-		}
-	}
-
-	return 0;
 }
 
 
@@ -156,7 +185,7 @@ static void hkcp_node_recv_sinks(hkcp_node_t *node, char *str)
 
 	if (*str == '.') {
 		/* If no sources attached to this node, remove it */
-		if (hkcp_node_attached_to_sources(node)) {
+		if (hkcp_node_source_attached(node, NULL) > 0) {
 			hkcp_node_set_state(node, HKCP_NODE_READY);
 		}
 		else {
@@ -171,18 +200,18 @@ static void hkcp_node_recv_sinks(hkcp_node_t *node, char *str)
 		}
 		
 		/* Check for local sources matching this remote sink */
-		hkcp_source_t *source = hkcp_source_retrieve(node->hkcp, str);
+		hk_source_t *source = hk_source_retrieve_by_name(&node->hkcp->eps, str);
 
 		/* If matching source is found, check for requesting node connection */
 		if (source != NULL) {
-			if ((source->ep.flag & HKCP_FLAG_LOCAL) == 0) {
+			if (hk_source_is_public(source)) {
 				log_debug(2, "  remote sink='%s', matching source='%s'", str, source->ep.name);
 
 				/* Attach source to node (if not already done) */
-				hkcp_source_attach_node(source, node);
+				hkcp_node_source_attach(node, source);
 
 				/* Send initial value */
-				hkcp_source_send_initial_value(source, node);
+				hkcp_node_send_initial_value(node, source);
 			}
 			else {
 				log_debug(2, "  remote sink='%s', matching source='%s' (local)", str, source->ep.name);
@@ -285,27 +314,6 @@ static void hkcp_node_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int r
 }
 
 
-static void hkcp_node_detach_from_sources(hkcp_t *hkcp, hkcp_node_t *node)
-{
-	int i, j;
-
-	log_debug(2, "hkcp_node_detach_from_sources node=#%d='%s'", node->id, node->name);
-
-	for (i = 0; i < hkcp->sources.nmemb; i++) {
-		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		if (source->ep.name != NULL) {
-			for (j = 0; j < source->nodes.nmemb; j++) {
-				hkcp_node_t **pnode = HK_TAB_PTR(source->nodes, hkcp_node_t *, j);
-				if (*pnode == node) {
-					log_debug(2, "  source='%s'", source->ep.name);
-					*pnode = NULL;
-				}
-			}
-		}
-	}
-}
-
-
 static void hkcp_node_remove(hkcp_node_t *node)
 {
 	log_debug(2, "hkcp_node_remove node=#%d='%s'", node->id, node->name);
@@ -320,8 +328,8 @@ static void hkcp_node_remove(hkcp_node_t *node)
 		node->timeout_tag = 0;
 	}
 
-	/* Detach from all sources */
-	hkcp_node_detach_from_sources(node->hkcp, node);
+	/* Clear table of sources */
+	hk_tab_cleanup(&node->sources);
 
 	/* Shut down connection */
 	tcp_sock_set_data(&node->tcp_sock, NULL);
@@ -390,7 +398,7 @@ void hkcp_node_add(hkcp_t *hkcp, char *remote_ip)
 	}
 
 	/* Do nothing if we do not have any public source */
-	if (hkcp_source_to_advertise(hkcp) <= 0) {
+	if (hk_source_to_advertise(&hkcp->eps) <= 0) {
 		log_debug(2, "  => No public source found");
 		return;
 	}
@@ -413,453 +421,23 @@ void hkcp_node_add(hkcp_t *hkcp, char *remote_ip)
 }
 
 
-/*
- * Generic endpoint operations
- */
-
-#define HKCP_EP(ep) ((hkcp_ep_t *)(ep))
-
-static inline const char *hkcp_ep_type_str(hkcp_ep_t *ep)
+static void hkcp_node_send_initial_value(hkcp_node_t *node, hk_source_t *source)
 {
-	static const char *tab[HKCP_EP_NTYPES] = {
-		"sink", "source"
-	};
-
-	if (ep->type >= HKCP_EP_NTYPES) {
-		return "?";
-	}
-
-	return tab[ep->type];
-}
-
-
-static void hkcp_ep_set_widget(hkcp_ep_t *ep, char *widget_name)
-{
-	if (ep->name != NULL) {
-		log_debug(2, "hkcp_ep_set_widget_ '%s'", widget_name);
-		if (ep->widget != NULL) {
-			free(ep->widget);
-			ep->widget = NULL;
-		}
-		if (widget_name != NULL) {
-			ep->widget = strdup(widget_name);
-		}
-	}
-	else {
-		log_str("PANIC: Attempting to set widget name on unknown %s #%d\n", hkcp_ep_type_str(ep), ep->id);
-	}
-}
-
-
-static void hkcp_ep_append_name(hkcp_ep_t *ep, buf_t *out_buf)
-{
-	buf_append_str(out_buf, ep->name);
-}
-
-
-static void hkcp_ep_dump(hkcp_ep_t *ep, buf_t *out_buf)
-{
-	buf_append_str(out_buf, (char *) hkcp_ep_type_str(ep));
-	buf_append_byte(out_buf, ' ');
-	buf_append_str(out_buf, ep->widget);
-	buf_append_byte(out_buf, ' ');
-	buf_append_str(out_buf, ep->name);
-	buf_append_byte(out_buf, ' ');
-	buf_append(out_buf, ep->value.base, ep->value.len);
-	buf_append_byte(out_buf, '\n');
-}
-
-
-/*
- * Sinks
- */
-
-static hkcp_sink_t *hkcp_sink_retrieve(hkcp_t *hkcp, char *name)
-{
-	int i;
-
-	for (i = 0; i < hkcp->sinks.nmemb; i++) {
-		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
-		if (sink->ep.name != NULL) {
-			if (strcmp(sink->ep.name, name) == 0) {
-				return sink;
-			}
-		}
-	}
-
-	return NULL;
-}
-
-
-static hkcp_sink_t *hkcp_sink_alloc(hkcp_t *hkcp)
-{
-	hkcp_sink_t *sink;
-	int i;
-
-	for (i = 0; i < hkcp->sinks.nmemb; i++) {
-		sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
-		if (sink->ep.name == NULL) {
-			return sink;
-		}
-	}
-
-	sink = hk_tab_push(&hkcp->sinks);
-
-	sink->ep.type = HKCP_EP_SINK;
-	sink->ep.id = i;
-	buf_init(&sink->ep.value);
-
-	return sink;
-}
-
-
-static void hkcp_sink_set_widget_name(hkcp_sink_t *sink, char *widget_name)
-{
-	if (widget_name == NULL) {
-		if (sink->ep.flag & HKCP_FLAG_LOCAL) {
-			widget_name = "switch-slide";
-		}
-		else {
-			widget_name = "led-green";
-		}
-	}
-
-	hkcp_ep_set_widget(HKCP_EP(sink), widget_name);
-}
-
-
-void hkcp_sink_add_handler(hkcp_t *hkcp, int id, hkcp_func_t func, void *user_data)
-{
-	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
-
-	if ((sink != NULL) && (sink->ep.name != NULL)) {
-		hkcp_sink_handler_t *handler = hk_tab_push(&sink->handlers);
-		handler->func = func;
-		handler->user_data = user_data;
-	}
-	else {
-		log_str("PANIC: Attempting to and event handler on unknown sink #%d\n", id);
-	}
-}
-
-
-int hkcp_sink_register(hkcp_t *hkcp, char *name, int local)
-{
-	hkcp_sink_t *sink;
-
-	/* Ensure there is no name conflict against sink and source namespaces */
-	if (hkcp_source_retrieve(hkcp, name) != NULL) {
-		log_str("ERROR: Cannot register sink '%s': a source is already registered with this name\n", name);
-		return -1;
-	}
-
-	if (hkcp_sink_retrieve(hkcp, name)) {
-		log_str("ERROR: Cannot register source '%s': a sink is already registered with this name\n", name);
-		return -1;
-	}
-
-	/* Allocate new sink */
-	sink = hkcp_sink_alloc(hkcp);
-	sink->ep.name = strdup(name);
-	log_debug(2, "hkcp_sink_register sink='%s' (%d elements)", name, hkcp->sinks.nmemb);
-
-	buf_set_str(&sink->ep.value, "");
-	hkcp_sink_set_widget_name(sink, NULL);
-
-	hk_tab_init(&sink->handlers, sizeof(hkcp_sink_handler_t));
-
-	if (local) {
-		sink->ep.flag |= HKCP_FLAG_LOCAL;
-	}
-
-	return sink->ep.id;
-}
-
-
-void hkcp_sink_set_widget(hkcp_t *hkcp, int id, char *widget_name)
-{
-	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
-	if (sink != NULL) {
-		hkcp_sink_set_widget_name(sink, widget_name);
-	}
-	else {
-		log_str("PANIC: Attempting to set widget on unknown sink #%d\n", id);
-	}
-}
-
-
-#if 0
-static void hkcp_sink_unregister_(hkcp_t *hkcp, char *name)
-{
-	hkcp_sink_t *sink = hkcp_sink_retrieve(hkcp, name);
-
-	if (sink != NULL) {
-		free(sink->ep.name);
-		buf_cleanup(&sink->ep.value);
-		sink->ep.flag = 0;
-		hk_tab_cleanup(&sink->handlers);
-	}
-}
-#endif
-
-
-static char *hkcp_sink_update_(hkcp_sink_t *sink, char *value)
-{
-	int i;
-
-	/* Update sink value */
-	buf_set_str(&sink->ep.value, value);
-
-	/* Invoke sink event callback */
-	for (i = 0; i < sink->handlers.nmemb; i++) {
-		hkcp_sink_handler_t *handler = HK_TAB_PTR(sink->handlers, hkcp_sink_handler_t, i);
-		if (handler->func != NULL) {
-			int event = (sink->ep.flag & HKCP_FLAG_EVENT) ? 1:0;
-			handler->func(handler->user_data, sink->ep.name, (char *) sink->ep.value.base, event);
-		}
-	}
-
-	return sink->ep.name;
-}
-
-
-char *hkcp_sink_update(hkcp_t *hkcp, int id, char *value)
-{
-	hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, id);
-
-	if ((sink == NULL) || (sink->ep.name == NULL)) {
-		log_str("PANIC: Attempting to update unknown sink #%d\n", id);
-		return NULL;
-	}
-
-	return hkcp_sink_update_(sink, value);
-}
-
-
-void hkcp_sink_update_by_name(hkcp_t *hkcp, char *name, char *value)
-{
-	hkcp_sink_t *sink = hkcp_sink_retrieve(hkcp, name);
-
-	if (sink != NULL) {
-		log_debug(2, "hkcp_sink_update %s='%s'", name, value);
-		hkcp_sink_update_(sink, value);
-	}
-	else {
-		log_str("WARNING: Attempting to update unkown sink '%s'", name);
-	}
-}
-
-
-void hkcp_sink_foreach(hkcp_t *hkcp, hkcp_func_t func, void *user_data)
-{
-	int i;
-
-	for (i = 0; i < hkcp->sinks.nmemb; i++) {
-		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
-		if ((sink->ep.name != NULL) && ((sink->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
-			int event = (sink->ep.flag & HKCP_FLAG_EVENT) ? 1:0;
-			func(user_data, sink->ep.name, (char *) sink->ep.value.base, event);
-		}
-	}
-}
-
-
-/*
- * Sources
- */
-
-static int hkcp_source_to_advertise(hkcp_t *hkcp)
-{
-	int count = 0;
-	int i;
-
-	for (i = 0; i < hkcp->sources.nmemb; i++) {
-		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		if ((source->ep.name != NULL) && ((source->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
-			count++;
-		}
-	}
-
-	return count;
-}
-
-
-static hkcp_source_t *hkcp_source_retrieve(hkcp_t *hkcp, char *name)
-{
-	int i;
-
-	for (i = 0; i < hkcp->sources.nmemb; i++) {
-		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		if (source->ep.name != NULL) {
-			if (strcmp(source->ep.name, name) == 0) {
-				return source;
-			}
-		}
-	}
-
-	return NULL;
-}
-
-
-static hkcp_source_t *hkcp_source_alloc(hkcp_t *hkcp)
-{
-	hkcp_source_t *source = NULL;
-	int i;
-
-	for (i = 0; i < hkcp->sources.nmemb; i++) {
-		source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		if (source->ep.name == NULL) {
-			source->ep.id = i;
-			return source;
-		}
-	}
-
-	i = hkcp->sources.nmemb;
-	source = hk_tab_push(&hkcp->sources);
-
-	source->ep.type = HKCP_EP_SOURCE;
-	source->ep.id = i;
-	buf_init(&source->ep.value);
-
-	hk_tab_init(&source->nodes, sizeof(hkcp_node_t *));
-
-	return source;
-}
-
-
-static void hkcp_source_set_widget_name(hkcp_source_t *source, char *widget_name)
-{
-	if (widget_name == NULL) {
-		widget_name = "led-red";
-	}
-
-	hkcp_ep_set_widget(HKCP_EP(source), widget_name);
-}
-
-
-int hkcp_source_register(hkcp_t *hkcp, char *name, int local, int event)
-{
-	hkcp_source_t *source;
-
-	/* Ensure there is no name conflict against sink and source namespaces */
-	if (hkcp_sink_retrieve(hkcp, name)) {
-		log_str("ERROR: Cannot register source '%s': a sink is already registered with this name\n", name);
-		return -1;
-	}
-
-	if (hkcp_source_retrieve(hkcp, name) != NULL) {
-		log_str("ERROR: Cannot register sink '%s': a source is already registered with this name\n", name);
-		return -1;
-	}
-
-	/* Allocate new source */
-	source = hkcp_source_alloc(hkcp);
-	source->ep.name = strdup(name);
-	log_debug(2, "hkcp_source_register name='%s' (%d elements)", name, hkcp->sources.nmemb);
-
-	hkcp_source_set_widget_name(source, NULL);
-	buf_set_str(&source->ep.value, "");
-
-	if (local) {
-		source->ep.flag |= HKCP_FLAG_LOCAL;
-	}
-
-	if (event) {
-		source->ep.flag |= HKCP_FLAG_EVENT;
-	}
-
-	return source->ep.id;
-}
-
-
-void hkcp_source_set_widget(hkcp_t *hkcp, int id, char *widget_name)
-{
-	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
-	if (source != NULL) {
-		hkcp_source_set_widget_name(source, widget_name);
-	}
-	else {
-		log_str("PANIC: Attempting to set widget on unknown source #%d\n", id);
-	}
-}
-
-
-#if 0
-void hkcp_source_unregister(hkcp_t *hkcp, char *name)
-{
-	hkcp_source_t *source = hkcp_source_retrieve(hkcp, name);
-
-	log_debug(2, "hkcp_source_unregister name='%s'", name);
-
-	if (source != NULL) {
-		free(source->name);
-		buf_cleanup(&source->value);
-		source->flag = 0;
-		hk_tab_cleanup(&source->nodes);
-	}
-}
-#endif
-
-
-static int hkcp_source_node_attached(hkcp_source_t *source, hkcp_node_t *node)
-{
-	int i;
-
-	if (source->ep.name == NULL) {
-		return 0;
-	}
-
-	for (i = 0; i < source->nodes.nmemb; i++) {
-		hkcp_node_t *node2 = HK_TAB_VALUE(source->nodes, hkcp_node_t *, i);
-		if (node2 == node) {
-			return 1;
-		}
-	}
-
-	return 0;
-}
-
-
-static void hkcp_source_attach_node(hkcp_source_t *source, hkcp_node_t *node)
-{
-	int i;
-
-	if (hkcp_source_node_attached(source, node)) {
-		return;
-	}
-
-	for (i = 0; i < source->nodes.nmemb; i++) {
-		hkcp_node_t **pnode = HK_TAB_PTR(source->nodes, hkcp_node_t *, i);
-		if (*pnode == NULL) {
-			*pnode = node;
-			return;
-		}
-	}
-
-	hkcp_node_t **pnode = hk_tab_push(&source->nodes);
-	*pnode = node;
-
-	log_debug(2, "hkcp_source_attach_node source='%s' node=#%d='%s' (%d elements)", source->ep.name, node->id, node->name, source->nodes.nmemb);
-}
-
-
-static void hkcp_source_send_initial_value(hkcp_source_t *source, hkcp_node_t *node)
-{
-	log_debug(3, "hkcp_source_send_initial_value source='%s' flag=%02X node=#%d='%s'", source->ep.name, source->ep.flag, node->id, node->name);
+	log_debug(3, "hkcp_node_send_initial_value node=#%d='%s' source='%s' flag=%02X", node->id, node->name, source->ep.name, source->ep.flag);
 
 	/* Do not send initial value if source is declared as an event */
-	if (source->ep.flag & HKCP_FLAG_EVENT) {
+	if (hk_source_is_event(source)) {
 		return;
 	}
 
 	/* Send initial value if node is attached to source */
-	if (hkcp_source_node_attached(source, node)) {
+	if (hkcp_node_source_attached(node, source)) {
 		int size = strlen(source->ep.name) + source->ep.value.len + 10;
 		char str[size];
 		int len;
 
 		len = snprintf(str, size-1, "set %s=%s", source->ep.name, source->ep.value.base);
-		log_debug(2, "hkcp_source_send_initial_value cmd='%s' node=#%d='%s'", str, node->id, node->name);
+		log_debug(2, "hkcp_node_send_initial_value node=#%d='%s' cmd='%s'", node->id, node->name, str);
 		str[len++] = '\n';
 
 		tcp_sock_write(&node->tcp_sock, str, len);
@@ -879,84 +457,39 @@ static int hkcp_source_send_watch(tcp_sock_t *tcp_sock, char *str)
 }
 
 
-char *hkcp_source_update(hkcp_t *hkcp, int id, char *value)
-{
-	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
-
-	if ((source == NULL) || (source->ep.name == NULL)) {
-		log_str("PANIC: Attempting to update unknown source #%d\n", id);
-		return NULL;
-	}
-
-	log_debug(3, "hkcp_source_update id=%d name='%s' value='%s'", id, source->ep.name, value);
-
-	buf_set_str(&source->ep.value, value);
-
-	if ((source->ep.flag & HKCP_FLAG_LOCAL) == 0) {
-		int size = strlen(source->ep.name) + source->ep.value.len + 20;
-		char str[size];
-		int len;
-		int i;
-
-		/* Setup command to send */
-		len = snprintf(str, size-1, "set %s=%s", source->ep.name, source->ep.value.base);
-		log_debug(2, "hkcp_source_send cmd='%s' (%d nodes)", str, source->nodes.nmemb);
-		str[len++] = '\n';
-
-		/* Send to all nodes that subscribed this source */
-		for (i = 0; i < source->nodes.nmemb; i++) {
-			hkcp_node_t *node = HK_TAB_VALUE(source->nodes, hkcp_node_t *, i);
-			if (node != NULL) {
-				log_debug(2, "  node=#%d='%s'", node->id, node->name);
-				tcp_sock_write(&node->tcp_sock, str, len);
-			}
-		}
-
-		/* Send event to watchers */
-		snprintf(str, size, "!%s=%s\n", source->ep.name, source->ep.value.base);
-		tcp_srv_foreach_client(&hkcp->tcp_srv, (tcp_foreach_func_t) hkcp_source_send_watch, str);
-	}
-
-	return source->ep.name;
-}
-
-
-static int hkcp_source_is_(hkcp_t *hkcp, int id, unsigned int mask)
-{
-	hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, id);
-
-	if (source == NULL) {
-		log_str("PANIC: Attempting to get flag on unknown source #%d\n", id);
-		return 0;
-	}
-
-	return (source->ep.flag & mask) ? 1:0;
-}
-
-
-int hkcp_source_is_local(hkcp_t *hkcp, int id)
-{
-	return hkcp_source_is_(hkcp, id, HKCP_FLAG_LOCAL);
-}
-
-
-int hkcp_source_is_event(hkcp_t *hkcp, int id)
-{
-	return hkcp_source_is_(hkcp, id, HKCP_FLAG_EVENT);
-}
-
-
-void hkcp_source_foreach(hkcp_t *hkcp, hkcp_func_t func, void *user_data)
+static void hkcp_source_send_nodes(hkcp_t *hkcp, hk_source_t *source, char *str, int len)
 {
 	int i;
 
-	for (i = 0; i < hkcp->sources.nmemb; i++) {
-		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-		if ((source->ep.name != NULL) && ((source->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
-			int event = (source->ep.flag & HKCP_FLAG_EVENT) ? 1:0;
-			func(user_data, source->ep.name, (char *) source->ep.value.base, event);
+	for (i = 0; i < hkcp->nodes.nmemb; i++) {
+		hkcp_node_t *node = HK_TAB_VALUE(hkcp->nodes, hkcp_node_t *, i);
+
+		if (hkcp_node_source_attached(node, source)) {
+			log_debug(2, "    node=#%d='%s'", node->id, node->name);
+			tcp_sock_write(&node->tcp_sock, str, len);
 		}
 	}
+}
+
+
+void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source, char *value)
+{
+	char *name = source->ep.name;
+	log_debug(3, "hkcp_source_update name='%s' value='%s'", name, value);
+
+	int size = strlen(name) + strlen(value) + 20;
+	char str[size];
+	int len;
+
+	/* Send update command to all nodes that subscribed this source */
+	len = snprintf(str, size-1, "set %s=%s", name, value);
+	log_debug(2, "  cmd='%s'", str);
+	str[len++] = '\n';
+	hkcp_source_send_nodes(hkcp, source, str, len);
+
+	/* Send event to watchers */
+	snprintf(str, size, "!%s=%s\n", name, value);
+	tcp_srv_foreach_client(&hkcp->tcp_srv, (tcp_foreach_func_t) hkcp_source_send_watch, str);
 }
 
 
@@ -1003,13 +536,13 @@ static void hkcp_command_set(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf
 		char *value = strchr(args, '=');
 
 		if (value != NULL) {
-			hkcp_sink_t *sink;
+			hk_sink_t *sink;
 
 			*(value++) = '\0';
-			sink = hkcp_sink_retrieve(hkcp, args);
+			sink = hk_sink_retrieve_by_name(&hkcp->eps, args);
 			if (sink != NULL) {
 				/* Update sink value and invoke sink event callback */
-				hkcp_sink_update_(sink, value);
+				hk_sink_update(sink, value);
 			}
 			else {
 				/* Send back error message */
@@ -1027,37 +560,37 @@ static void hkcp_command_set(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf
 }
 
 
+static int hkcp_command_get_source(hk_source_t *source, buf_t *out_buf)
+{
+	hk_ep_dump(HK_EP(source), out_buf);
+	return 1;
+}
+
+
+static int hkcp_command_get_sink(hk_sink_t *sink, buf_t *out_buf)
+{
+	hk_ep_dump(HK_EP(sink), out_buf);
+	return 1;
+}
+
+
 static void hkcp_command_get(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 {
 	int i;
 
 	if (argc > 1) {
 		for (i = 1; i < argc; i++) {
-			hkcp_source_t *source = hkcp_source_retrieve(hkcp, argv[i]);
-			if (source != NULL) {
-				hkcp_ep_dump(HKCP_EP(source), out_buf);
-			}
+                        hk_source_t *source = hk_source_retrieve_by_name(&hkcp->eps, argv[i]);
+			hk_ep_dump(HK_EP(source), out_buf);
 		}
 		for (i = 1; i < argc; i++) {
-			hkcp_sink_t *sink = hkcp_sink_retrieve(hkcp, argv[i]);
-			if (sink != NULL) {
-				hkcp_ep_dump(HKCP_EP(sink), out_buf);
-			}
+                        hk_sink_t *sink = hk_sink_retrieve_by_name(&hkcp->eps, argv[i]);
+			hk_ep_dump(HK_EP(sink), out_buf);
 		}
 	}
 	else {
-		for (i = 0; i < hkcp->sources.nmemb; i++) {
-			hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-			if (source->ep.name != NULL) {
-				hkcp_ep_dump(HKCP_EP(source), out_buf);
-			}
-		}
-		for (i = 0; i < hkcp->sinks.nmemb; i++) {
-			hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
-			if (sink->ep.name != NULL) {
-				hkcp_ep_dump(HKCP_EP(sink), out_buf);
-			}
-		}
+                hk_source_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_get_source, out_buf);
+                hk_sink_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_get_sink, out_buf);
 	}
 
 	buf_append_str(out_buf, ".\n");
@@ -1066,7 +599,7 @@ static void hkcp_command_get(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf
 
 static void hkcp_command_nodes(hkcp_t *hkcp, buf_t *out_buf)
 {
-	int i, j, k;
+	int i, j;
 
 	for (i = 0; i < hkcp->nodes.nmemb; i++) {
 		hkcp_node_t *node = HK_TAB_VALUE(hkcp->nodes, hkcp_node_t *, i);
@@ -1074,17 +607,12 @@ static void hkcp_command_nodes(hkcp_t *hkcp, buf_t *out_buf)
 		if (node->name != NULL) {
 			buf_append_str(out_buf, node->name);
 
-			for (j = 0; j < hkcp->sources.nmemb; j++) {
-				hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, j);
+			for (j = 0; j < node->sources.nmemb; j++) {
+				hk_source_t *source = HK_TAB_VALUE(node->sources, hk_source_t *, j);
 
-				if (source->ep.name != NULL) {
-					for (k = 0; k < source->nodes.nmemb; k++) {
-						hkcp_node_t *node2 = HK_TAB_VALUE(source->nodes, hkcp_node_t *, k);
-						if (node2 == node) {
-							buf_append_str(out_buf, " ");
-							hkcp_ep_append_name(HKCP_EP(source), out_buf);
-						}
-					}
+				if (source != NULL) {
+					buf_append_str(out_buf, " ");
+					hk_ep_append_name(HK_EP(source), out_buf);
 				}
 			}
 
@@ -1093,55 +621,86 @@ static void hkcp_command_nodes(hkcp_t *hkcp, buf_t *out_buf)
 	}
 
 	buf_append_str(out_buf, ".\n");
+}
+
+
+typedef struct {
+        hkcp_t *hkcp;
+        buf_t *out_buf;
+} hkcp_command_sources_ctx_t;
+
+static void hkcp_command_sources_dump_nodes(hkcp_t *hkcp, hk_source_t *source, buf_t *out_buf)
+{
+        int i;
+
+        for (i = 0; i < hkcp->nodes.nmemb; i++) {
+                hkcp_node_t *node = HK_TAB_VALUE(hkcp->nodes, hkcp_node_t *, i);
+                if (hkcp_node_source_attached(node, source)) {
+                        buf_append_str(out_buf, " ");
+                        buf_append_str(out_buf, node->name);
+                }
+        }
+}
+
+static int hkcp_command_sources_dump(hk_source_t *source, hkcp_command_sources_ctx_t *ctx)
+{
+        if (hk_source_is_public(source)) {
+                hk_ep_append_name(HK_EP(source), ctx->out_buf);
+
+                buf_append_str(ctx->out_buf, " \"");
+                hk_ep_append_value(HK_EP(source), ctx->out_buf);
+                buf_append_str(ctx->out_buf, "\"");
+
+                hkcp_command_sources_dump_nodes(ctx->hkcp, source, ctx->out_buf);
+
+                buf_append_str(ctx->out_buf, "\n");
+        }
+
+        return 1;
 }
 
 
 static void hkcp_command_sources(hkcp_t *hkcp, buf_t *out_buf)
 {
-	int i, j;
+        hkcp_command_sources_ctx_t ctx = {
+                .hkcp = hkcp,
+                .out_buf = out_buf,
+        };
 
-	for (i = 0; i < hkcp->sources.nmemb; i++) {
-		hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-
-		if ((source->ep.name != NULL) && ((source->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
-			hkcp_ep_append_name(HKCP_EP(source), out_buf);
-
-			buf_append_str(out_buf, " \"");
-			buf_append(out_buf, source->ep.value.base, source->ep.value.len);
-			buf_append_str(out_buf, "\"");
-
-			for (j = 0; j < source->nodes.nmemb; j++) {
-				hkcp_node_t *node = HK_TAB_VALUE(source->nodes, hkcp_node_t *, j);
-				if (node != NULL) {
-					buf_append_str(out_buf, " ");
-					buf_append_str(out_buf, node->name);
-				}
-			}
-
-			buf_append_str(out_buf, "\n");
-		}
-	}
-
+        hk_source_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_sources_dump, &ctx);
 	buf_append_str(out_buf, ".\n");
+}
+
+
+static int hkcp_command_sinks_dump(hk_sink_t *sink, buf_t *out_buf)
+{
+        if (hk_sink_is_public(sink)) {
+                hk_ep_append_name(HK_EP(sink), out_buf);
+                buf_append_str(out_buf, " \"");
+                hk_ep_append_value(HK_EP(sink), out_buf);
+                buf_append_str(out_buf, "\"\n");
+        }
+
+        return 1;
 }
 
 
 static void hkcp_command_sinks(hkcp_t *hkcp, buf_t *out_buf)
 {
-	int i;
-
-	for (i = 0; i < hkcp->sinks.nmemb; i++) {
-		hkcp_sink_t *sink = HK_TAB_PTR(hkcp->sinks, hkcp_sink_t, i);
-
-		if ((sink->ep.name != NULL) && ((sink->ep.flag & HKCP_FLAG_LOCAL) == 0)) {
-			hkcp_ep_append_name(HKCP_EP(sink), out_buf);
-			buf_append_str(out_buf, " \"");
-			buf_append(out_buf, sink->ep.value.base, sink->ep.value.len);
-			buf_append_str(out_buf, "\"\n");
-		}
-	}
-
+        hk_sink_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_sinks_dump, out_buf);
 	buf_append_str(out_buf, ".\n");
+}
+
+
+static int hkcp_command_watch_source(hk_source_t *source, buf_t *out_buf)
+{
+        buf_append_str(out_buf, "!");
+        hk_ep_append_name(HK_EP(source), out_buf);
+        buf_append_str(out_buf, "=");
+        hk_ep_append_value(HK_EP(source), out_buf);
+        buf_append_str(out_buf, "\n");
+
+        return 1;
 }
 
 
@@ -1172,18 +731,7 @@ static void hkcp_command_watch(hkcp_t *hkcp, int argc, char **argv, buf_t *out_b
 		buf_append_str(out_buf, ".ERROR: watch: Syntax error");
 	}
 	else if (show) {
-		int i;
-
-		for (i = 0; i < hkcp->sources.nmemb; i++) {
-			hkcp_source_t *source = HK_TAB_PTR(hkcp->sources, hkcp_source_t, i);
-			if (source->ep.name != NULL) {
-				buf_append_str(out_buf, "!");
-				buf_append_str(out_buf, source->ep.name);
-				buf_append_str(out_buf, "=");
-				buf_append(out_buf, source->ep.value.base, source->ep.value.len);
-				buf_append_str(out_buf, "\n");
-			}
-		}
+                hk_source_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_watch_source, out_buf);
 	}
 }
 
@@ -1296,12 +844,16 @@ int hkcp_init(hkcp_t *hkcp, int port)
 	int ret = -1;
 
 	memset(hkcp, 0, sizeof(hkcp_t));
+
+	/* Init node management */
+	hk_tab_init(&hkcp->nodes, sizeof(hkcp_node_t *));
+
+	/* Init endpoint management */
+	hk_endpoints_init(&hkcp->eps);
+
+	/* Init TCP server */
 	hkcp->port = port;
 	tcp_srv_clear(&hkcp->tcp_srv);
-	hk_tab_init(&hkcp->nodes, sizeof(hkcp_node_t *));
-	hk_tab_init(&hkcp->sinks, sizeof(hkcp_sink_t));
-	hk_tab_init(&hkcp->sources, sizeof(hkcp_source_t));
-
 	if (port > 0) {
 		if (tcp_srv_init(&hkcp->tcp_srv, port, hkcp_tcp_event, hkcp)) {
 			goto DONE;
@@ -1325,9 +877,8 @@ void hkcp_shutdown(hkcp_t *hkcp)
 		tcp_srv_shutdown(&hkcp->tcp_srv);
 	}
 
+	hk_endpoints_shutdown(&hkcp->eps);
 	hk_tab_cleanup(&hkcp->nodes);
-	hk_tab_cleanup(&hkcp->sinks);
-	hk_tab_cleanup(&hkcp->sources);
 
 	memset(hkcp, 0, sizeof(hkcp_t));
 }

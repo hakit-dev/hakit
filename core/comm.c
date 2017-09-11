@@ -23,6 +23,7 @@
 #include "mqtt.h"
 #include "eventq.h"
 #include "command.h"
+#include "endpoint.h"
 #include "advertise.h"
 #include "comm.h"
 
@@ -74,8 +75,8 @@ static void comm_mqtt_subscribe(mqtt_t *mqtt, char *name, char *value, int event
 
 static void comm_mqtt_connected(comm_t *comm)
 {
-	hkcp_source_foreach(&comm->hkcp, (hkcp_func_t) comm_mqtt_publish, &comm->mqtt);
-	hkcp_sink_foreach(&comm->hkcp, (hkcp_func_t) comm_mqtt_subscribe, &comm->mqtt);
+	hk_source_foreach_public(&comm->hkcp.eps, (hk_ep_func_t) comm_mqtt_publish, &comm->mqtt);
+	hk_sink_foreach_public(&comm->hkcp.eps, (hk_ep_func_t) comm_mqtt_subscribe, &comm->mqtt);
 }
 
 
@@ -83,7 +84,7 @@ static void comm_mqtt_update(comm_t *comm, char *name, char *value)
 {
 	if (name != NULL) {
 		log_debug(2, "comm_mqtt_update %s='%s'", name, value);
-		hkcp_sink_update_by_name(&comm->hkcp, name, value);
+		hk_sink_update_by_name(&comm->hkcp.eps, name, value);
 	}
 	else {
 		log_debug(2, "comm_mqtt_update CONNECTED");
@@ -94,7 +95,9 @@ static void comm_mqtt_update(comm_t *comm, char *name, char *value)
 static void comm_mqtt_discover(comm_t *comm, char *remote_ip, char *broker)
 {
 	log_debug(2, "comm_mqtt_discover %s '%s'", remote_ip, broker);
-	mqtt_connect(&comm->mqtt, broker);
+	if (broker != NULL) {
+		mqtt_connect(&comm->mqtt, broker);
+	}
 }
 
 #endif /* WITH_MQTT */
@@ -262,34 +265,48 @@ DONE:
 
 int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_data)
 {
-	int id = hkcp_sink_register(&comm.hkcp, name, local);
+	hk_sink_t *sink = hk_sink_register(&comm.hkcp.eps, name, local);
 
-	if (id >= 0) {
-		hkcp_sink_add_handler(&comm.hkcp, id, func, user_data);
-		hkcp_sink_add_handler(&comm.hkcp, id, (hkcp_func_t) comm_ws_send, comm.ws);
+	if (sink != NULL) {
+		hk_sink_add_handler(sink, func, user_data);
+		hk_sink_add_handler(sink, (hk_ep_func_t) comm_ws_send, comm.ws);
 		if (comm.use_hkcp && (!local)) {
 			/* Trigger advertising */
 			hk_advertise_hkcp(&comm.adv);
 		}
 	}
 
-	return id;
+	return hk_sink_id(sink);
 }
 
 
 void comm_sink_set_widget(int id, char *widget_name)
 {
-	hkcp_sink_set_widget(&comm.hkcp, id, widget_name);
+        hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.hkcp.eps, id);
+
+        if (sink != NULL) {
+                hk_sink_set_widget(sink, widget_name);
+        }
+        else {
+		log_str("PANIC: Attempting to set widget on unknown sink #%d\n", id);
+        }
 }
 
 
 void comm_sink_update_str(int id, char *value)
 {
-	char *name = hkcp_sink_update(&comm.hkcp, id, value);
+        hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.hkcp.eps, id);
 
-	if (name != NULL) {
-		comm_ws_send(comm.ws, name, value);
-	}
+        if (sink != NULL) {
+                char *name = hk_sink_update(sink, value);
+
+                if (name != NULL) {
+                        comm_ws_send(comm.ws, name, value);
+                }
+        }
+        else {
+		log_str("PANIC: Attempting to update unknown sink #%d\n", id);
+        }
 }
 
 
@@ -303,38 +320,53 @@ void comm_sink_update_int(int id, int value)
 
 int comm_source_register(char *name, int local, int event)
 {
-	int id = hkcp_source_register(&comm.hkcp, name, local, event);
+	hk_source_t *source = hk_source_register(&comm.hkcp.eps, name, local, event);
 
-	if (id >= 0) {
+	if (source != NULL) {
 		if (comm.use_hkcp && (!local)) {
 			/* Trigger advertising */
 			hk_advertise_hkcp(&comm.adv);
 		}
 	}
 
-	return id;
+	return hk_source_id(source);
 }
 
 
 void comm_source_set_widget(int id, char *widget_name)
 {
-	hkcp_source_set_widget(&comm.hkcp, id, widget_name);
+        hk_source_t *source = hk_source_retrieve_by_id(&comm.hkcp.eps, id);
+
+        if (source != NULL) {
+                hk_source_set_widget(source, widget_name);
+        }
+        else {
+		log_str("PANIC: Attempting to set widget on unknown source #%d\n", id);
+        }
 }
 
 
 void comm_source_update_str(int id, char *value)
 {
-	char *name = hkcp_source_update(&comm.hkcp, id, value);
+	hk_source_t *source = hk_source_retrieve_by_id(&comm.hkcp.eps, id);
 
-	if (name != NULL) {
-#ifdef WITH_MQTT
-		if (!hkcp_source_is_local(&comm.hkcp, id)) {
-			int retain = hkcp_source_is_event(&comm.hkcp, id) ? 0:1;
-			mqtt_publish(&comm.mqtt, name, value, retain);
-		}
-#endif
-		comm_ws_send(comm.ws, name, value);
+	if (source == NULL) {
+		log_str("PANIC: Attempting to update unknown source #%d\n", id);
+		return;
 	}
+
+	char *name = hk_source_update(source, value);
+
+	if (hk_source_is_public(source)) { 
+		hkcp_source_update(&comm.hkcp, source, value);
+
+#ifdef WITH_MQTT
+		int retain = hk_source_is_event(source) ? 0:1;
+		mqtt_publish(&comm.mqtt, name, value, retain);
+#endif
+	}
+
+	comm_ws_send(comm.ws, name, value);
 }
 
 

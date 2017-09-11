@@ -106,6 +106,7 @@ int main(int argc, char *argv[])
 		return 2;
 	}
 
+        /* Load application */
 	app = env_app();
 	if (app != NULL) {
 		if (hk_mod_load(app)) {
