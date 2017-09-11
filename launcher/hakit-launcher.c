@@ -504,7 +504,7 @@ static void engine_start(ctx_t *ctx)
 #ifdef WITH_MQTT
 	if (ctx->is_broker) {
 		char hostname[64];
-                char args[64];
+                char args[128];
 
 		gethostname(hostname, sizeof(hostname));
 
@@ -512,8 +512,12 @@ static void engine_start(ctx_t *ctx)
 		HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
 	}
 
-	snprintf(args, sizeof(args), "--mqtt-cafile=%s/certs/ca.crt", opt_lib_dir);
-	HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
+        {
+                char args[strlen(opt_lib_dir)+32];
+
+                snprintf(args, sizeof(args), "--mqtt-cafile=%s/certs/ca.crt", opt_lib_dir);
+                HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
+        }
 #endif
 
 	if (opt_no_hkcp) {
