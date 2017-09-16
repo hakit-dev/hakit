@@ -200,7 +200,7 @@ static void hkcp_node_recv_sinks(hkcp_node_t *node, char *str)
 		}
 		
 		/* Check for local sources matching this remote sink */
-		hk_source_t *source = hk_source_retrieve_by_name(&node->hkcp->eps, str);
+		hk_source_t *source = hk_source_retrieve_by_name(node->hkcp->eps, str);
 
 		/* If matching source is found, check for requesting node connection */
 		if (source != NULL) {
@@ -398,7 +398,7 @@ void hkcp_node_add(hkcp_t *hkcp, char *remote_ip)
 	}
 
 	/* Do nothing if we do not have any public source */
-	if (hk_source_to_advertise(&hkcp->eps) <= 0) {
+	if (hk_source_to_advertise(hkcp->eps) <= 0) {
 		log_debug(2, "  => No public source found");
 		return;
 	}
@@ -539,7 +539,7 @@ static void hkcp_command_set(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf
 			hk_sink_t *sink;
 
 			*(value++) = '\0';
-			sink = hk_sink_retrieve_by_name(&hkcp->eps, args);
+			sink = hk_sink_retrieve_by_name(hkcp->eps, args);
 			if (sink != NULL) {
 				/* Update sink value and invoke sink event callback */
 				hk_sink_update(sink, value);
@@ -574,23 +574,23 @@ static int hkcp_command_get_sink(hk_sink_t *sink, buf_t *out_buf)
 }
 
 
-static void hkcp_command_get(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
+static void hkcp_command_get(hk_endpoints_t *eps, int argc, char **argv, buf_t *out_buf)
 {
 	int i;
 
 	if (argc > 1) {
 		for (i = 1; i < argc; i++) {
-                        hk_source_t *source = hk_source_retrieve_by_name(&hkcp->eps, argv[i]);
+                        hk_source_t *source = hk_source_retrieve_by_name(eps, argv[i]);
 			hk_ep_dump(HK_EP(source), out_buf);
 		}
 		for (i = 1; i < argc; i++) {
-                        hk_sink_t *sink = hk_sink_retrieve_by_name(&hkcp->eps, argv[i]);
+                        hk_sink_t *sink = hk_sink_retrieve_by_name(eps, argv[i]);
 			hk_ep_dump(HK_EP(sink), out_buf);
 		}
 	}
 	else {
-                hk_source_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_get_source, out_buf);
-                hk_sink_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_get_sink, out_buf);
+                hk_source_foreach(eps, (hk_ep_foreach_func_t) hkcp_command_get_source, out_buf);
+                hk_sink_foreach(eps, (hk_ep_foreach_func_t) hkcp_command_get_sink, out_buf);
 	}
 
 	buf_append_str(out_buf, ".\n");
@@ -667,7 +667,7 @@ static void hkcp_command_sources(hkcp_t *hkcp, buf_t *out_buf)
                 .out_buf = out_buf,
         };
 
-        hk_source_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_sources_dump, &ctx);
+        hk_source_foreach(hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_sources_dump, &ctx);
 	buf_append_str(out_buf, ".\n");
 }
 
@@ -687,7 +687,7 @@ static int hkcp_command_sinks_dump(hk_sink_t *sink, buf_t *out_buf)
 
 static void hkcp_command_sinks(hkcp_t *hkcp, buf_t *out_buf)
 {
-        hk_sink_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_sinks_dump, out_buf);
+        hk_sink_foreach(hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_sinks_dump, out_buf);
 	buf_append_str(out_buf, ".\n");
 }
 
@@ -704,7 +704,7 @@ static int hkcp_command_watch_source(hk_source_t *source, buf_t *out_buf)
 }
 
 
-static void hkcp_command_watch(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf, hkcp_command_ctx_t *ctx)
+static void hkcp_command_watch(hk_endpoints_t *eps, int argc, char **argv, buf_t *out_buf, int *pwatch)
 {
 	int show = 1;
 	int err = 0;
@@ -712,11 +712,11 @@ static void hkcp_command_watch(hkcp_t *hkcp, int argc, char **argv, buf_t *out_b
 	if (argc > 1) {
 		if (argc == 2) {
 			if ((strcmp(argv[1], "0") == 0) || (strcmp(argv[1], "off") == 0)) {
-				ctx->watch = 0;
+				*pwatch = 0;
 				show = 0;
 			}
 			else if ((strcmp(argv[1], "1") == 0) || (strcmp(argv[1], "on") == 0)) {
-				ctx->watch = 1;
+				*pwatch = 1;
 			}
 			else {
 				err = 1;
@@ -731,7 +731,7 @@ static void hkcp_command_watch(hkcp_t *hkcp, int argc, char **argv, buf_t *out_b
 		buf_append_str(out_buf, ".ERROR: watch: Syntax error");
 	}
 	else if (show) {
-                hk_source_foreach(&hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_watch_source, out_buf);
+                hk_source_foreach(eps, (hk_ep_foreach_func_t) hkcp_command_watch_source, out_buf);
 	}
 }
 
@@ -744,7 +744,7 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 		hkcp_command_set(hkcp, argc, argv, out_buf);
 	}
 	else if (strcmp(argv[0], "get") == 0) {
-		hkcp_command_get(hkcp, argc, argv, out_buf);
+		hkcp_command_get(hkcp->eps, argc, argv, out_buf);
 	}
 	else if (strcmp(argv[0], "nodes") == 0) {
 		hkcp_command_nodes(hkcp, out_buf);
@@ -791,7 +791,7 @@ static int hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tcp
 
 	if (strcmp(argv[0], "watch") == 0) {
 		hkcp_command_ctx_t *ctx = tcp_sock_get_data(tcp_sock);
-		hkcp_command_watch(hkcp, argc, argv, &out_buf, ctx);
+		hkcp_command_watch(hkcp->eps, argc, argv, &out_buf, &ctx->watch);
 	}
 	else {
 		hkcp_command(hkcp, argc, argv, &out_buf);
@@ -839,17 +839,16 @@ static void hkcp_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
  * Management engine
  */
 
-int hkcp_init(hkcp_t *hkcp, int port)
+int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port)
 {
 	int ret = -1;
 
 	memset(hkcp, 0, sizeof(hkcp_t));
 
+	hkcp->eps = eps;
+
 	/* Init node management */
 	hk_tab_init(&hkcp->nodes, sizeof(hkcp_node_t *));
-
-	/* Init endpoint management */
-	hk_endpoints_init(&hkcp->eps);
 
 	/* Init TCP server */
 	hkcp->port = port;
@@ -877,7 +876,6 @@ void hkcp_shutdown(hkcp_t *hkcp)
 		tcp_srv_shutdown(&hkcp->tcp_srv);
 	}
 
-	hk_endpoints_shutdown(&hkcp->eps);
 	hk_tab_cleanup(&hkcp->nodes);
 
 	memset(hkcp, 0, sizeof(hkcp_t));

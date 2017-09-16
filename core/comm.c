@@ -34,6 +34,7 @@
 #define HAKIT_SHARE_DIR "/usr/share/hakit/"
 
 typedef struct {
+	hk_endpoints_t eps;
 	hk_advertise_t adv;
 	int use_hkcp;
 	hkcp_t hkcp;
@@ -75,8 +76,8 @@ static void comm_mqtt_subscribe(mqtt_t *mqtt, char *name, char *value, int event
 
 static void comm_mqtt_connected(comm_t *comm)
 {
-	hk_source_foreach_public(&comm->hkcp.eps, (hk_ep_func_t) comm_mqtt_publish, &comm->mqtt);
-	hk_sink_foreach_public(&comm->hkcp.eps, (hk_ep_func_t) comm_mqtt_subscribe, &comm->mqtt);
+	hk_source_foreach_public(&comm->eps, (hk_ep_func_t) comm_mqtt_publish, &comm->mqtt);
+	hk_sink_foreach_public(&comm->eps, (hk_ep_func_t) comm_mqtt_subscribe, &comm->mqtt);
 }
 
 
@@ -84,7 +85,7 @@ static void comm_mqtt_update(comm_t *comm, char *name, char *value)
 {
 	if (name != NULL) {
 		log_debug(2, "comm_mqtt_update %s='%s'", name, value);
-		hk_sink_update_by_name(&comm->hkcp.eps, name, value);
+		hk_sink_update_by_name(&comm->eps, name, value);
 	}
 	else {
 		log_debug(2, "comm_mqtt_update CONNECTED");
@@ -109,7 +110,13 @@ static void comm_wget_recv(void *user_data, char *buf, int len)
 }
 
 
-static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
+static void comm_command(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+{
+	hkcp_command(&comm->hkcp, argc, argv, out_buf);
+}
+
+
+static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 {
 	buf_t out_buf;
 
@@ -120,7 +127,7 @@ static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 			if (argc > 1) {
 				// HTTP/HTTPS get operation. This command is for debug/testing purpose only.
 				// Result will be displayed to the debug log
-				ws_client_get(&comm.ws->client, argv[1], NULL, comm_wget_recv, NULL);
+				ws_client_get(&comm->ws->client, argv[1], NULL, comm_wget_recv, NULL);
 			}
 			else {
 				log_str("ERROR: Usage: %s <uri>", argv[0]);
@@ -142,7 +149,7 @@ static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 			}
 		}
 		else {
-			hkcp_command(&comm.hkcp, argc, argv, &out_buf);
+			comm_command(comm, argc, argv, &out_buf);
 			if (fwrite(out_buf.base, 1, out_buf.len, stdout) < 0) {
 				log_str("PANIC: Failed to write stdout: %s", strerror(errno));
 			}
@@ -164,6 +171,9 @@ int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
 
 	memset(&comm, 0, sizeof(comm));
 
+	/* Init endpoint management */
+	hk_endpoints_init(&comm.eps);
+
 	/* Init advertising protocol */
 	if (hk_advertise_init(&comm.adv, HAKIT_HKCP_PORT)) {
 		ret = -1;
@@ -172,7 +182,7 @@ int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
 
 	/* Init HKCP gears */
 	comm.use_hkcp = use_hkcp;
-	ret = hkcp_init(&comm.hkcp, use_hkcp ? HAKIT_HKCP_PORT:0);
+	ret = hkcp_init(&comm.hkcp, &comm.eps, use_hkcp ? HAKIT_HKCP_PORT:0);
 	if (ret != 0) {
 		goto DONE;
 	}
@@ -242,11 +252,11 @@ int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
         ws_add_document_root(comm.ws, path);
         free(path);
 
-	ws_set_command_handler(comm.ws, (ws_command_handler_t) hkcp_command, &comm.hkcp);
+	ws_set_command_handler(comm.ws, (ws_command_handler_t) comm_command, &comm);
 
 	/* Setup stdin command handler if not running as a daemon */
 	if (!opt_daemon) {
-		command_t *cmd = command_new((command_handler_t) comm_command_stdin, &comm.hkcp);
+		command_t *cmd = command_new((command_handler_t) comm_command_stdin, &comm);
 		io_channel_setup(&comm.stdin, fileno(stdin), (io_func_t) command_recv, cmd);
 	}
 
@@ -257,6 +267,7 @@ DONE:
 #endif
 		hkcp_shutdown(&comm.hkcp);
 		hk_advertise_shutdown(&comm.adv);
+		hk_endpoints_shutdown(&comm.eps);
 	}
 
 	return ret;
@@ -265,7 +276,7 @@ DONE:
 
 int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_data)
 {
-	hk_sink_t *sink = hk_sink_register(&comm.hkcp.eps, name, local);
+	hk_sink_t *sink = hk_sink_register(&comm.eps, name, local);
 
 	if (sink != NULL) {
 		hk_sink_add_handler(sink, func, user_data);
@@ -282,7 +293,7 @@ int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_
 
 void comm_sink_set_widget(int id, char *widget_name)
 {
-        hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.hkcp.eps, id);
+        hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
 
         if (sink != NULL) {
                 hk_sink_set_widget(sink, widget_name);
@@ -295,7 +306,7 @@ void comm_sink_set_widget(int id, char *widget_name)
 
 void comm_sink_update_str(int id, char *value)
 {
-        hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.hkcp.eps, id);
+        hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
 
         if (sink != NULL) {
                 char *name = hk_sink_update(sink, value);
@@ -320,7 +331,7 @@ void comm_sink_update_int(int id, int value)
 
 int comm_source_register(char *name, int local, int event)
 {
-	hk_source_t *source = hk_source_register(&comm.hkcp.eps, name, local, event);
+	hk_source_t *source = hk_source_register(&comm.eps, name, local, event);
 
 	if (source != NULL) {
 		if (comm.use_hkcp && (!local)) {
@@ -335,7 +346,7 @@ int comm_source_register(char *name, int local, int event)
 
 void comm_source_set_widget(int id, char *widget_name)
 {
-        hk_source_t *source = hk_source_retrieve_by_id(&comm.hkcp.eps, id);
+        hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
 
         if (source != NULL) {
                 hk_source_set_widget(source, widget_name);
@@ -348,7 +359,7 @@ void comm_source_set_widget(int id, char *widget_name)
 
 void comm_source_update_str(int id, char *value)
 {
-	hk_source_t *source = hk_source_retrieve_by_id(&comm.hkcp.eps, id);
+	hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
 
 	if (source == NULL) {
 		log_str("PANIC: Attempting to update unknown source #%d\n", id);

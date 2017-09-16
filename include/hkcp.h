@@ -56,13 +56,13 @@ typedef struct {
  */
 
 struct hkcp_s {
+	hk_endpoints_t *eps;
 	int port;
 	tcp_srv_t tcp_srv;
 	hk_tab_t nodes;       // Table of (hkcp_node_t *)
-	hk_endpoints_t eps;
 };
 
-extern int hkcp_init(hkcp_t *hkcp, int port);
+extern int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port);
 extern void hkcp_shutdown(hkcp_t *hkcp);
 extern void hkcp_node_add(hkcp_t *hkcp, char *remote_ip);
 
