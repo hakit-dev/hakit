@@ -755,15 +755,6 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 	else if (strcmp(argv[0], "sources") == 0) {
 		hkcp_command_sources(hkcp, out_buf);
 	}
-	else if (strcmp(argv[0], "echo") == 0) {
-		for (i = 1; i < argc; i++) {
-			if (i > 1) {
-				buf_append_str(out_buf, " ");
-			}
-			buf_append_str(out_buf, argv[i]);
-		}
-		buf_append_str(out_buf, "\n.\n");
-	}
 	else if (strcmp(argv[0], "version") == 0) {
 		buf_append_str(out_buf, HAKIT_VERSION " " ARCH "\n.\n");
 	}
