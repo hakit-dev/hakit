@@ -69,8 +69,11 @@ static void update_output(ctx_t *ctx)
 {
 	int sel = ctx->sel->state;
 
+	log_debug(3, CLASS_NAME ".update_output: sel=%d", sel);
+
 	if ((sel >= 0) && (sel < ctx->ninputs)) {
 		char *str = (char *) ctx->inputs[sel]->value.base;
+		log_debug(3, "  -> '%s'", str);
 		if (str != NULL) {
 			hk_pad_update_str(ctx->output, str);
 		}
@@ -82,9 +85,14 @@ static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
 
+	log_debug(3, CLASS_NAME "._input: %s.%s=\"%s\"", pad->obj->name, pad->name, value);
+
 	/* Set selector value */
 	if (pad == ctx->sel) {
 		pad->state = atoi(value);
+	}
+	else {
+		hk_pad_update_str(pad, value);
 	}
 
 	/* Update output according to selector value */
