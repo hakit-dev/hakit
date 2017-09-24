@@ -42,7 +42,7 @@ typedef struct {
 	mqtt_t mqtt;
 #endif
 	ws_t *ws;
-	io_channel_t stdin;
+	io_channel_t io_stdin;
 } comm_t;
 
 static comm_t comm;
@@ -257,7 +257,7 @@ int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
 	/* Setup stdin command handler if not running as a daemon */
 	if (!opt_daemon) {
 		command_t *cmd = command_new((command_handler_t) comm_command_stdin, &comm);
-		io_channel_setup(&comm.stdin, fileno(stdin), (io_func_t) command_recv, cmd);
+		io_channel_setup(&comm.io_stdin, fileno(stdin), (io_func_t) command_recv, cmd);
 	}
 
 DONE:

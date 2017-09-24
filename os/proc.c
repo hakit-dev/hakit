@@ -109,8 +109,8 @@ static void hk_proc_term(hk_proc_t *proc)
 	proc->cb_stderr = NULL;
 	proc->cb_term = NULL;
 
-	io_channel_close(&proc->stdout);
-	io_channel_close(&proc->stderr);
+	io_channel_close(&proc->io_stdout);
+	io_channel_close(&proc->io_stderr);
 
 	if (proc->sigchld_tag) {
 		sys_remove(proc->sigchld_tag);
@@ -338,13 +338,13 @@ hk_proc_t *hk_proc_start(char *argv[], char *cwd,
                 close(p.err[1]);
 
                 /* Hook stdio handlers */
-                io_channel_setup(&proc->stdout, p.out[0], (io_func_t) hk_proc_stdout, proc);
-                io_channel_setup(&proc->stderr, p.err[0], (io_func_t) hk_proc_stderr, proc);
+                io_channel_setup(&proc->io_stdout, p.out[0], (io_func_t) hk_proc_stdout, proc);
+                io_channel_setup(&proc->io_stderr, p.err[0], (io_func_t) hk_proc_stderr, proc);
 
                 /* Enable close-on-exec mode on local pipe endpoints */
                 fcntl(proc->stdin_fd, F_SETFD, FD_CLOEXEC);
-                fcntl(proc->stdout.fd, F_SETFD, FD_CLOEXEC);
-                fcntl(proc->stderr.fd, F_SETFD, FD_CLOEXEC);
+                fcntl(proc->io_stdout.fd, F_SETFD, FD_CLOEXEC);
+                fcntl(proc->io_stderr.fd, F_SETFD, FD_CLOEXEC);
         }
 
 done:

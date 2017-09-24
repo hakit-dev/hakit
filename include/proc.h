@@ -28,8 +28,8 @@ typedef struct {
 	hk_proc_state_t state;
 	pid_t pid;
 	int stdin_fd;
-	io_channel_t stdout;
-	io_channel_t stderr;
+	io_channel_t io_stdout;
+	io_channel_t io_stderr;
 	sys_tag_t sigchld_tag;
 	sys_tag_t timeout_tag;
 	hk_proc_out_func_t cb_stdout;
