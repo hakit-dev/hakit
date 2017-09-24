@@ -2,5 +2,7 @@
 
 NAME=hakit
 
-service $NAME stop
-update-rc.d -f $NAME remove
+#service $NAME stop
+#update-rc.d -f $NAME remove
+systemctl stop $NAME
+systemctl disable $NAME
