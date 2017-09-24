@@ -24,7 +24,7 @@
 
 static char *usb_device_name(unsigned int bus, unsigned int dev)
 {
-	static char devname[PATH_MAX];
+	static char devname[64];
 	snprintf(devname, sizeof(devname), "/dev/bus/usb/%03u/%03u", bus, dev);
 	if (access(devname, F_OK)) {
 		snprintf(devname, sizeof(devname), "/proc/bus/usb/%03u/%03u", bus, dev);
