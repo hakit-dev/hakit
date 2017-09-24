@@ -14,6 +14,7 @@
 #include <string.h>
 #include <errno.h>
 #include <malloc.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <mqueue.h>
 
