@@ -70,19 +70,16 @@ static int setsockopt_keepalive(int sock)
 
 static void tcp_sock_shutdown_(tcp_sock_t *tcp_sock, int silent)
 {
-	if (tcp_sock->chan.tag > 0) {
-		sys_remove(tcp_sock->chan.tag);
-		tcp_sock->chan.tag = 0;
-	}
+        int fd = tcp_sock->chan.fd;
 
-	if (tcp_sock->chan.fd >= 0) {
+	if (fd >= 0) {
 		if (!silent) {
-			log_str("Shutting down connection [%d]", tcp_sock->chan.fd);
+			log_str("Shutting down connection [%d]", fd);
 		}
-		shutdown(tcp_sock->chan.fd, 2);
-		close(tcp_sock->chan.fd);
-		tcp_sock->chan.fd = -1;
-	}
+		shutdown(fd, 2);
+        }
+
+        io_channel_close(&tcp_sock->chan);
 }
 
 
