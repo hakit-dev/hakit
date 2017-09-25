@@ -497,9 +497,11 @@ static void engine_start(ctx_t *ctx)
         char *bin = env_bindir("hakit-engine");
         HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(bin));
 
-        char debug[16];
-        snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
-        HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(debug));
+        if (opt_debug > 0) {
+                char debug[16];
+                snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
+                HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(debug));
+        }
 
 #ifdef WITH_MQTT
 	if (ctx->is_broker) {
