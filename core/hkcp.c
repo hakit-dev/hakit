@@ -464,10 +464,12 @@ static void hkcp_source_send_nodes(hkcp_t *hkcp, hk_source_t *source, char *str,
 	for (i = 0; i < hkcp->nodes.nmemb; i++) {
 		hkcp_node_t *node = HK_TAB_VALUE(hkcp->nodes, hkcp_node_t *, i);
 
-		if (hkcp_node_source_attached(node, source)) {
-			log_debug(2, "    node=#%d='%s'", node->id, node->name);
-			tcp_sock_write(&node->tcp_sock, str, len);
-		}
+		if (node != NULL) {
+                        if (hkcp_node_source_attached(node, source)) {
+                                log_debug(2, "    node=#%d='%s'", node->id, node->name);
+                                tcp_sock_write(&node->tcp_sock, str, len);
+                        }
+                }
 	}
 }
 
@@ -604,7 +606,7 @@ static void hkcp_command_nodes(hkcp_t *hkcp, buf_t *out_buf)
 	for (i = 0; i < hkcp->nodes.nmemb; i++) {
 		hkcp_node_t *node = HK_TAB_VALUE(hkcp->nodes, hkcp_node_t *, i);
 
-		if (node->name != NULL) {
+		if (node != NULL) {
 			buf_append_str(out_buf, node->name);
 
 			for (j = 0; j < node->sources.nmemb; j++) {
@@ -635,9 +637,12 @@ static void hkcp_command_sources_dump_nodes(hkcp_t *hkcp, hk_source_t *source, b
 
         for (i = 0; i < hkcp->nodes.nmemb; i++) {
                 hkcp_node_t *node = HK_TAB_VALUE(hkcp->nodes, hkcp_node_t *, i);
-                if (hkcp_node_source_attached(node, source)) {
-                        buf_append_str(out_buf, " ");
-                        buf_append_str(out_buf, node->name);
+
+                if (node != NULL) {
+                        if (hkcp_node_source_attached(node, source)) {
+                                buf_append_str(out_buf, " ");
+                                buf_append_str(out_buf, node->name);
+                        }
                 }
         }
 }
