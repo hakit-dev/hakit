@@ -9,8 +9,7 @@
 
 [Unit]
 Description=HAKit, the Home Automation Kit
-After=local-fs.target systemd-journald-dev-log.socket network-online.target
-Wants=network-online.target
+After=network.target
 
 [Service]
 Type=forking
@@ -22,3 +21,4 @@ KillMode=mixed
 
 [Install]
 Alias=hakit
+WantedBy=multi-user.target

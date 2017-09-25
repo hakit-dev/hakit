@@ -117,22 +117,23 @@ INSTALL_DESTDIR = $(abspath $(HAKIT_DIR)$(DESTDIR))
 INSTALL_BIN = $(DESTDIR)/usr/bin
 INSTALL_SHARE = $(DESTDIR)/usr/share/hakit
 INSTALL_INIT = $(DESTDIR)/etc/init.d
-INSTALL_SYSTEMD = $(DESTDIR)/etc/systemd/system
+INSTALL_SYSTEMD = $(DESTDIR)/lib/systemd/system
 
 install:: all
-	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE) $(INSTALL_INIT) $(INSTALL_SYSTEMD)
+	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE)
 	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
 	$(CP) -a test/timer.hk $(INSTALL_SHARE)/test.hk
-	$(CP) -a targets/$(DISTRO)/hakit.sh $(INSTALL_INIT)/hakit
 	for dir in $(SUBDIRS); do \
 	  make -C "$$dir" DESTDIR=$(INSTALL_DESTDIR) install ;\
 	done
 ifneq ($(WITHOUT_SSL),yes)
 	make -C ssl DESTDIR=$(INSTALL_DESTDIR) install
 endif
-
+ifneq ($(wildcard targets/$(DISTRO)/hakit.sh),)
+	$(MKDIR) $(INSTALL_INIT)
+	$(CP) -a targets/$(DISTRO)/hakit.sh $(INSTALL_INIT)/hakit
+endif
 ifneq ($(wildcard targets/$(DISTRO)/hakit.service),)
-install::
 	$(MKDIR) $(INSTALL_SYSTEMD)
 	$(CP) -a targets/$(DISTRO)/hakit.service $(INSTALL_SYSTEMD)/
 endif
