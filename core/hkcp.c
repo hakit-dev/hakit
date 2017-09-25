@@ -738,8 +738,6 @@ static void hkcp_command_watch(hk_endpoints_t *eps, int argc, char **argv, buf_t
 
 void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 {
-	int i;
-
 	if (strcmp(argv[0], "set") == 0) {
 		hkcp_command_set(hkcp, argc, argv, out_buf);
 	}
