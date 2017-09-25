@@ -37,6 +37,7 @@ else
   LIB_NAME = libmosquitto.a
   LIB = $(OUTDIR)/$(LIB_NAME)
   MAKE_FLAGS += WITH_SRV=no WITH_UUID=no WITH_DOCS=no WITH_THREADING=yes DIRS=lib
+  MAKE_FLAGS += CFLAGS="-Wall -O2"
   ifdef TARGET
     MAKE_FLAGS += CROSS_COMPILE=$(CROSS_PATH)/bin/$(CROSS_COMPILE) CC=gcc
   endif
