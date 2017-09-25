@@ -39,7 +39,6 @@ else
   MAKE_FLAGS += WITH_SRV=no WITH_UUID=no WITH_DOCS=no WITH_THREADING=yes DIRS=lib
   ifdef TARGET
     MAKE_FLAGS += CROSS_COMPILE=$(CROSS_PATH)/bin/$(CROSS_COMPILE) CC=gcc
-    MAKE_FLAGS += LIB_CFLAGS="-I. -I.. -I$(CROSS_ROOT_PATH)/usr/include"
   endif
 endif
 
