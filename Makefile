@@ -32,7 +32,7 @@ OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c netif_watch.c udpio.c tcpio
 	gpio.c serial.c proc.c mod_init.c \
 	usb_io.c usb_device.c
 CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c endpoint.c mod.c mod_load.c prop.c \
-	advertise.c hkcp.c mqtt.c comm.c \
+	advertise.c hkcp.c hkcp_cmd.c mqtt.c comm.c \
 	mime.c eventq.c ws.c ws_utils.c ws_auth.c ws_events.c ws_client.c
 SRCS = $(OS_SRCS) $(CORE_SRCS)
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)

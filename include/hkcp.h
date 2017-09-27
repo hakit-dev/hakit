@@ -16,7 +16,6 @@
 #include "buf.h"
 #include "tcpio.h"
 #include "tab.h"
-#include "command.h"
 #include "endpoint.h"
 
 typedef struct hkcp_s hkcp_t;
@@ -65,8 +64,7 @@ struct hkcp_s {
 extern int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port);
 extern void hkcp_shutdown(hkcp_t *hkcp);
 extern void hkcp_node_add(hkcp_t *hkcp, char *remote_ip);
-
-extern void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf);
+extern void hkcp_node_dump(hkcp_t *hkcp, hk_source_t *source, buf_t *out_buf);
 
 extern void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source, char *value);
 

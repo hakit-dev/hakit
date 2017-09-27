@@ -20,6 +20,7 @@
 #include "ws_events.h"
 #include "ws_client.h"
 #include "hkcp.h"
+#include "hkcp_cmd.h"
 #include "mqtt.h"
 #include "eventq.h"
 #include "command.h"
@@ -110,12 +111,6 @@ static void comm_wget_recv(void *user_data, char *buf, int len)
 }
 
 
-static void comm_command(comm_t *comm, int argc, char **argv, buf_t *out_buf)
-{
-	hkcp_command(&comm->hkcp, argc, argv, out_buf);
-}
-
-
 static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 {
 	buf_t out_buf;
@@ -149,7 +144,7 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 			}
 		}
 		else {
-			comm_command(comm, argc, argv, &out_buf);
+			hkcp_command(&comm->hkcp, argc, argv, &out_buf);
 			if (fwrite(out_buf.base, 1, out_buf.len, stdout) < 0) {
 				log_str("PANIC: Failed to write stdout: %s", strerror(errno));
 			}
@@ -252,7 +247,7 @@ int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
         ws_add_document_root(comm.ws, path);
         free(path);
 
-	ws_set_command_handler(comm.ws, (ws_command_handler_t) comm_command, &comm);
+	ws_set_command_handler(comm.ws, (ws_command_handler_t) hkcp_command, &comm.hkcp);
 
 	/* Setup stdin command handler if not running as a daemon */
 	if (!opt_daemon) {
