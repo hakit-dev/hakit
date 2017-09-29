@@ -25,9 +25,6 @@
 #include "mqtt.h"
 
 
-/* MQTT config options */
-char *mqtt_cafile = NULL;
-
 /* Message queue */
 #define MSG_MAXSIZE 1024
 
@@ -260,7 +257,8 @@ int mqtt_connect(mqtt_t *mqtt, char *broker)
 }
 
 
-int mqtt_init(mqtt_t *mqtt, int use_ssl,
+int mqtt_init(mqtt_t *mqtt,
+              int use_ssl, char *cafile,
 	      mqtt_update_func_t update_func, void *user_data)
 {
 	int major, minor, revision;
@@ -301,8 +299,8 @@ int mqtt_init(mqtt_t *mqtt, int use_ssl,
 	// Setup SSL
 	if (use_ssl) {
 		mqtt->port = MQTT_DEFAULT_SSL_PORT;
-		if (mqtt_cafile != NULL) {
-			mosquitto_tls_set(mqtt->mosq, mqtt_cafile, NULL,
+		if (cafile != NULL) {
+			mosquitto_tls_set(mqtt->mosq, cafile, NULL,
 					  NULL, NULL,
 					  NULL);
 		}

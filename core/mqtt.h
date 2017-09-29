@@ -23,10 +23,6 @@
 #define MQTT_DEFAULT_SSL_PORT 8883
 #define MQTT_DEFAULT_KEEPALIVE 60
 
-/* MQTT current settings */
-extern char *mqtt_cafile;
-
-
 /* MQTT instance descriptor */
 typedef void (*mqtt_update_func_t)(void *user_data, char *name, char *value);
 
@@ -52,7 +48,8 @@ typedef struct {
 
 
 /* MQTT instance functions */
-extern int mqtt_init(mqtt_t *mqtt, int use_ssl,
+extern int mqtt_init(mqtt_t *mqtt,
+                     int use_ssl, char *cafile,
 		     mqtt_update_func_t update_func, void *user_data);
 extern void mqtt_shutdown(mqtt_t *mqtt);
 

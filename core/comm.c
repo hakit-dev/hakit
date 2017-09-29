@@ -159,7 +159,9 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 }
 
 
-int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
+int comm_init(int use_ssl, char *cafile,
+              int use_hkcp,
+              int use_mqtt, char *mqtt_broker)
 {
 	char *path = NULL;
 	int ret = 0;
@@ -188,26 +190,28 @@ int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker)
 	}
 
 #ifdef WITH_MQTT
-	/* Init MQTT gears */
-	if (mqtt_init(&comm.mqtt, use_ssl, (mqtt_update_func_t) comm_mqtt_update, &comm)) {
-		ret = -1;
-		goto DONE;
-	}
+        if (use_mqtt) {
+                /* Init MQTT gears */
+                if (mqtt_init(&comm.mqtt, use_ssl, cafile, (mqtt_update_func_t) comm_mqtt_update, &comm)) {
+                        ret = -1;
+                        goto DONE;
+                }
 
-	if (mqtt_broker != NULL) {
-		/* Connect to broker */
-		if (mqtt_connect(&comm.mqtt, mqtt_broker)) {
-			ret = -1;
-			goto DONE;
-		}
-	}
-	else {
-		/* Handle MQTT advertisement */
-		hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_MQTT, (hk_advertise_func_t) comm_mqtt_discover, &comm);
-	}
+                if (mqtt_broker != NULL) {
+                        /* Connect to broker */
+                        if (mqtt_connect(&comm.mqtt, mqtt_broker)) {
+                                ret = -1;
+                                goto DONE;
+                        }
+                }
+                else {
+                        /* Handle MQTT advertisement */
+                        hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_MQTT, (hk_advertise_func_t) comm_mqtt_discover, &comm);
+                }
 
-	/* Advertise MQTT protocol */
-	hk_advertise_mqtt(&comm.adv, mqtt_broker);
+                /* Advertise MQTT protocol */
+                hk_advertise_mqtt(&comm.adv, mqtt_broker);
+        }
 #endif /* WITH_MQTT */
 
 	/* Search for SSL cert directory */

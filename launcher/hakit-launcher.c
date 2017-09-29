@@ -73,6 +73,7 @@ static char *opt_lib_dir = NULL;
 static int opt_offline = 0;
 static int opt_no_hkcp = 0;
 #ifdef WITH_MQTT
+static int opt_no_mqtt = 0;
 static int opt_mqtt_port = MQTT_PORT;
 #endif
 
@@ -85,6 +86,7 @@ static const options_entry_t options_entries[] = {
 	{ "offline", 'l', 0,   OPTIONS_TYPE_NONE,  &opt_offline,  "Work off-line. Do not access the HAKit platform server" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 #ifdef WITH_MQTT
+	{ "no-mqtt",   'm', 0, OPTIONS_TYPE_NONE,   &opt_no_mqtt, "Disable MQTT protocol" },
 	{ "mqtt-port", 'p', 0, OPTIONS_TYPE_INT, &opt_mqtt_port, "MQTT broker port number (default: " xstr(MQTT_PORT) ")", "PORT" },
 #endif
 	{ NULL }
@@ -503,22 +505,27 @@ static void engine_start(ctx_t *ctx)
                 HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(debug));
         }
 
-#ifdef WITH_MQTT
-	if (ctx->is_broker) {
-		char hostname[64];
-                char args[128];
-
-		gethostname(hostname, sizeof(hostname));
-
-		snprintf(args, sizeof(args), "--mqtt-broker=%s:%d", hostname, opt_mqtt_port);
-		HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
-	}
-
         {
                 char args[strlen(opt_lib_dir)+32];
 
-                snprintf(args, sizeof(args), "--mqtt-cafile=%s/certs/ca.crt", opt_lib_dir);
+                snprintf(args, sizeof(args), "--cafile=%s/certs/ca.crt", opt_lib_dir);
                 HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
+        }
+
+#ifdef WITH_MQTT
+	if (opt_no_mqtt) {
+		HK_TAB_PUSH_VALUE(engine_argv, strdup("--no-mqtt"));
+	}
+        else {
+                if (ctx->is_broker) {
+                        char hostname[64];
+                        char args[128];
+
+                        gethostname(hostname, sizeof(hostname));
+
+                        snprintf(args, sizeof(args), "--mqtt-broker=%s:%d", hostname, opt_mqtt_port);
+                        HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
+                }
         }
 #endif
 
@@ -936,9 +943,11 @@ static void cert_request(ctx_t *ctx)
 		log_str("Downloading SSL certificate '%s'", crt->name);
 
 #ifdef WITH_MQTT
-		if (ctx->is_broker) {
-			ctx->restart_broker = 1;
-		}
+                if (!opt_no_mqtt) {
+                        if (ctx->is_broker) {
+                                ctx->restart_broker = 1;
+                        }
+                }
 #endif /* WITH_MQTT */
 
                 buf_init(&header);
@@ -950,25 +959,27 @@ static void cert_request(ctx_t *ctx)
         }
         else {
 #ifdef WITH_MQTT
-		// Start MQTT broker
-		if (ctx->is_broker) {
-			if (mqtt_proc == NULL) {
-				log_str("Starting MQTT broker");
-				mqtt_start();
-			}
-			else {
-				if (ctx->restart_broker) {
-					log_str("SSL certificates updated: restarting MQTT broker");
-					mqtt_stop(1);
-				}
-				else {
-					log_str("SSL certificates unchanged: keeping MQTT broker running");
-				}
-			}
-		}
-		else {
-			mqtt_stop(0);
-		}
+                if (!opt_no_mqtt) {
+                        // Start MQTT broker
+                        if (ctx->is_broker) {
+                                if (mqtt_proc == NULL) {
+                                        log_str("Starting MQTT broker");
+                                        mqtt_start();
+                                }
+                                else {
+                                        if (ctx->restart_broker) {
+                                                log_str("SSL certificates updated: restarting MQTT broker");
+                                                mqtt_stop(1);
+                                        }
+                                        else {
+                                                log_str("SSL certificates unchanged: keeping MQTT broker running");
+                                        }
+                                }
+                        }
+                        else {
+                                mqtt_stop(0);
+                        }
+                }
 #endif /* WITH_MQTT */
 		
 		// Fetch applications
@@ -1091,8 +1102,10 @@ static void hello_response_parse(char *str, ctx_t *ctx)
         }
 #ifdef WITH_MQTT
         else if (strcmp(str, "MQTT-broker") == 0) {
-                ctx->is_broker = 1;
-                mqtt_write_config(ctx);
+                if (!opt_no_mqtt) {
+                        ctx->is_broker = 1;
+                        mqtt_write_config(ctx);
+                }
         }
 #endif /* WITH_MQTT */
 }

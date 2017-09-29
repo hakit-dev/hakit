@@ -39,7 +39,9 @@ static char *opt_class_path = NULL;
 static int opt_no_hkcp = 0;
 static int opt_no_ssl = 0;
 static int opt_insecure_ssl = 0;
-static char *opt_auth = NULL;
+static char *opt_http_auth = NULL;
+static char *opt_cafile = NULL;
+static int opt_no_mqtt = 0;
 static char *opt_mqtt_broker = NULL;
 
 static const options_entry_t options_entries[] = {
@@ -47,13 +49,14 @@ static const options_entry_t options_entries[] = {
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 #ifdef WITH_SSL
-	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable SSL - Access status/dashboard using HTTP instead of HTTPS" },
-	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure SSL client connections (self-signed certificates)" },
+	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable TLS/SSL - Do not use encryption/authentication for HKCP/MQTT/HTTP exchanges" },
+	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure HTTP TLS/SSL for client connections (self-signed certificates)" },
 #endif
-	{ "http-auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
+	{ "http-auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_http_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
+	{ "cafile",    'C', 0, OPTIONS_TYPE_STRING, &opt_cafile,    "Certificate Authority file for TLS/SSL authentication", "FILE" },
 #ifdef WITH_MQTT
+	{ "no-mqtt",        'm', 0, OPTIONS_TYPE_NONE,   &opt_no_mqtt, "Disable MQTT protocol" },
 	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &opt_mqtt_broker, "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
-	{ "mqtt-cafile",    'C', 0, OPTIONS_TYPE_STRING, &mqtt_cafile,    "MQTT Certificate Authority file", "FILE" },
 #endif
 	{ NULL }
 };
@@ -93,12 +96,15 @@ int main(int argc, char *argv[])
 	else if (opt_insecure_ssl) {
 		use_ssl = 2;
 	}
-	if (comm_init(use_ssl, opt_no_hkcp ? 0:1, opt_mqtt_broker)) {
+
+	if (comm_init(use_ssl, opt_cafile,
+                      opt_no_hkcp ? 0:1,
+                      opt_no_mqtt ? 0:1, opt_mqtt_broker)) {
 		return 2;
 	}
 
-	if (opt_auth != NULL) {
-		ws_auth_init(opt_auth);
+	if (opt_http_auth != NULL) {
+		ws_auth_init(opt_http_auth);
 	}
 
 	/* Init module management */

@@ -13,7 +13,9 @@
 #include "hkcp.h"
 typedef hk_ep_func_t comm_sink_func_t;
 
-extern int comm_init(int use_ssl, int use_hkcp, char *mqtt_broker);
+extern int comm_init(int use_ssl, char *cafile,
+                     int use_hkcp,
+                     int use_mqtt, char *mqtt_broker);
 
 extern int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_data);
 extern void comm_sink_set_widget(int id, char *widget_name);
