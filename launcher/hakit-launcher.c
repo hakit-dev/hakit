@@ -53,6 +53,7 @@ typedef enum {
 } state_t;
 
 static state_t state = ST_HELLO;
+static int running_fallback = 0;
 
 static ws_client_t ws_client;
 static io_channel_t io_stdin;
@@ -381,6 +382,7 @@ static void ping_start(void);
 
 static void ping_stop(void)
 {
+        log_debug(2, "ping_stop");
         if (ping_timeout_tag != 0) {
                 sys_remove(ping_timeout_tag);
                 ping_timeout_tag = 0;
@@ -390,6 +392,7 @@ static void ping_stop(void)
 static void ping_start(void)
 {
         ping_stop();
+        log_debug(2, "ping_start");
         ping_timeout_tag = sys_timeout(PING_DELAY*1000, (sys_func_t) hello_request, NULL);
 }
 
@@ -942,6 +945,9 @@ static void cert_request(ctx_t *ctx)
 
 		log_str("Downloading SSL certificate '%s'", crt->name);
 
+                // A new certificate will be downloaded : request to restart engine and MQTT broker
+                ctx->restart_engine = 1;
+
 #ifdef WITH_MQTT
                 if (!opt_no_mqtt) {
                         if (ctx->is_broker) {
@@ -1158,6 +1164,8 @@ static void hello_response(void *user_data, char *buf, int len)
                 if (ctx != NULL) {
                         // Start engine from cached program, except if it is already running
                         if (state != ST_RUN) {
+                                log_str("Starting engine from cached settings as temporary fallback ...");
+                                running_fallback = 1;
                                 engine_start(ctx);
                         }
                         ctx_free(ctx);
@@ -1172,7 +1180,7 @@ static void hello_response(void *user_data, char *buf, int len)
 		int errcode = platform_get_status(buf, len, &errstr, &ofs);
 
 		if (errcode >= 0) {
-			if (errcode == 0) {
+                        if (errcode == 0) {
 				log_str("INFO    : Device accepted by platform server");
                                 char **argv = platform_get_lines(buf+ofs, len-ofs);
                                 ctx_t *ctx = ctx_alloc();
@@ -1218,8 +1226,9 @@ static int hello_request(void)
 	// API key
         buf_init(&header);
 
-        if (state != ST_RUN) {
+        if ((state != ST_RUN) || running_fallback) {
                 state = ST_HELLO;
+                running_fallback = 0;
 
                 // HAKit version
                 buf_append_str(&header, "HAKit-Version: " VERSION "\r\n");
