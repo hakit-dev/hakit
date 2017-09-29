@@ -1227,7 +1227,9 @@ static int hello_request(void)
         buf_init(&header);
 
         if ((state != ST_RUN) || running_fallback) {
-                state = ST_HELLO;
+		if (state != ST_RUN) {
+			state = ST_HELLO;
+		}
                 running_fallback = 0;
 
                 // HAKit version
