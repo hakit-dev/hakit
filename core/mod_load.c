@@ -226,6 +226,7 @@ int hk_mod_load(char *fname)
 	buf_init(&buf);
 
 	int check_nl = 0;
+	int lnum = 0;
 
 	while ((ret == 0) && (!feof(f))) {
 		char str[1024];
@@ -257,6 +258,11 @@ int hk_mod_load(char *fname)
 			while (s1 != NULL) {
 				char *s2 = strchr(s1, '\n');
 				if (s2 != NULL) {
+					lnum++;
+					if (buf.len == 0) {
+						ctx.lnum = lnum;
+					}
+
 					*(s2++) = '\0';
 					buf_append_str(&buf, s1);
 
