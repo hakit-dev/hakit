@@ -427,7 +427,7 @@ static void engine_terminated(void *user_data, int status)
         ping_stop();
 
         if (engine_proc == NULL) {
-                if (state == ST_RUN) {
+                if (state == ST_RESTART) {
                         engine_start_now();
                 }
         }
