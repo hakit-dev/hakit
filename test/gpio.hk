@@ -1,8 +1,8 @@
-[objects]
-button: gpio input=!17
-led: gpio output=!18
-blink: timer-clock period=200
-
-[nets]
-button.out blink.enable
-blink.out led.in
+button: gpio
+  input=!17
+blink: timer-clock
+  period=200
+  enable=$button.out
+led: gpio
+  output=!18
+  in=$blink.out

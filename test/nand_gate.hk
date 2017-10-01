@@ -1,10 +1,8 @@
-[objects]
-test_input_1: sink comment="Toto est \"rigolo\""
+test_input_1: sink
+  comment="Toto est \"rigolo\""
 test_input_2: sink
 nand_gate: and ninputs=2 inv
+  in1=$test_input_1.out
+  in2=$test_input_2.out
 test_output: source
-
-[nets]
-test_input_1.out nand_gate.in1
-test_input_2.out nand_gate.in2
-nand_gate.out test_output.in
+  in=$nand_gate.out
