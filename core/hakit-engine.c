@@ -68,7 +68,7 @@ static const options_entry_t options_entries[] = {
 
 int main(int argc, char *argv[])
 {
-	char *app;
+	char *app_name;
 	int use_ssl = 1;  // 0 = disable SSL, 2 = allow insecure SSL
 
 	if (options_parse(options_entries, &argc, argv) != 0) {
@@ -113,12 +113,13 @@ int main(int argc, char *argv[])
 	}
 
         /* Load application */
-	app = env_app();
-	if (app != NULL) {
-		if (hk_mod_load(app)) {
+	app_name = env_app();
+	if (app_name != NULL) {
+		hk_app_t *app = hk_mod_load(app_name);
+		if (app == NULL) {
 			return 3;
 		}
-		hk_obj_start_all();
+		hk_app_start(app);
 	}
 
 	sys_run();

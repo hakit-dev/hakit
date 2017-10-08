@@ -90,3 +90,20 @@ void hk_prop_foreach(hk_prop_t *props, hk_prop_foreach_func func, char *user_dat
 		}
 	}
 }
+
+
+void hk_prop_cleanup(hk_prop_t *props)
+{
+	int i;
+
+	for (i = 0; i < props->tab.nmemb; i++) {
+		hk_prop_entry_t *entry = HK_TAB_PTR(props->tab, hk_prop_entry_t, i);
+
+		free(entry->name);
+		if (entry->value != NULL) {
+			free(entry->value);
+		}
+	}
+
+	hk_tab_cleanup(&props->tab);
+}

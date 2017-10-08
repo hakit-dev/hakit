@@ -20,20 +20,9 @@
 #include "types.h"
 #include "env.h"
 #include "log.h"
+#include "files.h"
 #include "mod.h"
 #include "hakit_version.h"
-
-
-static int is_dir(char *path)
-{
-	DIR *d = opendir(path);
-	if (d == NULL) {
-		return 0;
-	}
-
-	closedir(d);
-	return 1;
-}
 
 
 static int hk_mod_init_dir(char *dir)

@@ -7,11 +7,10 @@
  * directory for more details.
  */
 
-#ifndef __HAKIT_MOD_LOAD_H__
-#define __HAKIT_MOD_LOAD_H__
+#ifndef __HAKIT_FILES_H__
+#define __HAKIT_FILES_H__
 
-#include "mod.h"
+extern int is_dir(char *path);
+extern int is_file(char *path);
 
-extern hk_app_t *hk_mod_load(char *path);
-
-#endif /* __HAKIT_MOD_LOAD_H__ */
+#endif /* __HAKIT_FILES_H__ */

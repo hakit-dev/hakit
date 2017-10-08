@@ -32,5 +32,6 @@ extern void hk_prop_set(hk_prop_t *props, char *name, char *value);
 extern char *hk_prop_get(hk_prop_t *props, char *name);
 extern int hk_prop_get_int(hk_prop_t *props, char *name);
 extern void hk_prop_foreach(hk_prop_t *props, hk_prop_foreach_func func, char *user_data);
+extern void hk_prop_cleanup(hk_prop_t *props);
 
 #endif /* __HAKIT_PROP_H__ */

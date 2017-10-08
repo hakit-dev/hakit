@@ -29,7 +29,7 @@ include defs.mk
 SUBDIRS := classes ui launcher
 
 OS_SRCS = env.c logio.c sys.c io.c iputils.c netif.c netif_watch.c udpio.c tcpio.c uevent.c sysfs.c \
-	gpio.c serial.c proc.c mod_init.c \
+	gpio.c serial.c proc.c files.c mod_init.c \
 	usb_io.c usb_device.c
 CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c endpoint.c mod.c mod_load.c prop.c \
 	advertise.c hkcp.c hkcp_cmd.c mqtt.c comm.c \

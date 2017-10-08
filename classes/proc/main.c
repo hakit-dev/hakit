@@ -131,7 +131,7 @@ static void _start(ctx_t *ctx)
 		for (i = 0; i < argc; i++) {
 			char *args = ctx->cmd_argv[i];
 			if (args[0] == '$') {
-				char *s = hk_pad_get_value(args+1);
+				char *s = hk_pad_get_value(ctx->obj, args+1);
 				if (s != NULL) {
 					args = s;
 				}
