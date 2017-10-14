@@ -18,7 +18,7 @@
 typedef struct hk_pad_s hk_pad_t;
 typedef struct hk_net_s hk_net_t;
 typedef struct hk_obj_s hk_obj_t;
-typedef struct hk_app_s hk_app_t;
+typedef struct hk_tile_s hk_tile_t;
 
 
 /**
@@ -75,7 +75,7 @@ struct hk_net_s {
 	hk_tab_t pads;  /**< Table of (hk_pad_t *) */
 };
 
-extern hk_net_t *hk_net_create(hk_app_t *app);
+extern hk_net_t *hk_net_create(hk_tile_t *tile);
 extern int hk_net_connect(hk_net_t *net, hk_pad_t *pad);
 
 
@@ -85,15 +85,15 @@ extern int hk_net_connect(hk_net_t *net, hk_pad_t *pad);
 
 struct hk_obj_s {
 	char *name;
-	hk_app_t *app;       /**< Application object belongs to */
+	hk_tile_t *tile;     /**< Tile object belongs to */
 	hk_class_t *class;   /**< Class object is based on */
 	hk_prop_t props;     /**< Object properties */
 	hk_tab_t pads;       /**< Object pads : table of (hk_pad_t *) */
 	void *ctx;           /**< Class-specific context */
 };
 
-extern hk_obj_t *hk_obj_create(hk_app_t *app, hk_class_t *class, char *name, int argc, char **argv);
-extern hk_obj_t *hk_obj_find(hk_app_t *app, char *name);
+extern hk_obj_t *hk_obj_create(hk_tile_t *tile, hk_class_t *class, char *name, int argc, char **argv);
+extern hk_obj_t *hk_obj_find(hk_tile_t *tile, char *name);
 
 extern void hk_obj_prop_set(hk_obj_t *obj, char *name, char *value);
 extern char *hk_obj_prop_get(hk_obj_t *obj, char *name);
@@ -101,10 +101,10 @@ extern void hk_obj_prop_foreach(hk_obj_t *obj, hk_prop_foreach_func func, void *
 
 
 /**
- * HAKit applications
+ * HAKit tiles
  */
 
-struct hk_app_s {
+struct hk_tile_s {
 	char *dir;
 	char *name;
 	char *fname;
@@ -112,9 +112,9 @@ struct hk_app_s {
 	hk_tab_t nets;       /**< Nets : table of (hk_net_t *) */
 };
 
-extern hk_app_t *hk_app_create(char *path);
-extern hk_app_t *hk_app_find(char *name);
-extern void hk_app_destroy(hk_app_t *app);
-extern void hk_app_start(hk_app_t *app);
+extern hk_tile_t *hk_tile_create(char *path);
+extern hk_tile_t *hk_tile_find(char *name);
+extern void hk_tile_destroy(hk_tile_t *tile);
+extern void hk_tile_start(hk_tile_t *tile);
 
 #endif /* __HAKIT_MOD_H__ */

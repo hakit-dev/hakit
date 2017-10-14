@@ -182,10 +182,10 @@ char *hk_pad_get_value(hk_obj_t *obj, char *ref)
 	char *pad_name = ref;
 	char *value = NULL;
 
-	// Fully qualified pad name expected: [[<app_name>.]<obj_name>.]<pad_name>
+	// Fully qualified pad name expected: [[<tile_name>.]<obj_name>.]<pad_name>
 	char *pt2 = strrchr(ref, '.');
 	if (pt2 != NULL) {
-		hk_app_t *app = obj->app;
+		hk_tile_t *tile = obj->tile;
 		char *obj_name = ref;
 
 		*pt2 = '\0';
@@ -195,12 +195,12 @@ char *hk_pad_get_value(hk_obj_t *obj, char *ref)
 		if (pt1 != NULL) {
 			*pt1 = '\0';
 			obj_name = pt1+1;
-			app = hk_app_find(ref);
+			tile = hk_tile_find(ref);
 			*pt1 = '.';
 		}
 
-		if (app != NULL) {
-			obj = hk_obj_find(app, obj_name);
+		if (tile != NULL) {
+			obj = hk_obj_find(tile, obj_name);
 		}
 		else {
 			obj = NULL;
@@ -224,15 +224,15 @@ char *hk_pad_get_value(hk_obj_t *obj, char *ref)
  * HAKit nets
  */
 
-hk_net_t *hk_net_create(hk_app_t *app)
+hk_net_t *hk_net_create(hk_tile_t *tile)
 {
 	hk_net_t *net = NULL;
 	hk_net_t **pnet;
 	int i;
 
 	// Try to recycle a freed net entry
-	for (i = 0; i < app->nets.nmemb; i++) {
-		net = HK_TAB_VALUE(app->nets, hk_net_t *, i);
+	for (i = 0; i < tile->nets.nmemb; i++) {
+		net = HK_TAB_VALUE(tile->nets, hk_net_t *, i);
 		if (net->id != 0) {
 			net = NULL;
 		}
@@ -245,7 +245,7 @@ hk_net_t *hk_net_create(hk_app_t *app)
 	if (net == NULL) {
 		net = (hk_net_t *) malloc(sizeof(hk_net_t));
 		memset(net, 0, sizeof(hk_net_t));
-		net->id = app->nets.nmemb+1;
+		net->id = tile->nets.nmemb+1;
 		hk_tab_init(&net->pads, sizeof(hk_pad_t *));
 		log_debug(2, "hk_net_create: new net #%d", net->id);
 	}
@@ -253,7 +253,7 @@ hk_net_t *hk_net_create(hk_app_t *app)
 		log_debug(2, "hk_net_create: recycled net #%d", net->id);
 	}
 
-	pnet = hk_tab_push(&app->nets);
+	pnet = hk_tab_push(&tile->nets);
 	*pnet = net;
 
 	return net;
@@ -272,11 +272,11 @@ int hk_net_connect(hk_net_t *net, hk_pad_t *pad)
 {
 	hk_pad_t **ppad;
 
-	log_debug(2, "hk_net_connect app=%s net=#%d pad=%s.%s", pad->obj->app->name, net->id, pad->obj->name, pad->name);
+	log_debug(2, "hk_net_connect tile=%s net=#%d pad=%s.%s", pad->obj->tile->name, net->id, pad->obj->name, pad->name);
 
 	/* Check pad is not already connected */
 	if (pad->net != NULL) {
-		log_str("ERROR: pad '%s.%s.%s' already connected to net #%d", pad->obj->app->name, pad->obj->name, pad->name, net->id);
+		log_str("ERROR: pad '%s.%s.%s' already connected to net #%d", pad->obj->tile->name, pad->obj->name, pad->name, net->id);
 		return 0;
 	}
 
@@ -313,12 +313,12 @@ static void hk_net_merge(hk_net_t *net1, hk_net_t *net2)
  * HAKit objects
  */
 
-hk_obj_t *hk_obj_find(hk_app_t *app, char *name)
+hk_obj_t *hk_obj_find(hk_tile_t *tile, char *name)
 {
 	int i;
 
-	for (i = 0; i < app->objs.nmemb; i++) {
-		hk_obj_t *obj = HK_TAB_VALUE(app->objs, hk_obj_t *, i);
+	for (i = 0; i < tile->objs.nmemb; i++) {
+		hk_obj_t *obj = HK_TAB_VALUE(tile->objs, hk_obj_t *, i);
 		if (strcmp(obj->name, name) == 0) {
 			return obj;
 		}
@@ -328,23 +328,23 @@ hk_obj_t *hk_obj_find(hk_app_t *app, char *name)
 }
 
 
-hk_obj_t *hk_obj_create(hk_app_t *app, hk_class_t *class, char *name, int argc, char **argv)
+hk_obj_t *hk_obj_create(hk_tile_t *tile, hk_class_t *class, char *name, int argc, char **argv)
 {
 	hk_obj_t *obj;
 	hk_obj_t **pobj;
 	int i;
 
-	log_debug(2, "hk_obj_create app='%s' class='%s' name='%s'", app->name, class->name, name);
+	log_debug(2, "hk_obj_create tile='%s' class='%s' name='%s'", tile->name, class->name, name);
 
-	obj = hk_obj_find(app, name);
+	obj = hk_obj_find(tile, name);
 	if (obj != NULL) {
-		log_str("ERROR: Object %s.%s already exists", app->name, name);
+		log_str("ERROR: Object %s.%s already exists", tile->name, name);
 		return NULL;
 	}
 
 	obj = (hk_obj_t *) malloc(sizeof(hk_obj_t));
 	obj->name = strdup(name);
-	obj->app = app;
+	obj->tile = tile;
 	obj->class = class;
 	hk_prop_init(&obj->props);
 	hk_tab_init(&obj->pads, sizeof(hk_pad_t *));
@@ -367,7 +367,7 @@ hk_obj_t *hk_obj_create(hk_app_t *app, hk_class_t *class, char *name, int argc, 
 		}
 	}
 
-	pobj = hk_tab_push(&app->objs);
+	pobj = hk_tab_push(&tile->objs);
 	*pobj = obj;
 
 	return obj;
@@ -386,32 +386,32 @@ static void hk_obj_destroy(hk_obj_t *obj)
 static int hk_obj_net(hk_pad_t *pad1, char *ref)
 {
 	hk_obj_t *obj1 =  pad1->obj;
-	hk_app_t *app = obj1->app;
+	hk_tile_t *tile = obj1->tile;
 	char *pt;
 	hk_obj_t *obj2;
 	hk_pad_t *pad2;
 	int ret = 0;
 
-	log_debug(2, "hk_obj_net %s.%s.%s=%s", app->name, obj1->name, pad1->name, ref);
+	log_debug(2, "hk_obj_net %s.%s.%s=%s", tile->name, obj1->name, pad1->name, ref);
 
 	// Parse target pad
 	pt = strrchr(ref, '.');
 	if (pt == NULL) {
-		log_str("ERROR: %s.%s.%s: Syntax error in target pad specification '%s'", app->name, obj1->name, pad1->name, ref);
+		log_str("ERROR: %s.%s.%s: Syntax error in target pad specification '%s'", tile->name, obj1->name, pad1->name, ref);
 		return 0;
 	}
 
 	*pt = '\0';
 
-	obj2 = hk_obj_find(app, ref);
+	obj2 = hk_obj_find(tile, ref);
 	if (obj2 == NULL) {
-		log_str("ERROR: %s.%s:%s: Referencing undefined object '%s'", app->name, obj1->name, pad1->name, ref);
+		log_str("ERROR: %s.%s:%s: Referencing undefined object '%s'", tile->name, obj1->name, pad1->name, ref);
 		goto done;
 	}
 
 	pad2 = hk_pad_find(obj2, pt+1);
 	if (pad2 == NULL) {
-		log_str("ERROR: %s.%s:%s: Referencing unknown pad '%s' in object '%s'", app->name, obj1->name, pad1->name, pt+1, obj2->name);
+		log_str("ERROR: %s.%s:%s: Referencing unknown pad '%s' in object '%s'", tile->name, obj1->name, pad1->name, pt+1, obj2->name);
 		goto done;
 	}
 
@@ -428,7 +428,7 @@ static int hk_obj_net(hk_pad_t *pad1, char *ref)
 			hk_net_connect(pad2->net, pad1);
 		}
 		else {
-			hk_net_t *net = hk_net_create(app);
+			hk_net_t *net = hk_net_create(tile);
 			hk_net_connect(net, pad1);
 			hk_net_connect(net, pad2);
 		}
@@ -443,7 +443,7 @@ done:
 
 static void hk_obj_preset(hk_pad_t *pad, char *value)
 {
-	log_debug(2, "hk_obj_preset %s.%s.%s='%s'", pad->obj->app->name, pad->obj->name, pad->name, value);
+	log_debug(2, "hk_obj_preset %s.%s.%s='%s'", pad->obj->tile->name, pad->obj->name, pad->name, value);
 
 	if (pad->dir == HK_PAD_OUT) {
 		hk_pad_update_str(pad, value);
@@ -474,7 +474,7 @@ static int hk_obj_setup(hk_obj_t *obj, char *name, char *value)
 
 void hk_obj_prop_set(hk_obj_t *obj, char *name, char *value)
 {
-	log_debug(2, "hk_obj_prop_set obj='%s.%s': %s='%s'", obj->app->name, obj->name, name, value);
+	log_debug(2, "hk_obj_prop_set obj='%s.%s': %s='%s'", obj->tile->name, obj->name, name, value);
 	hk_prop_set(&obj->props, name, value);
 }
 
@@ -498,23 +498,23 @@ void hk_obj_prop_foreach(hk_obj_t *obj, hk_prop_foreach_func func, void *user_da
 
 
 /**
- * HAKit applications
+ * HAKit tiles
  */
 
-static HK_TAB_DECLARE(apps, hk_app_t *);
+static HK_TAB_DECLARE(tiles, hk_tile_t *);
 
-#define HK_APP_ENTRY(i) HK_TAB_VALUE(apps, hk_app_t *, i)
+#define HK_TILE_ENTRY(i) HK_TAB_VALUE(tiles, hk_tile_t *, i)
 
 
-hk_app_t *hk_app_find(char *name)
+hk_tile_t *hk_tile_find(char *name)
 {
 	int i;
 
-	/* Remove app from list */
-	for (i = 0; i < apps.nmemb; i++) {
-		hk_app_t *app = HK_APP_ENTRY(i);
-		if (strcmp(app->name, name) == 0) {
-			return app;
+	/* Remove tile from list */
+	for (i = 0; i < tiles.nmemb; i++) {
+		hk_tile_t *tile = HK_TILE_ENTRY(i);
+		if (strcmp(tile->name, name) == 0) {
+			return tile;
 		}
 	}
 
@@ -522,117 +522,117 @@ hk_app_t *hk_app_find(char *name)
 }
 
 
-hk_app_t *hk_app_create(char *path)
+hk_tile_t *hk_tile_create(char *path)
 {
-	hk_app_t *app = malloc(sizeof(hk_app_t));
-	memset(app, 0, sizeof(hk_app_t));
+	hk_tile_t *tile = malloc(sizeof(hk_tile_t));
+	memset(tile, 0, sizeof(hk_tile_t));
 
-	log_debug(2, "hk_app_register '%s'", path);
+	log_debug(2, "hk_tile_register '%s'", path);
 
-	// Setup name, directory and app file
+	// Setup name, directory and tile file
 	if (is_dir(path)) {
-		app->dir = realpath(path, NULL);
+		tile->dir = realpath(path, NULL);
 
 		char *str = strdup(path);
-		app->name = strdup(basename(str));
+		tile->name = strdup(basename(str));
 		free(str);
 
 		int size = strlen(path) + 8;
-		app->fname = malloc(size);
-		snprintf(app->fname, size, "%s/app.hk", path);
+		tile->fname = malloc(size);
+		snprintf(tile->fname, size, "%s/tile.hk", path);
 	}
 	else if (is_file(path)) {
 		char *str = strdup(path);
-		app->dir = realpath(dirname(str), NULL);
+		tile->dir = realpath(dirname(str), NULL);
 		free(str);
 
 		str = strdup(path);
-		app->name = strdup(basename(str));
+		tile->name = strdup(basename(str));
 		free(str);
-		char *dot = strrchr(app->name, '.');
+		char *dot = strrchr(tile->name, '.');
 		if ((dot != NULL) && (strcmp(dot, ".hk") == 0)) {
 			*dot = '\0';
 		}
 
-		app->fname = strdup(path);
+		tile->fname = strdup(path);
 	}
 	else {
 		log_str("ERROR: %s: No such file or directory", path);
-		free(app);
+		free(tile);
 		return NULL;
 	}
 
-	log_debug(2, "  => dir='%s' name='%s' fname='%s'", app->dir, app->name, app->fname);
+	log_debug(2, "  => dir='%s' name='%s' fname='%s'", tile->dir, tile->name, tile->fname);
 
 	/* Check for name conflict */
-	if (hk_app_find(app->name) != NULL) {
-		log_str("ERROR: Application '%s' loaded more than once", app->name);
-		hk_app_destroy(app);
+	if (hk_tile_find(tile->name) != NULL) {
+		log_str("ERROR: Tile '%s' loaded more than once", tile->name);
+		hk_tile_destroy(tile);
 		return NULL;
 	}
 
 	/* Init object and net tables */
-	hk_tab_init(&app->objs, sizeof(hk_obj_t *));
-	hk_tab_init(&app->nets, sizeof(hk_net_t *));
+	hk_tab_init(&tile->objs, sizeof(hk_obj_t *));
+	hk_tab_init(&tile->nets, sizeof(hk_net_t *));
 
-	/* Add new entry to app table */
-	hk_app_t **papp = hk_tab_push(&apps);
-	*papp = app;
+	/* Add new entry to tile table */
+	hk_tile_t **ptile = hk_tab_push(&tiles);
+	*ptile = tile;
 
-	return app;
+	return tile;
 }
 
 
-void hk_app_destroy(hk_app_t *app)
+void hk_tile_destroy(hk_tile_t *tile)
 {
 	int i;
 
-	/* Remove app from list */
-	for (i = 0; i < apps.nmemb; i++) {
-		hk_app_t **papp = HK_TAB_PTR(apps, hk_app_t *, i);
-		if (*papp == app) {
-			*papp = NULL;
+	/* Remove tile from list */
+	for (i = 0; i < tiles.nmemb; i++) {
+		hk_tile_t **ptile = HK_TAB_PTR(tiles, hk_tile_t *, i);
+		if (*ptile == tile) {
+			*ptile = NULL;
 			break;
 		}
 	}
 
 	/* Destroy objects and nets */
-	for (i = 0; i < app->nets.nmemb; i++) {
-		hk_net_t *net = HK_TAB_VALUE(app->objs, hk_net_t *, i);
+	for (i = 0; i < tile->nets.nmemb; i++) {
+		hk_net_t *net = HK_TAB_VALUE(tile->objs, hk_net_t *, i);
 		hk_net_destroy(net);
 	}
-	hk_tab_cleanup(&app->nets);
+	hk_tab_cleanup(&tile->nets);
 
-	for (i = 0; i < app->objs.nmemb; i++) {
-		hk_obj_t *obj = HK_TAB_VALUE(app->objs, hk_obj_t *, i);
+	for (i = 0; i < tile->objs.nmemb; i++) {
+		hk_obj_t *obj = HK_TAB_VALUE(tile->objs, hk_obj_t *, i);
 		hk_obj_destroy(obj);
 	}
-	hk_tab_cleanup(&app->objs);
+	hk_tab_cleanup(&tile->objs);
 
 	/* Free descriptor content */
-	free(app->dir);
-	free(app->name);
-	free(app->fname);
+	free(tile->dir);
+	free(tile->name);
+	free(tile->fname);
 
 	/* Free descriptor */
-	memset(app, 0, sizeof(hk_app_t));  // Defencive operation to prevent from referencing unallocated pointers
-	free(app);
+	memset(tile, 0, sizeof(hk_tile_t));  // Defencive operation to prevent from referencing unallocated pointers
+	free(tile);
 }
 
 
-void hk_app_start(hk_app_t *app)
+void hk_tile_start(hk_tile_t *tile)
 {
 	int i;
 
 	/* Create nets and presets */
-	for (i = 0; i < app->objs.nmemb; i++) {
-		hk_obj_t *obj = HK_TAB_VALUE(app->objs, hk_obj_t *, i);
+	for (i = 0; i < tile->objs.nmemb; i++) {
+		hk_obj_t *obj = HK_TAB_VALUE(tile->objs, hk_obj_t *, i);
 		hk_prop_foreach(&obj->props, (hk_prop_foreach_func) hk_obj_setup, (void *) obj);
 	}
 
 	/* Invoke start handlers */
-	for (i = 0; i < app->objs.nmemb; i++) {
-		hk_obj_t *obj = HK_TAB_VALUE(app->objs, hk_obj_t *, i);
+	for (i = 0; i < tile->objs.nmemb; i++) {
+		hk_obj_t *obj = HK_TAB_VALUE(tile->objs, hk_obj_t *, i);
 
 		if (obj->class->start != NULL) {
 			log_debug(2, "Starting object '%s'", obj->name);

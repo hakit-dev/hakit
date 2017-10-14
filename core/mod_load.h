@@ -12,6 +12,6 @@
 
 #include "mod.h"
 
-extern hk_app_t *hk_mod_load(char *path);
+extern hk_tile_t *hk_mod_load(char *path);
 
 #endif /* __HAKIT_MOD_LOAD_H__ */

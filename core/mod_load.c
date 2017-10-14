@@ -26,7 +26,7 @@ typedef enum {
 } load_section_t;
 
 typedef struct {
-	hk_app_t *app;
+	hk_tile_t *tile;
 	int lnum;
 	load_section_t section;
 } load_ctx_t;
@@ -45,33 +45,33 @@ static int hk_mod_load_object(load_ctx_t *ctx, char *name, int argc, char **argv
 
 	/* Check object name is provided */
 	if (strempty(name)) {
-		log_str("ERROR: %s:%d: Missing object name", ctx->app->fname, ctx->lnum);
+		log_str("ERROR: %s:%d: Missing object name", ctx->tile->fname, ctx->lnum);
 		return -1;
 	}
 
 	/* Check class name is provided */
 	if (argc < 1) {
-		log_str("ERROR: %s:%d: Missing class name", ctx->app->fname, ctx->lnum);
+		log_str("ERROR: %s:%d: Missing class name", ctx->tile->fname, ctx->lnum);
 		return -1;
 	}
 
 	/* Retrieve class */
 	class = hk_class_find(argv[0]);
 	if (class == NULL) {
-		log_str("ERROR: %s:%d: Unknown class '%s'", ctx->app->fname, ctx->lnum, argv[0]);
+		log_str("ERROR: %s:%d: Unknown class '%s'", ctx->tile->fname, ctx->lnum, argv[0]);
 		return -1;
 	}
 
 	/* Create object */
-	obj = hk_obj_create(ctx->app, class, name, argc-1, argv+1);
+	obj = hk_obj_create(ctx->tile, class, name, argc-1, argv+1);
 	if (obj == NULL) {
-		log_str("PANIC: %s:%d: Failed to create object '%s'", ctx->app->fname, ctx->lnum, name);
+		log_str("PANIC: %s:%d: Failed to create object '%s'", ctx->tile->fname, ctx->lnum, name);
 		return -1;
 	}
 
 	if (class->new != NULL) {
 		if (class->new(obj) < 0) {
-			log_str("ERROR: %s:%d: Failed to setup object '%s'", ctx->app->fname, ctx->lnum, name);
+			log_str("ERROR: %s:%d: Failed to setup object '%s'", ctx->tile->fname, ctx->lnum, name);
 			return -1;
 		}
 	}
@@ -86,9 +86,9 @@ static int hk_mod_load_net(load_ctx_t *ctx, int argc, char **argv)
 	int i;
 
 	/* Create net */
-	net = hk_net_create(ctx->app);
+	net = hk_net_create(ctx->tile);
 	if (net == NULL) {
-		log_str("PANIC: %s:%d: Failed to create new net", ctx->app->fname, ctx->lnum);
+		log_str("PANIC: %s:%d: Failed to create new net", ctx->tile->fname, ctx->lnum);
 		return -1;
 	}
 
@@ -100,22 +100,22 @@ static int hk_mod_load_net(load_ctx_t *ctx, int argc, char **argv)
 		hk_pad_t *pad;
 
 		if (pt == NULL) {
-			log_str("ERROR: %s:%d: Syntax error in pad specification '%s'", ctx->app->fname, ctx->lnum, args);
+			log_str("ERROR: %s:%d: Syntax error in pad specification '%s'", ctx->tile->fname, ctx->lnum, args);
 			return -1;
 		}
 
 		*pt = '\0';
-		obj = hk_obj_find(ctx->app, args);
+		obj = hk_obj_find(ctx->tile, args);
 		*pt = '.';
 
 		if (obj == NULL) {
-			log_str("ERROR: %s:%d: Referencing undefined object '%s'", ctx->app->fname, ctx->lnum, args);
+			log_str("ERROR: %s:%d: Referencing undefined object '%s'", ctx->tile->fname, ctx->lnum, args);
 			return -1;
 		}
 
 		pad = hk_pad_find(obj, pt+1);
 		if (pad == NULL) {
-			log_str("ERROR: %s:%d: Referencing unknown pad '%s' in object '%s'", ctx->app->fname, ctx->lnum, pt+1, obj->name);
+			log_str("ERROR: %s:%d: Referencing unknown pad '%s' in object '%s'", ctx->tile->fname, ctx->lnum, pt+1, obj->name);
 			return -1;
 		}
 
@@ -134,7 +134,7 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 	char **argv = NULL;
 	char *s;
 
-	log_debug(2, "hk_mod_load_line %s:%d: '%s'", ctx->app->fname, ctx->lnum, line);
+	log_debug(2, "hk_mod_load_line %s:%d: '%s'", ctx->tile->fname, ctx->lnum, line);
 
 	/* Skip leadink blanks */
 	while ((*line <= ' ') && (*line != '\0')) {
@@ -161,7 +161,7 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 		}
 		else {
 			ctx->section = SECTION_UNKNOWN;
-			log_str("WARNING: %s:%s: ignoring unknown section %s", ctx->app->fname, ctx->lnum, line);
+			log_str("WARNING: %s:%s: ignoring unknown section %s", ctx->tile->fname, ctx->lnum, line);
 		}
 
 		return 0;
@@ -205,7 +205,7 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 }
 
 
-hk_app_t *hk_mod_load(char *path)
+hk_tile_t *hk_mod_load(char *path)
 {
 	int ret = 0;
 	FILE *f;
@@ -216,19 +216,19 @@ hk_app_t *hk_mod_load(char *path)
 
 	log_debug(2, "hk_mod_load '%s'", path);
 
-	hk_app_t *app = hk_app_create(path);
-	if (app == NULL) {
+	hk_tile_t *tile = hk_tile_create(path);
+	if (tile == NULL) {
 		return NULL;
 	}
 
-	f = fopen(app->fname, "r");
+	f = fopen(tile->fname, "r");
 	if (f == NULL) {
-		log_str("ERROR: Cannot open file '%s': %s", app->fname, strerror(errno));
-		hk_app_destroy(app);
+		log_str("ERROR: Cannot open file '%s': %s", tile->fname, strerror(errno));
+		hk_tile_destroy(tile);
 		return NULL;
 	}
 
-	ctx.app = app;
+	ctx.tile = tile;
 
 	buf_init(&buf);
 
@@ -294,7 +294,7 @@ hk_app_t *hk_mod_load(char *path)
 			}
 		}
 		else if (len < 0) {
-			log_str("ERROR: Cannot read file '%s': %s", app->fname, strerror(errno));
+			log_str("ERROR: Cannot read file '%s': %s", tile->fname, strerror(errno));
 			ret = -1;
 		}
 	}
@@ -306,13 +306,13 @@ hk_app_t *hk_mod_load(char *path)
 		}
 	}
 	else {
-		hk_app_destroy(app);
-		app = NULL;
+		hk_tile_destroy(tile);
+		tile = NULL;
 	}
 
 	buf_cleanup(&buf);
 
 	fclose(f);
 
-	return app;
+	return tile;
 }
