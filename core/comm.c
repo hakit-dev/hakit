@@ -15,6 +15,7 @@
 #include "env.h"
 #include "options.h"
 #include "log.h"
+#include "files.h"
 #include "io.h"
 #include "ws.h"
 #include "ws_events.h"
@@ -26,6 +27,8 @@
 #include "command.h"
 #include "endpoint.h"
 #include "advertise.h"
+#include "mod_load.h"
+#include "mod.h"
 #include "comm.h"
 
 
@@ -234,12 +237,6 @@ int comm_init(int use_ssl, char *cafile,
 	}
 
 	/* Setup document root directory stack */
-	path = env_appdir("ui");
-	if (path != NULL) {
-		ws_add_document_root(comm.ws, path);
-                free(path);
-	}
-
 	path = env_devdir("ui");
 	if (path != NULL) {
 		log_debug(2, "Running from development environment!");
@@ -270,6 +267,33 @@ DONE:
 	}
 
 	return ret;
+}
+
+
+int comm_tile_register(char *path)
+{
+	log_debug(2, "comm_tile_register '%s'", path);
+
+	/* Load tile */
+	hk_tile_t *tile = hk_mod_load(path);
+	if (tile == NULL) {
+		return -1;
+	}
+
+	/* Start tile */
+	hk_tile_start(tile);
+
+	/* Add this tile to document root directory stack */
+	char *ui = hk_tile_path(tile, "ui");
+	if (ui != NULL) {
+		if (is_dir(ui)) {
+			ws_add_document_root(comm.ws, ui);
+		}
+
+		free(ui);
+	}
+
+	return 0;
 }
 
 

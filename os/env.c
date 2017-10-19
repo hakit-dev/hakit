@@ -22,8 +22,6 @@
 static char *env_curdir_ = NULL;
 static char *env_bindir_ = NULL;
 static char *env_devdir_ = NULL;
-static char *env_appdir_ = NULL;
-static char *env_app_ = NULL;
 
 
 char *env_which(char *pgm)
@@ -93,24 +91,6 @@ void env_init(int argc, char *argv[])
 		env_devdir_ = strdup(dirname(dirname(path)));
 		free(path);
 	}
-
-	/* Retrieve HAKit application path */
-	if (env_app_ != NULL) {
-		free(env_app_);
-		env_app_ = NULL;
-	}
-	if (env_appdir_ != NULL) {
-		free(env_appdir_);
-		env_appdir_ = NULL;
-	}
-
-	if (argc > 1) {
-		env_app_ = strdup(argv[1]);
-
-		path = strdup(env_app_);
-		env_appdir_ = strdup(dirname(path));
-		free(path);
-	}
 }
 
 
@@ -156,21 +136,4 @@ char *env_devdir(char *subpath)
 	}
 
 	return env_dir(env_devdir_, subpath);
-}
-
-
-char *env_app(void)
-{
-	return env_app_;
-}
-
-
-char *env_appdir(char *subpath)
-{
-	/* Return NULL if no application is loaded */
-	if (env_app_ == NULL) {
-		return NULL;
-	}
-
-	return env_dir(env_appdir_, subpath);
 }

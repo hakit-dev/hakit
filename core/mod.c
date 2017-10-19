@@ -537,7 +537,7 @@ hk_tile_t *hk_tile_create(char *path)
 		tile->name = strdup(basename(str));
 		free(str);
 
-		int size = strlen(path) + 8;
+		int size = strlen(path) + 10;
 		tile->fname = malloc(size);
 		snprintf(tile->fname, size, "%s/tile.hk", path);
 	}
@@ -615,7 +615,7 @@ void hk_tile_destroy(hk_tile_t *tile)
 	free(tile->fname);
 
 	/* Free descriptor */
-	memset(tile, 0, sizeof(hk_tile_t));  // Defencive operation to prevent from referencing unallocated pointers
+	memset(tile, 0, sizeof(hk_tile_t));  // Defensive operation to prevent from referencing unallocated pointers
 	free(tile);
 }
 
@@ -639,4 +639,13 @@ void hk_tile_start(hk_tile_t *tile)
 			obj->class->start(obj);
 		}
 	}
+}
+
+
+char *hk_tile_path(hk_tile_t *tile, char *subpath)
+{
+	int size = strlen(tile->dir) + strlen(subpath) + 2;
+	char *buf = malloc(size);
+	snprintf(buf, size, "%s/%s", tile->dir, subpath);
+	return buf;
 }

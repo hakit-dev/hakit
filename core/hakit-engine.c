@@ -19,7 +19,6 @@
 #include "comm.h"
 #include "mod.h"
 #include "mod_init.h"
-#include "mod_load.h"
 #include "ws_auth.h"
 
 #include "lws_config.h"
@@ -69,6 +68,7 @@ static const options_entry_t options_entries[] = {
 int main(int argc, char *argv[])
 {
 	int use_ssl = 1;  // 0 = disable SSL, 2 = allow insecure SSL
+	int i;
 
 	if (options_parse(options_entries, &argc, argv) != 0) {
 		exit(1);
@@ -112,13 +112,11 @@ int main(int argc, char *argv[])
 	}
 
         /* Load application */
-	char *app_name = env_app();
-	if (app_name != NULL) {
-		hk_tile_t *tile = hk_mod_load(app_name);
-		if (tile == NULL) {
+	for (i = 1; i < argc; i++) {
+		char *path = argv[i];
+		if (comm_tile_register(path) < 0) {
 			return 3;
 		}
-		hk_tile_start(tile);
 	}
 
 	sys_run();

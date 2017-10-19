@@ -24,9 +24,6 @@ extern void env_init(int argc, char *argv[]);
 extern char *env_devdir(char *subpath);
 extern char *env_bindir(char *subpath);
 
-extern char *env_app(void);
-extern char *env_appdir(char *subpath);
-
 /**
  * @brief Search program file in PATH directories
  * @param pgm
