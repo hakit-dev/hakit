@@ -35,7 +35,7 @@
 
 #define PID_FILE "/var/run/hakit.pid"
 #define LIB_DIR "/var/lib/hakit"
-#define APP_FILE_NAME "app.hk"
+#define TILE_FILE_NAME "tile.hk"
 
 #define HELLO_RETRY_DELAY (3*60)
 #define PING_DELAY (30*60)
@@ -83,7 +83,7 @@ static const options_entry_t options_entries[] = {
 	{ "daemon", 'D', 0,    OPTIONS_TYPE_NONE, &opt_daemon,  "Run in background as a daemon" },
 	{ "pid-file", 'P', 0,  OPTIONS_TYPE_STRING, &opt_pid_file,  "Daemon PID file name (default: " PID_FILE ")", "FILE" },
 	{ "platform-url", 'U', 0, OPTIONS_TYPE_STRING,   &opt_platform_url,  "HAKit web platform URL (default: " PLATFORM_URL ")", "URL" },
-	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store application and config files (default: " LIB_DIR ")", "DIR" },
+	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store tiles and config files (default: " LIB_DIR ")", "DIR" },
 	{ "offline", 'l', 0,   OPTIONS_TYPE_NONE,  &opt_offline,  "Work off-line. Do not access the HAKit platform server" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 #ifdef WITH_MQTT
@@ -219,7 +219,7 @@ typedef struct {
         char *path;
         char *basename;
         int ready;
-} app_t;
+} tile_t;
 
 typedef struct {
         char *fingerprint;
@@ -228,7 +228,7 @@ typedef struct {
 } cert_t;
 
 typedef struct {
-        hk_tab_t apps;
+        hk_tab_t tiles;
         hk_tab_t certs;
 	int index;
         int restart_engine;
@@ -243,45 +243,45 @@ static ctx_t *ctx_alloc(void)
 {
 	ctx_t *ctx = malloc(sizeof(ctx_t));
         memset(ctx, 0, sizeof(ctx_t));
-        hk_tab_init(&ctx->apps, sizeof(app_t));
+        hk_tab_init(&ctx->tiles, sizeof(tile_t));
         hk_tab_init(&ctx->certs, sizeof(cert_t));
 
         return ctx;
 }
 
 
-static void ctx_app_feed(ctx_t *ctx, char *str)
+static void ctx_tile_feed(ctx_t *ctx, char *str)
 {
-        app_t *app = hk_tab_push(&ctx->apps);
+        tile_t *tile = hk_tab_push(&ctx->tiles);
 
-        app->name = strdup(str);
-        app->rev = NULL;
-        app->path = NULL;
-        app->ready = 0;
+        tile->name = strdup(str);
+        tile->rev = NULL;
+        tile->path = NULL;
+        tile->ready = 0;
 
-        char *s = strchr(app->name, ' ');
+        char *s = strchr(tile->name, ' ');
         if (s != NULL) {
                 *(s++) = '\0';
                 while ((*s != '\0') && (*s <= ' ')) {
                         s++;
                 }
-                app->rev = s;
+                tile->rev = s;
         }
 
-        int size = strlen(opt_lib_dir) + strlen(app->name) + 20;
-        app->path = malloc(size);
-        int ofs = snprintf(app->path, size, "%s/apps", opt_lib_dir);
-        create_dir(app->path, 0755);
-        ofs += snprintf(app->path+ofs, size-ofs, "/%s", app->name);
-        create_dir(app->path, 0755);
-        app->path[ofs++] = '/';
-        app->basename = &app->path[ofs];
+        int size = strlen(opt_lib_dir) + strlen(tile->name) + 20;
+        tile->path = malloc(size);
+        int ofs = snprintf(tile->path, size, "%s/tiles", opt_lib_dir);
+        create_dir(tile->path, 0755);
+        ofs += snprintf(tile->path+ofs, size-ofs, "/%s", tile->name);
+        create_dir(tile->path, 0755);
+        tile->path[ofs++] = '/';
+        tile->basename = &tile->path[ofs];
 
-        if (app->rev != NULL) {
-                strcpy(app->basename, "REVISION");
+        if (tile->rev != NULL) {
+                strcpy(tile->basename, "REVISION");
 
-                // Check if app is already downloaded and up-to-date
-                FILE *f = fopen(app->path, "r");
+                // Check if tile is already downloaded and up-to-date
+                FILE *f = fopen(tile->path, "r");
                 if (f != NULL) {
                         char buf[128];
                         int len = fread(buf, 1, sizeof(buf)-1, f);
@@ -289,57 +289,57 @@ static void ctx_app_feed(ctx_t *ctx, char *str)
 
                         if (len > 0) {
                                 buf[len] = '\0';
-                                if (strcmp(buf, app->rev) == 0) {
-                                        app->ready = 1;
+                                if (strcmp(buf, tile->rev) == 0) {
+                                        tile->ready = 1;
                                 }
                         }
                 }
         }
 
-        strcpy(app->basename, APP_FILE_NAME);
+        strcpy(tile->basename, TILE_FILE_NAME);
 }
 
 
-static void ctx_app_feed_local(ctx_t *ctx, char *path)
+static void ctx_tile_feed_local(ctx_t *ctx, char *path)
 {
-        app_t *app = hk_tab_push(&ctx->apps);
+        tile_t *tile = hk_tab_push(&ctx->tiles);
         int ofs;
 
-        app->name = NULL;
-        app->rev = NULL;
-        app->path = realpath(path, NULL);
-        app->ready = 1;
+        tile->name = NULL;
+        tile->rev = NULL;
+        tile->path = realpath(path, NULL);
+        tile->ready = 1;
 
-        ofs = strlen(app->path);
-        while ((ofs > 0) && (app->path[ofs-1] != '/')) {
+        ofs = strlen(tile->path);
+        while ((ofs > 0) && (tile->path[ofs-1] != '/')) {
                 ofs--;
         }
 
-        app->basename = &app->path[ofs];
+        tile->basename = &tile->path[ofs];
 
-        log_debug(2, "Preparing to start local application: %s", app->path);
+        log_debug(2, "Preparing to start local tile: %s", tile->path);
 }
 
 
-static void ctx_app_cleanup(ctx_t *ctx)
+static void ctx_tile_cleanup(ctx_t *ctx)
 {
         int i;
 
-        for (i = 0; i < ctx->apps.nmemb; i++) {
-                app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
+        for (i = 0; i < ctx->tiles.nmemb; i++) {
+                tile_t *tile = HK_TAB_PTR(ctx->tiles, tile_t, i);
 
-                if (app->name != NULL) {
-                        free(app->name);
+                if (tile->name != NULL) {
+                        free(tile->name);
                 }
 
-                if (app->path != NULL) {
-                        free(app->path);
+                if (tile->path != NULL) {
+                        free(tile->path);
                 }
 
-                memset(app, 0, sizeof(app_t));
+                memset(tile, 0, sizeof(tile_t));
         }
 
-        hk_tab_cleanup(&ctx->apps);
+        hk_tab_cleanup(&ctx->tiles);
 }
 
 
@@ -365,7 +365,7 @@ static void ctx_cert_cleanup(ctx_t *ctx)
 
 static void ctx_free(ctx_t *ctx)
 {
-        ctx_app_cleanup(ctx);
+        ctx_tile_cleanup(ctx);
         ctx_cert_cleanup(ctx);
         memset(ctx, 0, sizeof(ctx_t));
         free(ctx);
@@ -478,11 +478,11 @@ static void engine_start(ctx_t *ctx)
 
         log_debug(2, "engine_start");
 
-        // Check all application are ready
-        for (i = 0; i < ctx->apps.nmemb; i++) {
-                app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
-                if (!app->ready) {
-                        log_str("ERROR: Cannot start engine: application '%s' is not up to date.");
+        // Check all tiles are ready
+        for (i = 0; i < ctx->tiles.nmemb; i++) {
+                tile_t *tile = HK_TAB_PTR(ctx->tiles, tile_t, i);
+                if (!tile->ready) {
+                        log_str("ERROR: Cannot start engine: tile '%s' is not up to date.");
                         hello_retry();
                         return;
                 }
@@ -536,9 +536,9 @@ static void engine_start(ctx_t *ctx)
 		HK_TAB_PUSH_VALUE(engine_argv, strdup("--no-hkcp"));
 	}
 
-        for (i = 0; i < ctx->apps.nmemb; i++) {
-                app_t *app = HK_TAB_PTR(ctx->apps, app_t, i);
-                HK_TAB_PUSH_VALUE(engine_argv, strdup(app->path));
+        for (i = 0; i < ctx->tiles.nmemb; i++) {
+                tile_t *tile = HK_TAB_PTR(ctx->tiles, tile_t, i);
+                HK_TAB_PUSH_VALUE(engine_argv, strdup(tile->path));
         }
         HK_TAB_PUSH_VALUE(engine_argv, (char *) NULL);
 
@@ -576,53 +576,53 @@ static void app_response(ctx_t *ctx, char *buf, int len)
                 int errcode = platform_get_status(buf, len, &errstr, &ofs);
 
                 if (errcode == 0) {
-                        app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
+                        tile_t *tile = HK_TAB_PTR(ctx->tiles, tile_t, ctx->index);
                         FILE *f;
 
-                        log_str("INFO: Application '%s' downloaded successfully", app->name);
+                        log_str("INFO: Tile '%s' downloaded successfully", tile->name);
 
-                        // Store application data
-                        strcpy(app->basename, APP_FILE_NAME);
-                        log_str("Writing app file: %s", app->path);
-                        f = fopen(app->path, "w");
+                        // Store tile data
+                        strcpy(tile->basename, TILE_FILE_NAME);
+                        log_str("Writing tile file: %s", tile->path);
+                        f = fopen(tile->path, "w");
                         if (f != NULL) {
                                 char *buf1 = buf + ofs;
                                 int len1 = len - ofs;
                                 int wlen = fwrite(buf1, 1, len1, f);
                                 if (wlen != len1) {
-                                        log_str("ERROR: Failed to write file '%s': %s", app->path, strerror(errno));
+                                        log_str("ERROR: Failed to write file '%s': %s", tile->path, strerror(errno));
                                         errcode = -1;
                                 }
                                 fclose(f);
                         }
                         else {
-                                log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
+                                log_str("ERROR: Failed to create file '%s': %s", tile->path, strerror(errno));
                                 errcode = -1;
                         }
 
                         // Store revision tag
                         if (errcode == 0) {
-                                strcpy(app->basename, "REVISION");
+                                strcpy(tile->basename, "REVISION");
 
-                                log_str("Writing app revision tag: %s", app->path);
-                                f = fopen(app->path, "w");
+                                log_str("Writing tile revision tag: %s", tile->path);
+                                f = fopen(tile->path, "w");
                                 if (f != NULL) {
-                                        fprintf(f, "%s", app->rev);
+                                        fprintf(f, "%s", tile->rev);
                                         fclose(f);
 
-                                        app->ready = 1;
+                                        tile->ready = 1;
                                 }
                                 else {
-                                        log_str("ERROR: Failed to create file '%s': %s", app->path, strerror(errno));
+                                        log_str("ERROR: Failed to create file '%s': %s", tile->path, strerror(errno));
                                         errcode = -1;
                                 }
 
-                                strcpy(app->basename, APP_FILE_NAME);
+                                strcpy(tile->basename, TILE_FILE_NAME);
                         }
                 }
 
                 if (errcode == 0) {
-                        // Ask for next application
+                        // Ask for next tile
                         ctx->index++;
                         app_request(ctx);
                 }
@@ -635,33 +635,33 @@ static void app_response(ctx_t *ctx, char *buf, int len)
 
 static void app_request(ctx_t *ctx)
 {
-	log_debug(2, "app_request %d/%d", ctx->index, ctx->apps.nmemb);
+	log_debug(2, "app_request %d/%d", ctx->index, ctx->tiles.nmemb);
 
-        // Seek next appliation to download
-        while (ctx->index < ctx->apps.nmemb) {
-                app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
-                if (app->ready) {
-                        log_str("INFO: Application '%s' is up to date: %s", app->name, app->rev);
+        // Seek next tile to download
+        while (ctx->index < ctx->tiles.nmemb) {
+                tile_t *tile = HK_TAB_PTR(ctx->tiles, tile_t, ctx->index);
+                if (tile->ready) {
+                        log_str("INFO: Tile '%s' is up to date: %s", tile->name, tile->rev);
                         ctx->index++;
                 }
                 else {
-                        log_str("INFO: Application '%s' will be downloaded: %s", app->name, app->rev);
+                        log_str("INFO: Tile '%s' will be downloaded: %s", tile->name, tile->rev);
                         break;
                 }
         }
 
-        if (ctx->index < ctx->apps.nmemb) {
-                app_t *app = HK_TAB_PTR(ctx->apps, app_t, ctx->index);
+        if (ctx->index < ctx->tiles.nmemb) {
+                tile_t *tile = HK_TAB_PTR(ctx->tiles, tile_t, ctx->index);
                 buf_t header;
 
-                // A new app will be downloaded, so we will need to restart the engine
+                // A new tile will be downloaded, so we will need to restart the engine
                 // after downloads are completed
                 ctx->restart_engine = 1;
 
                 buf_init(&header);
 
-                // Application name
-                buf_append_fmt(&header, "HAKit-Application: %s\r\n", app->name);
+                // Tile name
+                buf_append_fmt(&header, "HAKit-Tile: %s\r\n", tile->name);
 
 		platform_request("app.php", &header, (ws_client_func_t *) app_response, ctx);
         }
@@ -988,7 +988,7 @@ static void cert_request(ctx_t *ctx)
                 }
 #endif /* WITH_MQTT */
 		
-		// Fetch applications
+		// Fetch tiles
                 ctx->index = 0;
                 app_request(ctx);
         }
@@ -1096,9 +1096,9 @@ static void hello_response_parse(char *str, ctx_t *ctx)
                 }
         }
 
-        if (strcmp(str, "Application") == 0) {
+        if (strcmp(str, "Tile") == 0) {
                 if (value != NULL) {
-                        ctx_app_feed(ctx, value);
+                        ctx_tile_feed(ctx, value);
                 }
         }
         else if (strcmp(str, "Cert") == 0) {
@@ -1346,8 +1346,6 @@ static int stdin_recv(void *user_data, char *buf, int len)
 
 int main(int argc, char *argv[])
 {
-        char *app;
-
 	if (options_parse(options_entries, &argc, argv) != 0) {
 		exit(1);
 	}
@@ -1374,10 +1372,9 @@ int main(int argc, char *argv[])
 	log_init(NAME);
 	log_str(options_summary);
 
-        /* If a local application is given in command line arguments, force off-line mode */
-        app = env_app();
-        if (app != NULL) {
-                log_str("Using local application: off-line mode forced");
+        /* If a local tile is given in command line arguments, force off-line mode */
+        if (argc > 1) {
+                log_str("Using local tile(s): off-line mode forced");
                 opt_offline = 1;
         }
 
@@ -1405,12 +1402,20 @@ int main(int argc, char *argv[])
 	}
 
         /* Start it all, either on- or off-line */
-        if (app != NULL) {
-                /* Start local application, if any */
-                ctx_t *ctx = ctx_alloc();
-                ctx_app_feed_local(ctx, app);
+        if (argc > 1) {
+		int i;
+
+		ctx_t *ctx = ctx_alloc();
+
+                /* Start local tiles, if any */
+		for (i = 1; i < argc; i++) {
+			char *path = argv[i];
+			
+			ctx_tile_feed_local(ctx, path);
+		}
+
 		engine_start(ctx);
-                ctx_free(ctx);
+		ctx_free(ctx);
         }
         else {
                 /* Create lib directory */
@@ -1424,10 +1429,10 @@ int main(int argc, char *argv[])
                         hello_request();
                 }
                 else {
-                        /* Off-line mode: try to get application from the cache */
+                        /* Off-line mode: try to get tile from the cache */
                         ctx_t *ctx = hello_cache_load();
                         if (ctx == NULL) {
-                                log_str("ERROR: No API-Key provided, No application found in the cache: exiting.");
+                                log_str("ERROR: No API-Key provided, No tile found in the cache: exiting.");
                                 exit(2);
                         }
                 }
