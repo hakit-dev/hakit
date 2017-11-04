@@ -378,8 +378,6 @@ static void ctx_free(ctx_t *ctx)
 
 static sys_tag_t ping_timeout_tag = 0;
 
-static void ping_start(void);
-
 static void ping_stop(void)
 {
         log_debug(2, "ping_stop");
@@ -450,7 +448,7 @@ static void engine_start_now(void)
 
                 // Leave stdin stream to child
                 log_str("HAKit engine process started: pid=%d", engine_proc->pid);
-                if (!opt_offline) {
+                if ((!opt_offline) && (!running_fallback)) {
                         ping_start();
                 }
         }
@@ -1160,19 +1158,18 @@ static void hello_response(void *user_data, char *buf, int len)
         if (len < 0) {
                 log_str("ERROR: Unable to connect to HAKit platform. Is network available?");
 
-                ctx_t *ctx = hello_cache_load();
-                if (ctx != NULL) {
-                        // Start engine from cached program, except if it is already running
-                        if (state != ST_RUN) {
+                // Start engine from cached program, except if it is already running
+                if (state != ST_RUN) {
+                        ctx_t *ctx = hello_cache_load();
+                        if (ctx != NULL) {
                                 log_str("Starting engine from cached settings as temporary fallback ...");
                                 running_fallback = 1;
                                 engine_start(ctx);
+                                ctx_free(ctx);
                         }
-                        ctx_free(ctx);
                 }
-                else {
-                        hello_retry();
-                }
+
+                hello_retry();
         }
 	else if (len > 0) {
 		char *errstr = NULL;
