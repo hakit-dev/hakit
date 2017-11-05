@@ -77,7 +77,6 @@ static void hkcp_node_source_attach(hkcp_node_t *node, hk_source_t *source)
 #if 0
 static void hkcp_node_source_detach(hkcp_node_t *node, hk_source_t *source)
 {
-	int id = source->ep.id;
 	int i;
 
 	if (source == NULL) {
