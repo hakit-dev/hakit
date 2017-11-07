@@ -3,11 +3,11 @@
 ##
 
 ifneq ($(shell which rpm 2>/dev/null),)
-ifneq ($(shell rpm -q fedora-release | grep ^fedora-release),)
+ifneq ($(shell rpm -q fedora-release 2>/dev/null | grep ^fedora-release),)
 HOST_DISTRO = Fedora
-else ifneq ($(shell rpm -q redhat-release | grep ^redhat-release),)
+else ifneq ($(shell rpm -q redhat-release 2>/dev/null | grep ^redhat-release),)
 HOST_DISTRO = RedHat
-else ifneq ($(shell rpm -q centos-release | grep ^centos-release),)
+else ifneq ($(shell rpm -q centos-release 2>/dev/null | grep ^centos-release),)
 HOST_DISTRO = CentOS
 endif
 ifdef HOST_DISTRO
