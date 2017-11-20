@@ -226,7 +226,10 @@ function hakit_updated(name, value, dir, widget)
 	    row.cells[3].innerHTML = hakit_widget_led(widget, value);
 	}
 	else if (widget.substr(0, 7) == 'switch-') {
-	    if (widget == 'switch-3state') {
+            var args = widget.split(':');
+            var wname = args[0];
+
+	    if (wname == 'switch-3state') {
 		var elmt = document.getElementById(name+':switch3_'+value);
 		if (elmt) {
 		    elmt.checked = 1;
