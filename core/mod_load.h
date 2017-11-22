@@ -7,11 +7,11 @@
  * directory for more details.
  */
 
-#ifndef __HAKIT_MOD_LOAD_H__
-#define __HAKIT_MOD_LOAD_H__
+#ifndef __HAKIT_TILE_LOAD_H__
+#define __HAKIT_TILE_LOAD_H__
 
 #include "mod.h"
 
-extern hk_tile_t *hk_mod_load(char *path);
+extern int hk_tile_load(hk_tile_t *tile);
 
-#endif /* __HAKIT_MOD_LOAD_H__ */
+#endif /* __HAKIT_TILE_LOAD_H__ */

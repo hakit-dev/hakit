@@ -506,6 +506,12 @@ static HK_TAB_DECLARE(tiles, hk_tile_t *);
 #define HK_TILE_ENTRY(i) HK_TAB_VALUE(tiles, hk_tile_t *, i)
 
 
+int hk_tile_nmemb(void)
+{
+        return tiles.nmemb;
+}
+
+
 hk_tile_t *hk_tile_find(char *name)
 {
 	int i;

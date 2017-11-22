@@ -70,7 +70,7 @@ static void hkcp_node_source_attach(hkcp_node_t *node, hk_source_t *source)
 	hk_source_t **psource = hk_tab_push(&node->sources);
 	*psource = source;
 
-	log_debug(2, "hkcp_node_source_attach node=#%d='%s' source='%s' (%d elements)", node->id, node->name, source->ep.name, node->sources.nmemb);
+	log_debug(2, "hkcp_node_source_attach node=#%d='%s' source='%s.%s' (%d elements)", node->id, node->name, source->ep.obj->tile->name, source->ep.obj->name, node->sources.nmemb);
 }
 
 
@@ -204,7 +204,7 @@ static void hkcp_node_recv_sinks(hkcp_node_t *node, char *str)
 		/* If matching source is found, check for requesting node connection */
 		if (source != NULL) {
 			if (hk_source_is_public(source)) {
-				log_debug(2, "  remote sink='%s', matching source='%s'", str, source->ep.name);
+				log_debug(2, "  remote sink='%s', matching source='%s.%s'", str, source->ep.obj->tile->name, source->ep.obj->name);
 
 				/* Attach source to node (if not already done) */
 				hkcp_node_source_attach(node, source);
@@ -213,7 +213,7 @@ static void hkcp_node_recv_sinks(hkcp_node_t *node, char *str)
 				hkcp_node_send_initial_value(node, source);
 			}
 			else {
-				log_debug(2, "  remote sink='%s', matching source='%s' (local)", str, source->ep.name);
+				log_debug(2, "  remote sink='%s', matching source='%s.%s' (local)", str, source->ep.obj->tile->name, source->ep.obj->name);
 			}
 		}
 		else {
@@ -440,7 +440,7 @@ void hkcp_node_dump(hkcp_t *hkcp, hk_source_t *source, buf_t *out_buf)
 
 static void hkcp_node_send_initial_value(hkcp_node_t *node, hk_source_t *source)
 {
-	log_debug(3, "hkcp_node_send_initial_value node=#%d='%s' source='%s' flag=%02X", node->id, node->name, source->ep.name, source->ep.flag);
+	log_debug(3, "hkcp_node_send_initial_value node=#%d='%s' source='%s.%s' flag=%02X", node->id, node->name, source->ep.obj->tile->name, source->ep.obj->name, source->ep.flag);
 
 	/* Do not send initial value if source is declared as an event */
 	if (hk_source_is_event(source)) {
@@ -449,11 +449,11 @@ static void hkcp_node_send_initial_value(hkcp_node_t *node, hk_source_t *source)
 
 	/* Send initial value if node is attached to source */
 	if (hkcp_node_source_attached(node, source)) {
-		int size = strlen(source->ep.name) + source->ep.value.len + 10;
+		int size = strlen(source->ep.obj->name) + source->ep.value.len + 10;
 		char str[size];
 		int len;
 
-		len = snprintf(str, size-1, "set %s=%s", source->ep.name, source->ep.value.base);
+		len = snprintf(str, size-1, "set %s=%s", source->ep.obj->name, source->ep.value.base);
 		log_debug(2, "hkcp_node_send_initial_value node=#%d='%s' cmd='%s'", node->id, node->name, str);
 		str[len++] = '\n';
 
@@ -493,8 +493,8 @@ static void hkcp_source_send_nodes(hkcp_t *hkcp, hk_source_t *source, char *str,
 
 void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source, char *value)
 {
-	char *name = source->ep.name;
-	log_debug(3, "hkcp_source_update name='%s' value='%s'", name, value);
+	char *name = source->ep.obj->name;
+	log_debug(3, "hkcp_source_update name='%s.%s' value='%s'", source->ep.obj->tile->name, name, value);
 
 	int size = strlen(name) + strlen(value) + 20;
 	char str[size];

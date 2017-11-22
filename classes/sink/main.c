@@ -28,9 +28,9 @@ typedef struct {
 } ctx_t;
 
 
-static void _event(ctx_t *ctx, char *name, char *value)
+static void _event(ctx_t *ctx, hk_ep_t *ep)
 {
-	hk_pad_update_str(ctx->output, value);
+	hk_pad_update_str(ctx->output, hk_ep_get_value(ep));
 }
 
 
@@ -46,7 +46,7 @@ static int _new(hk_obj_t *obj)
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 
 	local = (hk_prop_get(&obj->props, "local") != NULL) ? 1:0;
-	ctx->id = comm_sink_register(obj->name, local, (comm_sink_func_t) _event, ctx);
+	ctx->id = comm_sink_register(obj, local, (hk_ep_func_t) _event, ctx);
 
 	comm_sink_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
 

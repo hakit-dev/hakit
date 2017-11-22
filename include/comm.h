@@ -10,8 +10,8 @@
 #ifndef __HAKIT_COMM_H__
 #define __HAKIT_COMM_H__
 
-#include "hkcp.h"
-typedef hk_ep_func_t comm_sink_func_t;
+#include "mod.h"
+#include "endpoint.h"
 
 extern int comm_init(int use_ssl, char *cafile,
                      int use_hkcp,
@@ -19,12 +19,12 @@ extern int comm_init(int use_ssl, char *cafile,
 
 extern int comm_tile_register(char *path);
 
-extern int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_data);
+extern int comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data);
 extern void comm_sink_set_widget(int id, char *widget_name);
 extern void comm_sink_update_str(int id, char *value);
 extern void comm_sink_update_int(int id, int value);
 
-extern int comm_source_register(char *name, int local, int event);
+extern int comm_source_register(hk_obj_t *obj, int local, int event);
 extern void comm_source_set_widget(int id, char *widget_name);
 extern void comm_source_update_str(int id, char *value);
 extern void comm_source_update_int(int id, int value);

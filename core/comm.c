@@ -52,29 +52,37 @@ typedef struct {
 static comm_t comm;
 
 
-static void comm_ws_send(ws_t *ws, char *name, char *value)
+static void comm_ws_send(ws_t *ws, hk_ep_t *ep)
 {
-	int size = strlen(name) + strlen(value) + 4;
+        char *tile_name = hk_ep_get_tile_name(ep);
+        char *name = hk_ep_get_name(ep);
+        char *value = hk_ep_get_value(ep);
+	int size = strlen(tile_name) + strlen(name) + strlen(value) + 4;
 	char str[size];
 
 	/* Send WebSocket event */
-	snprintf(str, size, "!%s=%s", name, value);
+        if (hk_tile_nmemb() > 1) {
+                snprintf(str, size, "!%s.%s=%s", tile_name, name, value);
+        }
+        else {
+                snprintf(str, size, "!%s=%s", name, value);
+        }
+
 	ws_events_send(ws, str);
 }
 
 
 #ifdef WITH_MQTT
 
-static void comm_mqtt_publish(mqtt_t *mqtt, char *name, char *value, int event)
+static void comm_mqtt_publish(mqtt_t *mqtt, hk_ep_t *ep)
 {
-	int retain = event ? 0:1;
-	mqtt_publish(mqtt, name, value, retain);
+	mqtt_publish(mqtt, hk_ep_get_name(ep), hk_ep_get_value(ep),  hk_ep_flag_retain(ep));
 }
 
 
-static void comm_mqtt_subscribe(mqtt_t *mqtt, char *name, char *value, int event)
+static void comm_mqtt_subscribe(mqtt_t *mqtt, hk_ep_t *ep)
 {
-	mqtt_subscribe(mqtt, name);
+	mqtt_subscribe(mqtt, hk_ep_get_name(ep));
 }
 
 
@@ -274,11 +282,17 @@ int comm_tile_register(char *path)
 {
 	log_debug(2, "comm_tile_register '%s'", path);
 
-	/* Load tile */
-	hk_tile_t *tile = hk_mod_load(path);
+	/* Create tile */
+	hk_tile_t *tile = hk_tile_create(path);
 	if (tile == NULL) {
 		return -1;
 	}
+
+	/* Load tile */
+        if (hk_tile_load(tile) < 0) {
+		hk_tile_destroy(tile);
+		return -1;
+        }
 
 	/* Start tile */
 	hk_tile_start(tile);
@@ -297,9 +311,9 @@ int comm_tile_register(char *path)
 }
 
 
-int comm_sink_register(char *name, int local, comm_sink_func_t func, void *user_data)
+int comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data)
 {
-	hk_sink_t *sink = hk_sink_register(&comm.eps, name, local);
+	hk_sink_t *sink = hk_sink_register(&comm.eps, obj, local);
 
 	if (sink != NULL) {
 		hk_sink_add_handler(sink, func, user_data);
@@ -335,7 +349,7 @@ void comm_sink_update_str(int id, char *value)
                 char *name = hk_sink_update(sink, value);
 
                 if (name != NULL) {
-                        comm_ws_send(comm.ws, name, value);
+                        comm_ws_send(comm.ws, &sink->ep);
                 }
         }
         else {
@@ -352,9 +366,9 @@ void comm_sink_update_int(int id, int value)
 }
 
 
-int comm_source_register(char *name, int local, int event)
+int comm_source_register(hk_obj_t *obj, int local, int event)
 {
-	hk_source_t *source = hk_source_register(&comm.eps, name, local, event);
+	hk_source_t *source = hk_source_register(&comm.eps, obj, local, event);
 
 	if (source != NULL) {
 		if (comm.use_hkcp && (!local)) {
@@ -395,12 +409,11 @@ void comm_source_update_str(int id, char *value)
 		hkcp_source_update(&comm.hkcp, source, value);
 
 #ifdef WITH_MQTT
-		int retain = hk_source_is_event(source) ? 0:1;
-		mqtt_publish(&comm.mqtt, name, value, retain);
+		mqtt_publish(&comm.mqtt, name, value, hk_ep_flag_retain(&source->ep));
 #endif
 	}
 
-	comm_ws_send(comm.ws, name, value);
+	comm_ws_send(comm.ws, &source->ep);
 }
 
 

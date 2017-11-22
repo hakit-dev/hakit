@@ -38,7 +38,7 @@ static inline int strempty(char *str)
 }
 
 
-static int hk_mod_load_object(load_ctx_t *ctx, char *name, int argc, char **argv)
+static int hk_tile_load_object(load_ctx_t *ctx, char *name, int argc, char **argv)
 {
 	hk_class_t *class;
 	hk_obj_t *obj;
@@ -80,7 +80,7 @@ static int hk_mod_load_object(load_ctx_t *ctx, char *name, int argc, char **argv
 }
 
 
-static int hk_mod_load_net(load_ctx_t *ctx, int argc, char **argv)
+static int hk_tile_load_net(load_ctx_t *ctx, int argc, char **argv)
 {
 	hk_net_t *net;
 	int i;
@@ -126,7 +126,7 @@ static int hk_mod_load_net(load_ctx_t *ctx, int argc, char **argv)
 }
 
 
-static int hk_mod_load_line(load_ctx_t *ctx, char *line)
+static int hk_tile_load_line(load_ctx_t *ctx, char *line)
 {
 	int ret = 0;
 	char *name = NULL;
@@ -134,7 +134,7 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 	char **argv = NULL;
 	char *s;
 
-	log_debug(2, "hk_mod_load_line %s:%d: '%s'", ctx->tile->fname, ctx->lnum, line);
+	log_debug(2, "hk_tile_load_line %s:%d: '%s'", ctx->tile->fname, ctx->lnum, line);
 
 	/* Skip leadink blanks */
 	while ((*line <= ' ') && (*line != '\0')) {
@@ -188,10 +188,10 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 
 	switch (ctx->section) {
 	case SECTION_OBJECTS:
-		ret = hk_mod_load_object(ctx, name, argc, argv);
+		ret = hk_tile_load_object(ctx, name, argc, argv);
 		break;
 	case SECTION_NETS:
-		ret = hk_mod_load_net(ctx, argc, argv);
+		ret = hk_tile_load_net(ctx, argc, argv);
 		break;
 	default:
 		break;
@@ -205,7 +205,7 @@ static int hk_mod_load_line(load_ctx_t *ctx, char *line)
 }
 
 
-hk_tile_t *hk_mod_load(char *path)
+int hk_tile_load(hk_tile_t *tile)
 {
 	int ret = 0;
 	FILE *f;
@@ -214,18 +214,12 @@ hk_tile_t *hk_mod_load(char *path)
 		.section = SECTION_OBJECTS,
 	};
 
-	log_debug(2, "hk_mod_load '%s'", path);
-
-	hk_tile_t *tile = hk_tile_create(path);
-	if (tile == NULL) {
-		return NULL;
-	}
+	log_debug(2, "hk_tile_load '%s' from %s", tile->name, tile->fname);
 
 	f = fopen(tile->fname, "r");
 	if (f == NULL) {
 		log_str("ERROR: Cannot open file '%s': %s", tile->fname, strerror(errno));
-		hk_tile_destroy(tile);
-		return NULL;
+		return -1;
 	}
 
 	ctx.tile = tile;
@@ -257,7 +251,7 @@ hk_tile_t *hk_mod_load(char *path)
 			if (check_nl) {
 				check_nl = 0;
 				if (*s1 != ' ') {
-					ret = hk_mod_load_line(&ctx, (char *) buf.base);
+					ret = hk_tile_load_line(&ctx, (char *) buf.base);
 					buf.len = 0;
 				}
 			}
@@ -282,7 +276,7 @@ hk_tile_t *hk_mod_load(char *path)
 					else if (*s2 != ' ') {
 						// If the next line does not begins with a space,
 						// the current line is complete and must be processed
-						ret = hk_mod_load_line(&ctx, (char *) buf.base);
+						ret = hk_tile_load_line(&ctx, (char *) buf.base);
 						buf.len = 0;
 					}
 				}
@@ -302,17 +296,13 @@ hk_tile_t *hk_mod_load(char *path)
 	if (ret == 0) {
 		if (buf.len > 0) {
 			buf.base[buf.len] = '\0';
-			ret = hk_mod_load_line(&ctx, (char *) buf.base);
+			ret = hk_tile_load_line(&ctx, (char *) buf.base);
 		}
-	}
-	else {
-		hk_tile_destroy(tile);
-		tile = NULL;
 	}
 
 	buf_cleanup(&buf);
 
 	fclose(f);
 
-	return tile;
+	return ret;
 }

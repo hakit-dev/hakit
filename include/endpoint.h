@@ -14,6 +14,7 @@
 
 #include "buf.h"
 #include "tab.h"
+#include "mod.h"
 
 
 /*
@@ -52,14 +53,19 @@ typedef enum {
 typedef struct {
 	hk_ep_type_t type;
 	int id;                  /* Endpoint id */
-	char *name;              /* Endpoint name */
+	hk_obj_t *obj;
 	buf_t value;
 	unsigned int flag;
 	char *widget;
+        int locked;
 } hk_ep_t;
 
-typedef int (*hk_ep_foreach_func_t)(hk_ep_t *ep, void *user_data);
+typedef int (*hk_ep_foreach_func_t)(void *user_data, hk_ep_t *ep);
 
+#define hk_ep_get_tile_name(ep) ((ep)->obj->tile->name)
+#define hk_ep_get_name(ep) ((ep)->obj->name)
+#define hk_ep_get_value(ep) ((char *) ((ep)->value.base))
+#define hk_ep_flag_retain(ep) ((((ep)->flag) & HK_FLAG_EVENT) ? 0:1)
 extern void hk_ep_append_name(hk_ep_t *ep, buf_t *out_buf);
 extern void hk_ep_append_value(hk_ep_t *ep, buf_t *out_buf);
 extern void hk_ep_dump(hk_ep_t *ep, buf_t *out_buf);
@@ -69,7 +75,7 @@ extern void hk_ep_dump(hk_ep_t *ep, buf_t *out_buf);
  * Sink endpoint
  */
 
-typedef void (*hk_ep_func_t)(void *user_data, char *name, char *value, int event);
+typedef void (*hk_ep_func_t)(void *user_data, hk_ep_t *ep);
 
 typedef struct {
 	hk_ep_func_t func;
@@ -81,7 +87,7 @@ typedef struct {
 	hk_tab_t handlers;   // Table of (hk_sink_handler_t);
 } hk_sink_t;
 
-extern hk_sink_t *hk_sink_register(hk_endpoints_t *eps, char *name, int local);
+extern hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local);
 extern hk_sink_t *hk_sink_retrieve_by_name(hk_endpoints_t *eps, char *name);
 extern hk_sink_t *hk_sink_retrieve_by_id(hk_endpoints_t *eps, int id);
 extern void hk_sink_update_by_name(hk_endpoints_t *eps, char *name, char *value);
@@ -101,9 +107,10 @@ extern char *hk_sink_update(hk_sink_t *sink, char *value);
 
 typedef struct {
 	hk_ep_t ep;
+	hk_tab_t local_sinks;   // Table of (hk_sink_t *);
 } hk_source_t;
 
-extern hk_source_t *hk_source_register(hk_endpoints_t *eps, char *name, int local, int event);
+extern hk_source_t *hk_source_register(hk_endpoints_t *eps, hk_obj_t *obj, int local, int event);
 extern hk_source_t *hk_source_retrieve_by_name(hk_endpoints_t *eps, char *name);
 extern hk_source_t *hk_source_retrieve_by_id(hk_endpoints_t *eps, int id);
 extern int hk_source_to_advertise(hk_endpoints_t *eps);

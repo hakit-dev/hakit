@@ -38,8 +38,8 @@ static inline const char *hk_ep_type_str(hk_ep_t *ep)
 
 static void hk_ep_set_widget(hk_ep_t *ep, char *widget_name)
 {
-	if (ep->name != NULL) {
-		log_debug(2, "hk_ep_set_widget name='%s' widget='%s'", ep->name, widget_name);
+	if (ep->obj != NULL) {
+		log_debug(2, "hk_ep_set_widget name='%s' widget='%s'", ep->obj->name, widget_name);
 		if (ep->widget != NULL) {
 			free(ep->widget);
 			ep->widget = NULL;
@@ -49,14 +49,14 @@ static void hk_ep_set_widget(hk_ep_t *ep, char *widget_name)
 		}
 	}
 	else {
-		log_str("PANIC: Attempting to set widget name on unknown %s #%d\n", hk_ep_type_str(ep), ep->id);
+		log_str("PANIC: Attempting to set widget name on dead %s #%d\n", hk_ep_type_str(ep), ep->id);
 	}
 }
 
 
 void hk_ep_append_name(hk_ep_t *ep, buf_t *out_buf)
 {
-	buf_append_str(out_buf, ep->name);
+	buf_append_str(out_buf, ep->obj->name);
 }
 
 
@@ -71,7 +71,7 @@ static int hk_ep_id(hk_ep_t *ep)
         if (ep == NULL) {
                 return -1;
         }
-        if (ep->name == NULL) {
+        if (ep->obj == NULL) {
                 return -1;
         }
 
@@ -84,7 +84,7 @@ static int hk_ep_is_public(hk_ep_t *ep)
         if (ep == NULL) {
                 return 0;
         }
-        if (ep->name == NULL) {
+        if (ep->obj == NULL) {
                 return 0;
         }
 
@@ -97,15 +97,19 @@ void hk_ep_dump(hk_ep_t *ep, buf_t *out_buf)
         if (ep == NULL) {
                 return;
         }
-        if (ep->name == NULL) {
+        if (ep->obj == NULL) {
                 return;
         }
 
 	buf_append_str(out_buf, (char *) hk_ep_type_str(ep));
 	buf_append_byte(out_buf, ' ');
 	buf_append_str(out_buf, ep->widget);
-	buf_append_byte(out_buf, ' ');
-	buf_append_str(out_buf, ep->name);
+        buf_append_byte(out_buf, ' ');
+        if (hk_tile_nmemb() > 1) {
+                buf_append_str(out_buf, ep->obj->tile->name);
+                buf_append_byte(out_buf, '.');
+        }
+	buf_append_str(out_buf, ep->obj->name);
 	buf_append_byte(out_buf, ' ');
 	buf_append(out_buf, ep->value.base, ep->value.len);
 	buf_append_byte(out_buf, '\n');
@@ -114,10 +118,6 @@ void hk_ep_dump(hk_ep_t *ep, buf_t *out_buf)
 
 static void hk_ep_cleanup(hk_ep_t *ep)
 {
-        if (ep->name != NULL) {
-                free(ep->name);
-        }
-
         buf_cleanup(&ep->value);
 
         if (ep->widget != NULL) {
@@ -138,8 +138,8 @@ hk_sink_t *hk_sink_retrieve_by_name(hk_endpoints_t *eps, char *name)
 
 	for (i = 0; i < eps->sinks.nmemb; i++) {
 		hk_sink_t *sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, i);
-                if ((sink != NULL) && (sink->ep.name != NULL)) {
-			if (strcmp(sink->ep.name, name) == 0) {
+                if ((sink != NULL) && (sink->ep.obj != NULL) && (sink->ep.obj->name != NULL)) {
+			if (strcmp(sink->ep.obj->name, name) == 0) {
 				return sink;
 			}
 		}
@@ -161,7 +161,7 @@ hk_sink_t *hk_sink_retrieve_by_id(hk_endpoints_t *eps, int id)
 	
 	hk_sink_t *sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, id);
 
-	if (sink->ep.name == NULL) {
+	if (sink->ep.obj == NULL) {
 		return NULL;
 	}
 
@@ -169,7 +169,7 @@ hk_sink_t *hk_sink_retrieve_by_id(hk_endpoints_t *eps, int id)
 }
 
 
-static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, char *name, int local)
+static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local)
 {
 	hk_sink_t *sink = NULL;
 	int i;
@@ -177,7 +177,7 @@ static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, char *name, int local)
         /* Search a free entry in the sink table */
 	for (i = 0; (i < eps->sinks.nmemb) && (sink == NULL); i++) {
 		sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, i);
-		if (sink->ep.name != NULL) {
+		if (sink->ep.obj != NULL) {
                         sink = NULL;
 		}
 	}
@@ -191,7 +191,7 @@ static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, char *name, int local)
 
 	sink->ep.type = HK_EP_SINK;
 	sink->ep.id = i;
-	sink->ep.name = strdup(name);
+	sink->ep.obj = obj;
 	buf_init(&sink->ep.value);
 	buf_set_str(&sink->ep.value, "");
 
@@ -202,6 +202,8 @@ static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, char *name, int local)
         else {
                 hk_ep_set_widget(HK_EP(sink), "led-green");
         }
+
+	hk_tab_init(&sink->handlers, sizeof(hk_sink_handler_t));
 
 	return sink;
 }
@@ -214,10 +216,11 @@ static void hk_sink_cleanup(hk_sink_t *sink)
 }
 
 
-static void hk_sink_free(hk_sink_t *sink)
+static int hk_sink_free(void *user_data, hk_sink_t *sink)
 {
         hk_sink_cleanup(sink);
         free(sink);
+        return 1;
 }
 
 
@@ -229,26 +232,30 @@ void hk_sink_add_handler(hk_sink_t *sink, hk_ep_func_t func, void *user_data)
 }
 
 
-hk_sink_t *hk_sink_register(hk_endpoints_t *eps, char *name, int local)
+hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local)
 {
 	hk_sink_t *sink;
 
-	/* Ensure there is no name conflict against sink and source namespaces */
-	if (hk_source_retrieve_by_name(eps, name) != NULL) {
-		log_str("ERROR: Cannot register sink '%s': a source is already registered with this name\n", name);
-		return NULL;
-	}
-
-	if (hk_sink_retrieve_by_name(eps, name)) {
-		log_str("ERROR: Cannot register source '%s': a sink is already registered with this name\n", name);
+	/* Ensure there is not sink with this name */
+        sink = hk_sink_retrieve_by_name(eps, obj->name);
+	if (sink != NULL) {
+		log_str("ERROR: Cannot register sink '%s': sink #%d is already registered with this name\n", obj->name, sink->ep.id);
 		return NULL;
 	}
 
 	/* Allocate new sink */
-	sink = hk_sink_alloc(eps, name, local);
-	log_debug(2, "hk_sink_register sink='%s' (%d elements)", name, eps->sinks.nmemb);
+	sink = hk_sink_alloc(eps, obj, local);
+	log_debug(2, "hk_sink_register '%s' #%d (%d elements)", obj->name, sink->ep.id, eps->sinks.nmemb);
 
-	hk_tab_init(&sink->handlers, sizeof(hk_sink_handler_t));
+        /* Establish local connection with source, if any */
+        if (!local) {
+                hk_source_t *source = hk_source_retrieve_by_name(eps, obj->name);
+                if (source != NULL) {
+                        hk_sink_t **psink = hk_tab_push(&source->local_sinks);
+                        *psink = sink;
+                        log_debug(2, "hk_sink_register '%s' connected to local source #%d", obj->name, source->ep.id);
+                }
+        }
 
 	return sink;
 }
@@ -263,14 +270,30 @@ void hk_sink_set_widget(hk_sink_t *sink, char *widget_name)
 
 
 #if 0
-static void hk_sink_unregister_(hk_endpoints_t *eps, char *name)
+static void hk_sink_unregister(hk_endpoints_t *eps, char *name)
 {
 	hk_sink_t *sink = hk_sink_retrieve_by_name(eps, name);
+	int i, j;
 
-	if (sink != NULL) {
-                log_debug(2, "hk_sink_unregister name='%s'", name);
-                hk_sink_cleanup(sink);
-	}
+	if (sink == NULL) {
+                return;
+        }
+
+        log_debug(2, "hk_sink_unregister '%s' #%d", name, sink->ep.id);
+
+        /* Cancel connections to local sources */
+        for (i = 0; i < eps->sources.nmemb; i++) {
+                hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
+                for (j = 0; j < source->local_sinks.nmemb; j++) {
+                        hk_sink_t **psink = HK_TAB_PTR(source->local_sinks, hk_sink_t *, j);
+                        if (*psink == sink) {
+                                *psink = NULL;
+                        }
+                }
+        }
+
+        /* Cleanup sink */
+        hk_sink_cleanup(sink);
 }
 #endif
 
@@ -283,21 +306,31 @@ int hk_sink_is_public(hk_sink_t *sink)
 
 char *hk_sink_update(hk_sink_t *sink, char *value)
 {
+        char *name = sink->ep.obj->name;
 	int i;
+
+        /* Prevent circular endoint update */
+        if (sink->ep.locked) {
+		log_str("WARNING: Attempting to update locked sink endpoint '%s' #%d", name, sink->ep.id);
+                return name;
+        }
 
 	/* Update sink value */
 	buf_set_str(&sink->ep.value, value);
 
 	/* Invoke sink event callback */
+        sink->ep.locked = 1;
+
 	for (i = 0; i < sink->handlers.nmemb; i++) {
 		hk_sink_handler_t *handler = HK_TAB_PTR(sink->handlers, hk_sink_handler_t, i);
 		if (handler->func != NULL) {
-			int event = (sink->ep.flag & HK_FLAG_EVENT) ? 1:0;
-			handler->func(handler->user_data, sink->ep.name, (char *) sink->ep.value.base, event);
+			handler->func(handler->user_data, &sink->ep);
 		}
 	}
 
-	return sink->ep.name;
+        sink->ep.locked = 0;
+
+	return name;
 }
 
 
@@ -327,8 +360,8 @@ void hk_sink_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *user_
 
 	for (i = 0; i < eps->sinks.nmemb; i++) {
 		hk_sink_t *sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, i);
-                if ((sink != NULL) && (sink->ep.name != NULL)) {
-                        if (func(HK_EP(sink), user_data) == 0) {
+                if ((sink != NULL) && (sink->ep.obj != NULL)) {
+                        if (func(user_data, HK_EP(sink)) == 0) {
                                 return;
                         }
                 }
@@ -342,10 +375,9 @@ void hk_sink_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_d
 
 	for (i = 0; i < eps->sinks.nmemb; i++) {
 		hk_sink_t *sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, i);
-                if ((sink != NULL) && (sink->ep.name != NULL)) {
+                if ((sink != NULL) && (sink->ep.obj != NULL)) {
                         if ((sink->ep.flag & HK_FLAG_LOCAL) == 0) {
-                                int event = (sink->ep.flag & HK_FLAG_EVENT) ? 1:0;
-                                func(user_data, sink->ep.name, (char *) sink->ep.value.base, event);
+                                func(user_data, &sink->ep);
                         }
                 }
 	}
@@ -384,7 +416,7 @@ hk_source_t *hk_source_retrieve_by_id(hk_endpoints_t *eps, int id)
 	
 	hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, id);
 
-	if (source->ep.name == NULL) {
+	if (source->ep.obj == NULL) {
 		return NULL;
 	}
 
@@ -398,8 +430,8 @@ hk_source_t *hk_source_retrieve_by_name(hk_endpoints_t *eps, char *name)
 
 	for (i = 0; i < eps->sources.nmemb; i++) {
 		hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
-		if ((source != NULL) && (source->ep.name != NULL)) {
-			if (strcmp(source->ep.name, name) == 0) {
+		if ((source != NULL) && (source->ep.obj != NULL)) {
+			if (strcmp(source->ep.obj->name, name) == 0) {
 				return source;
 			}
 		}
@@ -409,7 +441,7 @@ hk_source_t *hk_source_retrieve_by_name(hk_endpoints_t *eps, char *name)
 }
 
 
-static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, char *name, int local, int event)
+static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local, int event)
 {
 	hk_source_t *source = NULL;
 	int i;
@@ -417,7 +449,7 @@ static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, char *name, int local, 
         /* Search a free entry in the source table */
 	for (i = 0; (i < eps->sources.nmemb) && (source == NULL); i++) {
 		source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
-		if (source->ep.name != NULL) {
+		if (source->ep.obj != NULL) {
                         source = NULL;
 		}
 	}
@@ -431,7 +463,7 @@ static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, char *name, int local, 
 
 	source->ep.type = HK_EP_SOURCE;
 	source->ep.id = i;
-	source->ep.name = strdup(name);
+	source->ep.obj = obj;
 	buf_init(&source->ep.value);
 	buf_set_str(&source->ep.value, "");
 
@@ -445,6 +477,8 @@ static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, char *name, int local, 
 
         hk_ep_set_widget(HK_EP(source), "led-red");
 
+	hk_tab_init(&source->local_sinks, sizeof(hk_sink_t *));
+
 	return source;
 }
 
@@ -452,34 +486,40 @@ static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, char *name, int local, 
 static void hk_source_cleanup(hk_source_t *source)
 {
         hk_ep_cleanup(&source->ep);
+        hk_tab_cleanup(&source->local_sinks);
 }
 
 
-static void hk_source_free(hk_source_t *source)
+static int hk_source_free(void *user_data, hk_source_t *source)
 {
         hk_source_cleanup(source);
         free(source);
+        return 1;
 }
 
 
-hk_source_t *hk_source_register(hk_endpoints_t *eps, char *name, int local, int event)
+hk_source_t *hk_source_register(hk_endpoints_t *eps, hk_obj_t *obj, int local, int event)
 {
 	hk_source_t *source;
 
-	/* Ensure there is no name conflict against sink and source namespaces */
-	if (hk_sink_retrieve_by_name(eps, name)) {
-		log_str("ERROR: Cannot register source '%s': a sink is already registered with this name\n", name);
-		return NULL;
-	}
-
-	if (hk_source_retrieve_by_name(eps, name) != NULL) {
-		log_str("ERROR: Cannot register sink '%s': a source is already registered with this name\n", name);
+	/* Ensure there is not source with this name */
+        source = hk_source_retrieve_by_name(eps, obj->name);
+	if (source != NULL) {
+		log_str("ERROR: Cannot register source '%s': source #%d is already registered with this name\n", obj->name, source->ep.id);
 		return NULL;
 	}
 
 	/* Allocate new source */
-	source = hk_source_alloc(eps, name, local, event);
-	log_debug(2, "hk_source_register name='%s' (%d elements)", name, eps->sources.nmemb);
+	source = hk_source_alloc(eps, obj, local, event);
+	log_debug(2, "hk_source_register '%s' #%d (%d elements)", obj->name, source->ep.id, eps->sources.nmemb);
+
+        /* Establish local connection with sink, if any */
+        hk_sink_t *sink = hk_sink_retrieve_by_name(eps, obj->name);
+	if (sink != NULL) {
+                hk_sink_t **psink = hk_tab_push(&source->local_sinks);
+                *psink = sink;
+                log_debug(2, "hk_source_register '%s' connected to local sink #%d", obj->name, sink->ep.id);
+	}
 
 	return source;
 }
@@ -498,10 +538,14 @@ void hk_source_unregister(hk_endpoints_t *eps, char *name)
 {
 	hk_source_t *source = hk_source_retrieve_by_name(eps, name);
 
-	if (source != NULL) {
-                log_debug(2, "hk_source_unregister name='%s'", name);
-                hk_ep_cleanup(&source->ep);
+	if (source == NULL) {
+                return;
 	}
+
+        log_debug(2, "hk_source_unregister '%s' #%d", name, source->ep.id);
+
+        /* Cleanup source */
+        hk_source_cleanup(source);
 }
 #endif
 
@@ -517,7 +561,7 @@ int hk_source_is_event(hk_source_t *source)
         if (source == NULL) {
                 return 0;
         }
-        if (source->ep.name == NULL) {
+        if (source->ep.obj == NULL) {
                 return 0;
         }
 	return (source->ep.flag & HK_FLAG_EVENT) ? 1:0;
@@ -530,7 +574,7 @@ void hk_source_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *use
 
 	for (i = 0; i < eps->sources.nmemb; i++) {
 		hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
-                if (func(HK_EP(source), user_data) == 0) {
+                if (func(user_data, HK_EP(source)) == 0) {
                         return;
                 }
 	}
@@ -543,9 +587,10 @@ void hk_source_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user
 
 	for (i = 0; i < eps->sources.nmemb; i++) {
 		hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
-		if ((source->ep.name != NULL) && ((source->ep.flag & HK_FLAG_LOCAL) == 0)) {
-			int event = (source->ep.flag & HK_FLAG_EVENT) ? 1:0;
-			func(user_data, source->ep.name, (char *) source->ep.value.base, event);
+		if ((source->ep.obj != NULL) && ((source->ep.flag & HK_FLAG_LOCAL) == 0)) {
+			////int event = (source->ep.flag & HK_FLAG_EVENT) ? 1:0;
+			////func(user_data, source->ep.obj->name, (char *) source->ep.value.base, event);
+			func(user_data, &source->ep);
 		}
 	}
 }
@@ -553,8 +598,31 @@ void hk_source_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user
 
 char *hk_source_update(hk_source_t *source, char *value)
 {
-	buf_set_str(&source->ep.value, value);
-	return source->ep.name;
+        char *name = source->ep.obj->name;
+        int i;
+
+        /* Prevent circular endoint update */
+        if (source->ep.locked) {
+		log_str("WARNING: Attempting to update locked endpoint '%s' #%d", name, source->ep.id);
+                return name;
+        }
+
+        /* Update value */
+        buf_set_str(&source->ep.value, value);
+
+        /* Invoke update handlers of locally connected sinks */
+        source->ep.locked = 1;
+
+        for (i = 0; i < source->local_sinks.nmemb; i++) {
+                hk_sink_t *sink = HK_TAB_VALUE(source->local_sinks, hk_sink_t *, i);
+                if (sink != NULL) {
+                        hk_sink_update(sink, value);
+                }
+        }
+
+        source->ep.locked = 0;
+
+	return name;
 }
 
 

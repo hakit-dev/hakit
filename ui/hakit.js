@@ -79,6 +79,23 @@ function hakit_get(name)
 }
 
 
+function hakit_recv_get(line)
+{
+    var fields = line.split(" ");
+    var dir = fields[0];
+    var widget = fields[1];
+    var name = fields[2];
+
+    var value = '';
+    for (var i = 3; i < fields.length; i++) {
+	value += ' '+fields[i];
+    }
+    value = value.trim();
+
+    hakit_updated(name, value, dir, widget);
+}
+
+
 function hakit_recv_line(line)
 {
     //console.log("hakit_recv_line('"+line+"')");
@@ -107,18 +124,7 @@ function hakit_recv_line(line)
 		hakit_version = line;
 	    }
 	    else if (hakit_sock_state == HAKIT_ST_GET) {
-		var fields = line.split(" ");
-		var dir = fields[0];
-		var widget = fields[1];
-		var name = fields[2];
-
-		var value = '';
-		for (var i = 3; i < fields.length; i++) {
-		    value += ' '+fields[i];
-		}
-		value = value.trim();
-
-		hakit_updated(name, value, dir, widget);
+                hakit_recv_get(line);
 	    }
 	}
     }

@@ -39,7 +39,7 @@ static int _new(hk_obj_t *obj)
 	local = (hk_prop_get(&obj->props, "local") != NULL) ? 1:0;
 	event = (hk_prop_get(&obj->props, "event") != NULL) ? 1:0;
 
-	ctx->id = comm_source_register(obj->name, local, event);
+	ctx->id = comm_source_register(obj, local, event);
 
 	comm_source_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
 

@@ -38,7 +38,15 @@ static void hkcp_command_set(hk_endpoints_t *eps, int argc, char **argv, buf_t *
 			hk_sink_t *sink;
 
 			*(value++) = '\0';
-			sink = hk_sink_retrieve_by_name(eps, args);
+                        char *name = strrchr(args, '.');
+                        if (name != NULL) {
+                                name++;
+                        }
+                        else {
+                                name = args;
+                        }
+
+			sink = hk_sink_retrieve_by_name(eps, name);
 			if (sink != NULL) {
 				/* Update sink value and invoke sink event callback */
 				hk_sink_update(sink, value);
@@ -46,7 +54,7 @@ static void hkcp_command_set(hk_endpoints_t *eps, int argc, char **argv, buf_t *
 			else {
 				/* Send back error message */
 				buf_append_str(out_buf, ".ERROR: Unknown sink: ");
-				buf_append_str(out_buf, args);
+				buf_append_str(out_buf, name);
 				buf_append_str(out_buf, "\n");
 			}
 		}
@@ -59,14 +67,14 @@ static void hkcp_command_set(hk_endpoints_t *eps, int argc, char **argv, buf_t *
 }
 
 
-static int hkcp_command_get_source(hk_source_t *source, buf_t *out_buf)
+static int hkcp_command_get_source(buf_t *out_buf, hk_source_t *source)
 {
 	hk_ep_dump(HK_EP(source), out_buf);
 	return 1;
 }
 
 
-static int hkcp_command_get_sink(hk_sink_t *sink, buf_t *out_buf)
+static int hkcp_command_get_sink(buf_t *out_buf, hk_sink_t *sink)
 {
 	hk_ep_dump(HK_EP(sink), out_buf);
 	return 1;
@@ -96,14 +104,14 @@ static void hkcp_command_get(hk_endpoints_t *eps, int argc, char **argv, buf_t *
 }
 
 
-static int hkcp_command_nodes_source(hk_source_t *source, buf_t *out_buf)
+static int hkcp_command_nodes_source(buf_t *out_buf, hk_source_t *source)
 {
         buf_append_str(out_buf, " ");
         hk_ep_append_name(HK_EP(source), out_buf);
         return 1;
 }
 
-static void hkcp_command_nodes(hkcp_t *hkcp, buf_t *out_buf)
+static void hkcp_command_nodes(buf_t *out_buf, hkcp_t *hkcp)
 {
 	int i;
 
@@ -127,7 +135,7 @@ typedef struct {
 } hkcp_command_sources_ctx_t;
 
 
-static int hkcp_command_sources_dump(hk_source_t *source, hkcp_command_sources_ctx_t *ctx)
+static int hkcp_command_sources_dump(hkcp_command_sources_ctx_t *ctx, hk_source_t *source)
 {
         if (hk_source_is_public(source)) {
                 hk_ep_append_name(HK_EP(source), ctx->out_buf);
@@ -157,7 +165,7 @@ static void hkcp_command_sources(hkcp_t *hkcp, buf_t *out_buf)
 }
 
 
-static int hkcp_command_sinks_dump(hk_sink_t *sink, buf_t *out_buf)
+static int hkcp_command_sinks_dump(buf_t *out_buf, hk_sink_t *sink)
 {
         if (hk_sink_is_public(sink)) {
                 hk_ep_append_name(HK_EP(sink), out_buf);
@@ -177,7 +185,7 @@ static void hkcp_command_sinks(hk_endpoints_t *eps, buf_t *out_buf)
 }
 
 
-static int hkcp_command_watch_source(hk_source_t *source, buf_t *out_buf)
+static int hkcp_command_watch_source(buf_t *out_buf, hk_source_t *source)
 {
         buf_append_str(out_buf, "!");
         hk_ep_append_name(HK_EP(source), out_buf);
@@ -231,7 +239,7 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 		hkcp_command_get(hkcp->eps, argc, argv, out_buf);
 	}
 	else if (strcmp(argv[0], "nodes") == 0) {
-		hkcp_command_nodes(hkcp, out_buf);
+		hkcp_command_nodes(out_buf, hkcp);
 	}
 	else if (strcmp(argv[0], "sinks") == 0) {
 		hkcp_command_sinks(hkcp->eps, out_buf);
