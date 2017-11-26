@@ -14,7 +14,7 @@
 
 #include "io.h"
 
-#define SRV_DSOCK_MAX 32
+#define TCP_SRV_MAX_CLIENTS 32
 
 typedef enum {
 	TCP_IO_CONNECT=0,
@@ -46,7 +46,7 @@ extern void tcp_sock_shutdown(tcp_sock_t *tcp_sock);
 
 typedef struct {
 	tcp_sock_t csock;
-	tcp_sock_t dsock[SRV_DSOCK_MAX];
+	tcp_sock_t dsock[TCP_SRV_MAX_CLIENTS];
 	struct sockaddr_in iremote;
 	tcp_func_t func;
 	void *user_data;

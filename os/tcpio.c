@@ -228,12 +228,12 @@ static int tcp_srv_csock_accept(tcp_srv_t *srv)
 	}
 
 	/* Find an available data socket */
-	for (dnum = 0; dnum < SRV_DSOCK_MAX; dnum++) {
+	for (dnum = 0; dnum < TCP_SRV_MAX_CLIENTS; dnum++) {
 		if (srv->dsock[dnum].chan.fd < 0)
 			break;
 	}
 
-	if (dnum >= SRV_DSOCK_MAX) {
+	if (dnum >= TCP_SRV_MAX_CLIENTS) {
 		log_str("WARNING: Too many connections");
 		close(sock);
 		return -1;
@@ -277,7 +277,7 @@ void tcp_srv_clear(tcp_srv_t *srv)
 	srv->user_data = NULL;
 	tcp_sock_clear(&srv->csock);
 
-	for (i = 0; i < SRV_DSOCK_MAX; i++) {
+	for (i = 0; i < TCP_SRV_MAX_CLIENTS; i++) {
 		tcp_sock_clear(&srv->dsock[i]);
 	}
 }
@@ -336,7 +336,7 @@ void tcp_srv_shutdown(tcp_srv_t *srv)
 	srv->func = NULL;
 	srv->user_data = NULL;
 
-	for (i = 0; i < SRV_DSOCK_MAX; i++)
+	for (i = 0; i < TCP_SRV_MAX_CLIENTS; i++)
 		tcp_sock_shutdown(&srv->dsock[i]);
 
 	tcp_sock_shutdown(&srv->csock);
@@ -347,7 +347,7 @@ void tcp_srv_foreach_client(tcp_srv_t *srv, tcp_foreach_func_t func, void *user_
 {
 	int i;
 
-	for (i = 0; i < SRV_DSOCK_MAX; i++) {
+	for (i = 0; i < TCP_SRV_MAX_CLIENTS; i++) {
 		tcp_sock_t *tcp_sock = &srv->dsock[i];
 		if (tcp_sock->chan.fd >= 0) {
 			if (!func(tcp_sock, user_data)) {
