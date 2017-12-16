@@ -80,6 +80,15 @@ void io_channel_setup(io_channel_t *chan, int fd, io_func_t func, void *user_dat
 }
 
 
+void io_channel_setup_io(io_channel_t *chan, int fd, sys_io_func_t io_func, void *user_data)
+{
+	chan->fd = fd;
+	chan->tag = sys_io_watch(fd, io_func, user_data);
+
+	io_blocking(fd, 0);
+}
+
+
 void io_channel_clear(io_channel_t *chan)
 {
 	chan->fd = -1;
@@ -118,6 +127,24 @@ int io_channel_write(io_channel_t *chan, char *buf, int len)
 	}
 
 	io_blocking(chan->fd, 0);
+
+	return ret;
+}
+
+
+int io_channel_write_async(io_channel_t *chan, char *buf, int len)
+{
+	int ret;
+
+	if (chan->fd < 0)
+		return 0;
+	if (len <= 0)
+		return 0;
+
+	ret = write(chan->fd, buf, len);
+	if (ret < 0) {
+		log_str("ERROR: Socket [%d] write error: %s", chan->fd, strerror(errno));
+	}
 
 	return ret;
 }

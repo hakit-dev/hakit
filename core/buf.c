@@ -140,3 +140,22 @@ int buf_set_int(buf_t *buf, int v)
 	int len = snprintf(str, sizeof(str), "%d", v);
 	return buf_set(buf, (unsigned char *) str, len);
 }
+
+
+void buf_shift(buf_t *buf, int ofs)
+{
+        if (ofs > 0) {
+                if (ofs < buf->len) {
+                        int i;
+
+                        for (i = ofs; i < buf->len; i++) {
+                                buf->base[i-ofs] = buf->base[i];
+                        }
+
+                        buf->len -= ofs;
+                }
+                else {
+                        buf->len = 0;
+                }
+        }
+}

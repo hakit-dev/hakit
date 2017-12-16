@@ -35,6 +35,6 @@ extern int buf_set(buf_t *buf, unsigned char *ptr, int len);
 extern int buf_set_str(buf_t *buf, char *str);
 extern int buf_set_int(buf_t *buf, int v);
 
-extern int buf_file_load(buf_t *buf, char *filename, int silent);
+extern void buf_shift(buf_t *buf, int ofs);
 
 #endif /* __HAKIT_BUF_H__ */

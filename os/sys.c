@@ -39,6 +39,7 @@ typedef enum {
 typedef struct {
 	sys_tag_t tag;
 	sys_func_t func;
+	sys_io_func_t wfunc;
 	void *arg;
 	sys_type_t type;
 	union {
@@ -99,21 +100,32 @@ static sys_source_t *sys_source_add(sys_func_t func, void *arg)
 }
 
 
-void sys_remove(sys_tag_t tag)
+static sys_source_t *sys_retrieve(sys_tag_t tag)
 {
 	int i;
-
-	log_debug(3, "sys_remove(%u)", tag);
 
 	for (i = 0; i < NSOURCES; i++) {
 		sys_source_t *src = &sources[i];
 		if (src->tag == tag) {
-			src->type = SYS_TYPE_REMOVED;
-			src->func = NULL;
-			src->arg = NULL;
-			break;
+                        return src;
 		}
 	}
+
+	return NULL;
+}
+
+
+void sys_remove(sys_tag_t tag)
+{
+	log_debug(3, "sys_remove(%u)", tag);
+
+        sys_source_t *src = sys_retrieve(tag);
+        if (src != NULL) {
+                src->type = SYS_TYPE_REMOVED;
+                src->func = NULL;
+                src->wfunc = NULL;
+                src->arg = NULL;
+        }
 }
 
 
@@ -190,6 +202,27 @@ sys_tag_t sys_io_watch(int fd, sys_io_func_t func, void *arg)
 }
 
 
+int sys_io_write_handler(sys_tag_t tag, sys_io_func_t wfunc)
+{
+        sys_source_t *src = sys_retrieve(tag);
+
+	if (src == NULL) {
+		return -1;
+	}
+
+        if (wfunc != NULL) {
+                src->d.io.pollfd.events |= POLLOUT;
+        }
+        else {
+                src->d.io.pollfd.events &= ~POLLOUT;
+        }
+
+	src->wfunc = wfunc;
+
+        return 0;
+}
+
+
 sys_tag_t sys_io_poll(int fd, unsigned int events, sys_poll_func_t func, void *arg)
 {
 	sys_source_t *src = sys_io_source_add(fd, (sys_func_t) func, arg);
@@ -257,7 +290,7 @@ sys_tag_t sys_quit_handler(sys_func_t func, void *arg)
 
 static int sys_callback(sys_source_t *src)
 {
-	int ret = 0;
+	int ret = -1;
 
 	if (src->func != NULL) {
 		switch (src->type) {
@@ -266,7 +299,22 @@ static int sys_callback(sys_source_t *src)
 				ret = ((sys_poll_func_t) src->func)(src->arg, &src->d.io.pollfd);
 			}
 			else {
-				ret = ((sys_io_func_t) src->func)(src->arg, src->d.io.pollfd.fd);
+                                if (src->d.io.pollfd.revents & (POLLIN|POLLPRI|POLLRDHUP|POLLERR|POLLHUP|POLLNVAL)) {
+                                        ret = ((sys_io_func_t) src->func)(src->arg, src->d.io.pollfd.fd);
+                                }
+
+                                if (ret != 0) {
+                                        if (src->d.io.pollfd.revents & POLLOUT) {
+                                                int cont = 0;
+                                                if (src->wfunc != NULL) {
+                                                        cont = ((sys_io_func_t) src->wfunc)(src->arg, src->d.io.pollfd.fd);
+                                                }
+                                                if (cont == 0) {
+                                                        src->d.io.pollfd.events &= ~POLLOUT;
+                                                }
+                                        }
+                                        ret = 1;
+                                }
 			}
 			break;
 		case SYS_TYPE_CHILD:
@@ -278,7 +326,7 @@ static int sys_callback(sys_source_t *src)
 		}
 	}
 
-	if (ret == 0) {
+	if (ret <= 0) {
 		sys_source_clear(src);
 	}
 

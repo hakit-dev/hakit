@@ -572,7 +572,7 @@ static int hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tcp
 		hkcp_command(hkcp, argc, argv, &out_buf);
 	}
 
-	io_channel_write(&tcp_sock->chan, (char *) out_buf.base, out_buf.len);
+	tcp_sock_write(tcp_sock, (char *) out_buf.base, out_buf.len);
 
 	buf_cleanup(&out_buf);
 

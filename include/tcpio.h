@@ -12,9 +12,12 @@
 
 #include <netinet/in.h>
 
+#include "buf.h"
 #include "io.h"
 
-#define TCP_SRV_MAX_CLIENTS 32
+/*
+ * TCP socket
+ */
 
 typedef enum {
 	TCP_IO_CONNECT=0,
@@ -30,6 +33,7 @@ struct tcp_sock_s {
 	io_channel_t chan;
 	tcp_func_t func;
 	void *user_data;
+        buf_t tbuf;
 };
 
 extern void tcp_sock_clear(tcp_sock_t *tcp_sock);
@@ -39,10 +43,15 @@ extern void *tcp_sock_get_data(tcp_sock_t *tcp_sock);
 extern int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port,
 			    tcp_func_t func, void *user_data);
 extern int tcp_sock_is_connected(tcp_sock_t *tcp_sock);
-extern int tcp_sock_write(tcp_sock_t *tcp_sock, char *buf, int size);
-extern int tcp_sock_write_str(tcp_sock_t *tcp_sock, char *str);
+extern void tcp_sock_write(tcp_sock_t *tcp_sock, char *buf, int size);
 extern void tcp_sock_shutdown(tcp_sock_t *tcp_sock);
 
+
+/*
+ * TCP Server
+ */
+
+#define TCP_SRV_MAX_CLIENTS 32
 
 typedef struct {
 	tcp_sock_t csock;
@@ -54,7 +63,6 @@ typedef struct {
 
 extern void tcp_srv_clear(tcp_srv_t *srv);
 extern int tcp_srv_init(tcp_srv_t *srv, int port, tcp_func_t func, void *user_data);
-extern int tcp_srv_write(tcp_srv_t *srv, int dnum, char *str);
 extern void tcp_srv_shutdown(tcp_srv_t *srv);
 
 typedef int (* tcp_foreach_func_t)(tcp_sock_t *tcp_sock, void *user_data);

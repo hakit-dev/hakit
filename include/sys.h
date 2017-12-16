@@ -23,6 +23,8 @@ extern int sys_init(void);
 
 extern sys_tag_t sys_io_watch(int fd, sys_io_func_t func, void *arg);
 extern sys_tag_t sys_io_poll(int fd, unsigned int events, sys_poll_func_t func, void *arg);
+extern int sys_io_write_handler(sys_tag_t tag, sys_io_func_t wfunc);
+
 extern sys_tag_t sys_timeout(unsigned long delay, sys_func_t func, void *arg);
 extern sys_tag_t sys_child_watch(pid_t pid, sys_child_func_t func, void *arg);
 extern sys_tag_t sys_quit_handler(sys_func_t func, void *arg);
