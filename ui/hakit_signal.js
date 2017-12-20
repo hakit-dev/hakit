@@ -113,7 +113,6 @@ function hakit_widget_slider(id, value, options)
 
 function hakit_widget_meter(id, value, options)
 {
-
     var str = '<meter id="'+id+':meter"';
 
     if (value) {
@@ -126,6 +125,26 @@ function hakit_widget_meter(id, value, options)
     }
 
     str += '>'+value+'</meter>';
+
+    return str;
+}
+
+
+function hakit_widget_select(id, value, options)
+{
+    var str = '<select id="'+id+':select" onchange="hakit_widget_updated(this,this.value);">';
+
+    var list = options.split(',');
+    for (var i = 0; i < list.length; i++) {
+        var item = list[i];
+	str += '<option value="'+item+'"';
+        if (item == value) {
+            str += ' selected';
+        }
+        str += '>'+item+'</option>';
+    }
+
+    str += '</select>';
 
     return str;
 }
@@ -203,6 +222,9 @@ function hakit_signal_add(name, value, dir, widget)
     else if (wname == 'slider') {
 	str = hakit_widget_slider(name, value, options);
     }
+    else if (wname == 'select') {
+	str = hakit_widget_select(name, value, options);
+    }
 
     row.insertCell(3).innerHTML = str;
 
@@ -243,15 +265,22 @@ function hakit_updated(name, value, dir, widget)
 	    }
 	}
 	else {
-	    elmt = document.getElementById(name+':meter');
+	    var elmt = document.getElementById(name+':meter');
 	    if (elmt) {
 		elmt.value = value;
 	    }
-
-	    elmt = document.getElementById(name+':slider');
-	    if (elmt) {
-		elmt.value = value;
-	    }
+            else {
+	        elmt = document.getElementById(name+':slider');
+	        if (elmt) {
+		    elmt.value = value;
+	        }
+                else {
+	            elmt = document.getElementById(name+':select');
+	            if (elmt) {
+		        elmt.value = value;
+	            }
+                }
+            }
 	}
 	return;
     }
