@@ -27,6 +27,250 @@ static void tcp_sock_read_event(tcp_sock_t *tcp_sock, char *buf, int len);
 
 
 /*
+ * SSL gears
+ */
+
+#ifdef WITH_SSL
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+
+static int tcp_certificate_verify(int preverify_ok, X509_STORE_CTX *ctx)
+{
+	/* Preverify should have already checked expiry, revocation.
+	 * We may need to verify other settings here (hostname, ...) */
+        log_debug(3, "tcp_certificate_verify %d", preverify_ok);
+        return preverify_ok;
+}
+
+
+static SSL_CTX *tcp_sock_ssl_ctx(char *certs, int server)
+{
+        static int tcp_ssl_initialized = 0;
+        SSL_CTX *ssl_ctx;
+
+        log_debug(3, "tcp_sock_ssl_ctx certs='%s' server=%d", certs, server);
+
+        /* Check arguments */
+        if (certs == NULL) {
+                return NULL;
+        }
+
+        /* Init SSL lib */
+        if (!tcp_ssl_initialized) {
+                SSL_library_init();
+                SSL_load_error_strings();
+                OpenSSL_add_all_algorithms();
+                tcp_ssl_initialized = 1;
+        }
+
+        int len = strlen(certs);
+        char cafile[len+16];
+        snprintf(cafile, sizeof(cafile), "%s/ca.crt", certs);
+        char certfile[len+16];
+        snprintf(certfile, sizeof(certfile), "%s/server.crt", certs);
+        char keyfile[len+16];
+        snprintf(keyfile, sizeof(keyfile), "%s/server.key", certs);
+
+        /* Create SSL server context */
+        ssl_ctx = SSL_CTX_new(server ? SSLv23_server_method() : SSLv23_client_method());
+        if (ssl_ctx == NULL) {
+                log_str("ERROR: SSL: Failed to initialize SSL");
+                goto FAILED;
+        }
+
+        /* Setup SSL certificate check */
+        if (!SSL_CTX_load_verify_locations(ssl_ctx, cafile, NULL)) {
+                log_str("ERROR: SSL: Failed to load CA certificate '%s'", cafile);
+                goto FAILED;
+        }
+        log_debug(3, "tcp_sock_ssl_ctx: CA file loaded: %s", cafile);
+
+        SSL_CTX_set_verify(ssl_ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, tcp_certificate_verify);
+
+        /* Setup SSL key and cert */
+        if (!SSL_CTX_use_certificate_file(ssl_ctx, certfile, SSL_FILETYPE_PEM)) {
+                log_str("ERROR: SSL: Failed to load cert file '%s'", certfile);
+                goto FAILED;
+        }
+        log_debug(3, "tcp_sock_ssl_ctx: cert file loaded: %s", certfile);
+
+        if (!SSL_CTX_use_PrivateKey_file(ssl_ctx, keyfile, SSL_FILETYPE_PEM)) {
+                log_str("ERROR: SSL: Failed to load key file '%s'", keyfile);
+                goto FAILED;
+        }
+        log_debug(3, "tcp_sock_ssl_ctx: key file loaded: %s", keyfile);
+
+        if (!SSL_CTX_check_private_key(ssl_ctx)) {
+                log_str("ERROR: SSL: Certificate file '%s' and key file '%s' are inconsistent", certfile, keyfile);
+                goto FAILED;
+        }
+        log_debug(3, "tcp_sock_ssl_ctx: cert/key verification passed");
+
+        return ssl_ctx;
+
+FAILED:
+        if (ssl_ctx != NULL) {
+                SSL_CTX_free(ssl_ctx);
+                ssl_ctx = NULL;
+        }
+
+        return NULL;
+}
+
+
+static int tcp_sock_ssl_setup(tcp_sock_t *tcp_sock, int sock, SSL_CTX *ssl_ctx, int server)
+{
+        log_debug(3, "tcp_sock_ssl_setup [%d] server=%d", sock, server);
+
+        /* Setup SSL gears */
+        tcp_sock->ssl = SSL_new(ssl_ctx);
+        if (tcp_sock->ssl == NULL) {
+                long error = ERR_get_error();
+                const char* error_str = ERR_error_string(error, NULL);
+                log_str("ERROR: Could not init SSL on server connection [%d]: %s", sock, error_str);
+                goto FAILED;
+        }
+
+        if (!SSL_set_fd(tcp_sock->ssl, sock)) {
+                log_str("ERROR: Could not setup SSL on server connection [%d]", sock);
+                goto FAILED;
+        }
+
+        /* Init SSL state */
+        if (server) {
+                SSL_set_accept_state(tcp_sock->ssl);
+        }
+        else {
+                SSL_set_connect_state(tcp_sock->ssl);
+        }
+
+        return 0;
+
+FAILED:
+        if (tcp_sock->ssl != NULL) {
+                SSL_free(tcp_sock->ssl);
+                tcp_sock->ssl = NULL;
+        }
+        return -1;
+}
+
+
+static int tcp_sock_ssl_write_event(tcp_sock_t *tcp_sock, int fd)
+{
+        int cont = 0;
+
+        log_debug(3, "tcp_sock_ssl_write_event [%d] size=%d", fd, tcp_sock->wbuf.len);
+
+        if (tcp_sock->wbuf.len > 0) {
+                int ret = SSL_write(tcp_sock->ssl, tcp_sock->wbuf.base, tcp_sock->wbuf.len);
+                log_debug(3, "SSL_write => %d", ret);
+
+                if (ret >= 0) {
+                        buf_shift(&tcp_sock->wbuf, ret);
+
+                        if (tcp_sock->wbuf.len > 0) {
+                                cont = 1;
+                        }
+                }
+                else {
+                        int ssl_error = SSL_get_error(tcp_sock->ssl, ret);
+                        if (ssl_error == SSL_ERROR_WANT_WRITE) {
+                                log_debug(3, "SSL_write wants write");
+                                cont = 1;
+                        }
+                        else if (ssl_error == SSL_ERROR_WANT_READ) {
+                                log_debug(3, "SSL_write wants read");
+                        }
+                        else {
+                                long error = ERR_get_error();
+                                const char* error_str = ERR_error_string(error, NULL);
+                                log_str("ERROR: could not SSL_write (%d): %s", ret, error_str);
+                                tcp_sock_read_event(tcp_sock, NULL, 0);
+                        }
+                }
+        }
+
+        return cont;
+}
+
+
+static int tcp_sock_ssl_read_event(tcp_sock_t *tcp_sock, int fd)
+{
+	int cont = 1;
+        char buffer[1024];
+        int ret;
+
+        log_debug(3, "tcp_sock_ssl_read_event [%d]", fd);
+
+        ret = SSL_read(tcp_sock->ssl, buffer, sizeof(buffer));
+        log_debug(3, "SSL_read => %d", ret);
+        if (ret == 0) {
+                cont = 0;
+        }
+        else if (ret < 0) {
+                int ssl_error = SSL_get_error(tcp_sock->ssl, ret);
+                if (ssl_error == SSL_ERROR_WANT_WRITE) {
+                        log_debug(3, "SSL_read wants write");
+                }
+                else if (ssl_error == SSL_ERROR_WANT_READ) {
+                        log_debug(3, "SSL_read wants read");
+                }
+                else {
+                        cont = 0;
+                }
+        }
+        else {
+                tcp_sock_read_event(tcp_sock, buffer, ret);
+        }
+
+        if (cont) {
+                if (tcp_sock->wbuf.len > 0) {
+                        sys_io_write_handler(tcp_sock->chan.tag, (sys_io_func_t) tcp_sock_ssl_write_event);
+                }
+        }
+        else {
+                if (ret < 0) {
+                        long error = ERR_get_error();
+                        const char* error_str = ERR_error_string(error, NULL);
+                        log_str("ERROR: could not SSL_read (%d): %s", ret, error_str);
+                }
+                tcp_sock_read_event(tcp_sock, NULL, 0);
+        }
+
+	return cont;
+}
+
+
+static void tcp_sock_ssl_shutdown(tcp_sock_t *tcp_sock)
+{
+        if (tcp_sock->ssl != NULL) {
+                SSL_free(tcp_sock->ssl);
+                tcp_sock->ssl = NULL;
+        }
+
+        if (tcp_sock->ssl_ctx != NULL) {
+                SSL_CTX_free(tcp_sock->ssl_ctx);
+                tcp_sock->ssl_ctx = NULL;
+        }
+}
+
+#else /* WITH_SSL */
+
+static SSL_CTX *tcp_sock_ssl_ctx(char *certs)
+{
+        if (certs != NULL) {
+                log_str("ERROR: TLS/SSL not available");
+        }
+
+        return NULL;
+}
+
+#endif /* !WITH_SSL */
+
+
+/*
  * Socket option setup helper
  */
 
@@ -83,7 +327,11 @@ static void tcp_sock_shutdown_(tcp_sock_t *tcp_sock, int silent)
 
         io_channel_close(&tcp_sock->chan);
 
-        buf_cleanup(&tcp_sock->tbuf);
+        buf_cleanup(&tcp_sock->wbuf);
+
+#ifdef WITH_SSL
+        tcp_sock_ssl_shutdown(tcp_sock);
+#endif
 }
 
 
@@ -121,14 +369,23 @@ static void tcp_sock_setup(tcp_sock_t *tcp_sock, int sock, tcp_func_t func, void
 	setsockopt_keepalive(sock);
 
 	/* Setup event callback */
-        io_channel_setup(&tcp_sock->chan, sock, (io_func_t) tcp_sock_read_event, tcp_sock);
+#ifdef WITH_SSL
+        if (tcp_sock->ssl != NULL) {
+                io_channel_setup_io(&tcp_sock->chan, sock, (sys_io_func_t) tcp_sock_ssl_read_event, tcp_sock);
+        }
+        else
+#endif
+        {
+                io_channel_setup(&tcp_sock->chan, sock, (io_func_t) tcp_sock_read_event, tcp_sock);
+        }
 
 	tcp_sock->func = func;
 	tcp_sock->user_data = user_data;
 }
 
 
-int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func, void *user_data)
+int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, char *certs,
+                     tcp_func_t func, void *user_data)
 {
 	struct hostent *hp;
 	struct sockaddr_in iremote;
@@ -164,6 +421,19 @@ int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, tcp_func_t func
 	ip_addr((struct sockaddr *) &iremote, s_addr, sizeof(s_addr));
 	log_str("Outgoing connection [%d] established to %s:%d", sock, s_addr, port);
 
+        /* Setup SSL gears */
+        if (certs != NULL) {
+                tcp_sock->ssl_ctx = tcp_sock_ssl_ctx(certs, 0);
+                if (tcp_sock->ssl_ctx == NULL) {
+                        goto FAILED;
+                }
+#ifdef WITH_SSL
+                if (tcp_sock_ssl_setup(tcp_sock, sock, tcp_sock->ssl_ctx, 0) < 0) {
+                        goto FAILED;
+                }
+#endif
+        }
+
 	/* Hook an IO watch on this socket */
 	tcp_sock_setup(tcp_sock, sock, func, user_data);
 
@@ -187,16 +457,16 @@ static int tcp_sock_write_event(tcp_sock_t *tcp_sock, int fd)
 {
         int cont = 0;
 
-        log_debug(3, "tcp_sock_write_event [%d] size=%d", fd, tcp_sock->tbuf.len);
+        log_debug(3, "tcp_sock_write_event [%d] size=%d", fd, tcp_sock->wbuf.len);
 
-        if (tcp_sock->tbuf.len > 0) {
-                int ret = io_channel_write_async(&tcp_sock->chan, (char *) tcp_sock->tbuf.base, tcp_sock->tbuf.len);
+        if (tcp_sock->wbuf.len > 0) {
+                int ret = io_channel_write_async(&tcp_sock->chan, (char *) tcp_sock->wbuf.base, tcp_sock->wbuf.len);
                 log_debug(3, "io_channel_write_async => %d", ret);
 
                 if (ret >= 0) {
-                        buf_shift(&tcp_sock->tbuf, ret);
+                        buf_shift(&tcp_sock->wbuf, ret);
 
-                        if (tcp_sock->tbuf.len > 0) {
+                        if (tcp_sock->wbuf.len > 0) {
                                 cont = 1;
                         }
                 }
@@ -205,7 +475,7 @@ static int tcp_sock_write_event(tcp_sock_t *tcp_sock, int fd)
                 }
         }
 
-        log_debug(3, "  => len=%d, cont=%d", tcp_sock->tbuf.len, cont);
+        log_debug(3, "  => len=%d, cont=%d", tcp_sock->wbuf.len, cont);
 
         return cont;
 }
@@ -214,12 +484,20 @@ static int tcp_sock_write_event(tcp_sock_t *tcp_sock, int fd)
 void tcp_sock_write(tcp_sock_t *tcp_sock, char *buf, int size)
 {
 	if (tcp_sock != NULL) {
-                log_debug(3, "tcp_sock_write [%d] size=%d+%d", tcp_sock->chan.fd, tcp_sock->tbuf.len, size);
+                log_debug(3, "tcp_sock_write [%d] size=%d+%d", tcp_sock->chan.fd, tcp_sock->wbuf.len, size);
 
-                buf_append(&tcp_sock->tbuf, (unsigned char *) buf, size);
+                buf_append(&tcp_sock->wbuf, (unsigned char *) buf, size);
 
-                if (tcp_sock->tbuf.len > 0) {
-                        sys_io_write_handler(tcp_sock->chan.tag, (sys_io_func_t) tcp_sock_write_event);
+                if (tcp_sock->wbuf.len > 0) {
+#ifdef WITH_SSL
+                        if (tcp_sock->ssl != NULL) {
+                                sys_io_write_handler(tcp_sock->chan.tag, (sys_io_func_t) tcp_sock_ssl_write_event);
+                        }
+                        else
+#endif
+                        {
+                                sys_io_write_handler(tcp_sock->chan.tag, (sys_io_func_t) tcp_sock_write_event);
+                        }
                 }
         }
 }
@@ -273,6 +551,15 @@ static int tcp_srv_csock_accept(tcp_srv_t *srv)
 	/* Prevent child processes from inheriting this socket */
 	fcntl(sock, F_SETFD, FD_CLOEXEC);
 
+#ifdef WITH_SSL
+        /* Setup SSL gears */
+        if (srv->csock.ssl_ctx != NULL) {
+                if (tcp_sock_ssl_setup(dsock, sock, srv->csock.ssl_ctx, 1) < 0) {
+                        goto FAILED;
+                }
+        }
+#endif
+
 	/* Hook an IO watch on this socket */
 	tcp_sock_setup(dsock, sock, srv->func, srv->user_data);
 
@@ -320,7 +607,8 @@ void tcp_srv_clear(tcp_srv_t *srv)
 }
 
 
-int tcp_srv_init(tcp_srv_t *srv, int port, tcp_func_t func, void *user_data)
+int tcp_srv_init(tcp_srv_t *srv, int port, char *certs,
+                 tcp_func_t func, void *user_data)
 {
 	struct sockaddr_in ilocal;
 
@@ -359,13 +647,18 @@ int tcp_srv_init(tcp_srv_t *srv, int port, tcp_func_t func, void *user_data)
 	srv->func = func;
 	srv->user_data = user_data;
 
+        /* Set SSL mode */
+        if (certs != NULL) {
+                srv->csock.ssl_ctx = tcp_sock_ssl_ctx(certs, 1);
+                if (srv->csock.ssl_ctx == NULL) {
+                        goto FAILED;
+                }
+        }
+
 	return 0;
 
 FAILED:
-        if (srv->csock.chan.fd >= 0) {
-		close(srv->csock.chan.fd);
-		srv->csock.chan.fd = -1;
-        }
+        io_channel_close(&srv->csock.chan);
 
         return -1;
 }

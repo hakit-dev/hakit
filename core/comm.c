@@ -170,7 +170,7 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 }
 
 
-int comm_init(int use_ssl, char *cafile,
+int comm_init(int use_ssl, char *certs,
               int use_hkcp,
               int use_mqtt, char *mqtt_broker)
 {
@@ -190,7 +190,7 @@ int comm_init(int use_ssl, char *cafile,
 
 	/* Init HKCP gears */
 	comm.use_hkcp = use_hkcp;
-	ret = hkcp_init(&comm.hkcp, &comm.eps, use_hkcp ? HAKIT_HKCP_PORT:0);
+	ret = hkcp_init(&comm.hkcp, &comm.eps, use_hkcp ? HAKIT_HKCP_PORT:0, certs);
 	if (ret != 0) {
 		goto DONE;
 	}
@@ -203,7 +203,7 @@ int comm_init(int use_ssl, char *cafile,
 #ifdef WITH_MQTT
         if (use_mqtt) {
                 /* Init MQTT gears */
-                if (mqtt_init(&comm.mqtt, use_ssl, cafile, (mqtt_update_func_t) comm_mqtt_update, &comm)) {
+                if (mqtt_init(&comm.mqtt, certs, (mqtt_update_func_t) comm_mqtt_update, &comm)) {
                         ret = -1;
                         goto DONE;
                 }

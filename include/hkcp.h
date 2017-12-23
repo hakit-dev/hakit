@@ -57,11 +57,12 @@ typedef struct {
 struct hkcp_s {
 	hk_endpoints_t *eps;
 	int port;
+        char *certs;
 	tcp_srv_t tcp_srv;
 	hk_tab_t nodes;       // Table of (hkcp_node_t *)
 };
 
-extern int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port);
+extern int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port, char *certs);
 extern void hkcp_shutdown(hkcp_t *hkcp);
 extern void hkcp_node_add(hkcp_t *hkcp, char *remote_ip);
 extern void hkcp_node_dump(hkcp_t *hkcp, hk_source_t *source, buf_t *out_buf);

@@ -13,7 +13,7 @@
 #include "mod.h"
 #include "endpoint.h"
 
-extern int comm_init(int use_ssl, char *cafile,
+extern int comm_init(int use_ssl, char *certs,
                      int use_hkcp,
                      int use_mqtt, char *mqtt_broker);
 

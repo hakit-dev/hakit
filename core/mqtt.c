@@ -257,8 +257,7 @@ int mqtt_connect(mqtt_t *mqtt, char *broker)
 }
 
 
-int mqtt_init(mqtt_t *mqtt,
-              int use_ssl, char *cafile,
+int mqtt_init(mqtt_t *mqtt, char *certs,
 	      mqtt_update_func_t update_func, void *user_data)
 {
 	int major, minor, revision;
@@ -297,18 +296,19 @@ int mqtt_init(mqtt_t *mqtt,
 	mqtt->user_data = user_data;
 
 	// Setup SSL
-	if (use_ssl) {
+	if (certs != NULL) {
+                int len = strlen(certs);
+                char cafile[len+16];
+                snprintf(cafile, sizeof(cafile), "%s/ca.crt", certs);
+                char certfile[len+16];
+                snprintf(certfile, sizeof(certfile), "%s/server.crt", certs);
+                char keyfile[len+16];
+                snprintf(keyfile, sizeof(keyfile), "%s/server.key", certs);
+
 		mqtt->port = MQTT_DEFAULT_SSL_PORT;
-		if (cafile != NULL) {
-			mosquitto_tls_set(mqtt->mosq, cafile, NULL,
-					  NULL, NULL,
-					  NULL);
-		}
-		else {
-			mosquitto_tls_set(mqtt->mosq, NULL, "/etc/ssl/certs",
-					  NULL, NULL,
-					  NULL);
-		}
+                mosquitto_tls_set(mqtt->mosq, cafile, NULL,
+                                  certfile, keyfile,
+                                  NULL);
 	}
 	else {
 		mqtt->port = MQTT_DEFAULT_PORT;

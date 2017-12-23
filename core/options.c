@@ -34,7 +34,7 @@ static void options_help(const options_entry_t *entries, char *command)
 
 	fprintf(stderr, "Usage:\n");
 	if (command != NULL) {
-		fprintf(stderr, "  %s [OPTION...] APP_FILE\n\n", command);
+		fprintf(stderr, "  %s [OPTION...] TILE...\n\n", command);
 	}
 
 	fprintf(stderr,

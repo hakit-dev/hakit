@@ -16,6 +16,14 @@
 #include "io.h"
 
 /*
+ * SSL context
+ */
+#ifdef WITH_SSL
+#include <openssl/ssl.h>
+#endif /* WITH_SSL */
+
+
+/*
  * TCP socket
  */
 
@@ -33,14 +41,18 @@ struct tcp_sock_s {
 	io_channel_t chan;
 	tcp_func_t func;
 	void *user_data;
-        buf_t tbuf;
+        buf_t wbuf;
+#ifdef WITH_SSL
+        SSL_CTX *ssl_ctx;
+        SSL *ssl;
+#endif
 };
 
 extern void tcp_sock_clear(tcp_sock_t *tcp_sock);
 extern void tcp_sock_set_data(tcp_sock_t *tcp_sock, void *user_data);
 extern void *tcp_sock_get_data(tcp_sock_t *tcp_sock);
 
-extern int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port,
+extern int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, char *certs,
 			    tcp_func_t func, void *user_data);
 extern int tcp_sock_is_connected(tcp_sock_t *tcp_sock);
 extern void tcp_sock_write(tcp_sock_t *tcp_sock, char *buf, int size);
@@ -62,7 +74,7 @@ typedef struct {
 } tcp_srv_t;
 
 extern void tcp_srv_clear(tcp_srv_t *srv);
-extern int tcp_srv_init(tcp_srv_t *srv, int port, tcp_func_t func, void *user_data);
+extern int tcp_srv_init(tcp_srv_t *srv, int port, char *certs, tcp_func_t func, void *user_data);
 extern void tcp_srv_shutdown(tcp_srv_t *srv);
 
 typedef int (* tcp_foreach_func_t)(tcp_sock_t *tcp_sock, void *user_data);

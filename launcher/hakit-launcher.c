@@ -509,7 +509,7 @@ static void engine_start(ctx_t *ctx)
         {
                 char args[strlen(opt_lib_dir)+32];
 
-                snprintf(args, sizeof(args), "--cafile=%s/certs/ca.crt", opt_lib_dir);
+                snprintf(args, sizeof(args), "--certs=%s/certs", opt_lib_dir);
                 HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
         }
 

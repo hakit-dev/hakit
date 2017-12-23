@@ -355,7 +355,7 @@ static int hkcp_node_connect(hkcp_node_t *node)
 	hkcp_node_set_state(node, HKCP_NODE_CONNECT);
 
 	log_str("Connecting to node #%d='%s' (%d/%d)", node->id, node->name, node->connect_attempts, HKCP_NODE_CONNECT_RETRIES);
-	if (tcp_sock_connect(&node->tcp_sock, node->name, node->hkcp->port, hkcp_node_event, node) > 0) {
+	if (tcp_sock_connect(&node->tcp_sock, node->name, node->hkcp->port, node->hkcp->certs, hkcp_node_event, node) > 0) {
 		node->timeout_tag = 0;
 		/* Get list of sinks from this node */
 		hkcp_node_set_state(node, HKCP_NODE_VERSION);
@@ -614,7 +614,7 @@ static void hkcp_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
  * Management engine
  */
 
-int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port)
+int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port, char *certs)
 {
 	int ret = -1;
 
@@ -627,9 +627,13 @@ int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port)
 
 	/* Init TCP server */
 	hkcp->port = port;
+        if (certs != NULL) {
+                hkcp->certs = strdup(certs);
+        }
 	tcp_srv_clear(&hkcp->tcp_srv);
+
 	if (port > 0) {
-		if (tcp_srv_init(&hkcp->tcp_srv, port, hkcp_tcp_event, hkcp)) {
+		if (tcp_srv_init(&hkcp->tcp_srv, port, certs, hkcp_tcp_event, hkcp)) {
 			goto DONE;
 		}
 	}
@@ -652,6 +656,10 @@ void hkcp_shutdown(hkcp_t *hkcp)
 	}
 
 	hk_tab_cleanup(&hkcp->nodes);
+
+        if (hkcp->certs != NULL) {
+                free(hkcp->certs);
+        }
 
 	memset(hkcp, 0, sizeof(hkcp_t));
 }

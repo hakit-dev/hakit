@@ -36,10 +36,10 @@ const char *options_summary = "HAKit engine " HAKIT_VERSION " (" ARCH ")";
 
 static char *opt_class_path = NULL;
 static int opt_no_hkcp = 0;
-static int opt_no_ssl = 0;
+static int opt_no_https = 0;
 static int opt_insecure_ssl = 0;
 static char *opt_http_auth = NULL;
-static char *opt_cafile = NULL;
+static char *opt_certs = NULL;
 static int opt_no_mqtt = 0;
 static char *opt_mqtt_broker = NULL;
 
@@ -48,11 +48,11 @@ static const options_entry_t options_entries[] = {
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 #ifdef WITH_SSL
-	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl,  "Disable TLS/SSL - Do not use encryption/authentication for HKCP/MQTT/HTTP exchanges" },
+	{ "no-https", 's', 0, OPTIONS_TYPE_NONE,   &opt_no_https,       "Use HTTP instead of HTTPS" },
 	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure HTTP TLS/SSL for client connections (self-signed certificates)" },
+	{ "certs",      'e', 0, OPTIONS_TYPE_STRING, &opt_certs,  "TLS/SSL certificate directory for HKCP/MQTT exchanges", "DIR" },
 #endif
 	{ "http-auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_http_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
-	{ "cafile",    'C', 0, OPTIONS_TYPE_STRING, &opt_cafile,    "Certificate Authority file for TLS/SSL authentication", "FILE" },
 #ifdef WITH_MQTT
 	{ "no-mqtt",        'm', 0, OPTIONS_TYPE_NONE,   &opt_no_mqtt, "Disable MQTT protocol" },
 	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &opt_mqtt_broker, "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
@@ -89,14 +89,14 @@ int main(int argc, char *argv[])
 	sys_init();
 
 	/* Init communication engine */
-	if (opt_no_ssl) {
+	if (opt_no_https) {
 		use_ssl = 0;
 	}
 	else if (opt_insecure_ssl) {
 		use_ssl = 2;
 	}
 
-	if (comm_init(use_ssl, opt_cafile,
+	if (comm_init(use_ssl, opt_certs,
                       opt_no_hkcp ? 0:1,
                       opt_no_mqtt ? 0:1, opt_mqtt_broker)) {
 		return 2;

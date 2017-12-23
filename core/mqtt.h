@@ -48,8 +48,7 @@ typedef struct {
 
 
 /* MQTT instance functions */
-extern int mqtt_init(mqtt_t *mqtt,
-                     int use_ssl, char *cafile,
+extern int mqtt_init(mqtt_t *mqtt, char *certs,
 		     mqtt_update_func_t update_func, void *user_data);
 extern void mqtt_shutdown(mqtt_t *mqtt);
 
