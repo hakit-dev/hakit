@@ -44,8 +44,7 @@ io_channel_t stdin_chan;
 
 static void tcp_recv_line(char *str)
 {
-	//log_debug(3, "tcp_recv_line str='%s'", str);
-        printf("RX %s\n", str);
+        printf("%s\n", str);
 }
 
 
@@ -123,11 +122,6 @@ static int stdin_recv(void *user_data, char *buf, int len)
                 sys_quit();
                 return 0;
         }
-
-        
-        fputs("TX ", stdout);
-        fwrite(buf, 1, len, stdout);
-        fputs("\n", stdout);
 
         tcp_sock_write(&tcp_sock, buf, len);
 
