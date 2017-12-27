@@ -19,17 +19,9 @@
 
 #define MAX_BUF_LEN (256*1024)
 
-typedef enum {
-        PSS_STATE_IDLE=0,
-        PSS_STATE_ESTABLISHED,
-        PSS_STATE_COMPLETED,
-        PSS_STATE_DONE,
-} pss_state_t;
-
 struct per_session_data__client {
         ws_client_t *client;
 	buf_t headers;
-	pss_state_t state;
 	buf_t buf;
 	ws_client_func_t *func;
 	void *user_data;
@@ -43,46 +35,37 @@ static int ws_http_client_read(struct lws *wsi, struct per_session_data__client 
 	int lenx = sizeof(buffer) - LWS_PRE;
 	int ret;
 
-	/*
-	 * Often you need to flow control this by something
-	 * else being writable.  In that case call the api
-	 * to get a callback when writable here, and do the
-	 * pending client read in the writeable callback of
-	 * the output.
-	 */
 	ret = lws_http_client_read(wsi, &px, &lenx);
-        log_debug(3, "ws_http_client_read (%d) => %d", pss->state, ret);
-	if (ret < 0) {
-		ret = 1;
-	}
-	else {
-                if (lenx > 0) {
-                        log_debug(3, "  lenx=%d", lenx);
-                        //log_debug_data((unsigned char *) px, lenx);
-
-                        if ((pss->buf.len+lenx) < MAX_BUF_LEN) {
-                                buf_append(&pss->buf, (unsigned char *) px, lenx);
-                        }
-                }
-
-		if (pss->state == PSS_STATE_COMPLETED) {
-			log_debug(2, "ws_http_client_read: completed len=%d", pss->buf.len);
-                        log_debug_data(pss->buf.base, pss->buf.len);
-
-                        pss->state = PSS_STATE_DONE;
-
-                        // Callback received data
-                        if (pss->func != NULL) {
-                                pss->func(pss->user_data, (char *) pss->buf.base, pss->buf.len);
-                        }
- 
-			buf_cleanup(&pss->buf);
-		}
-
-		ret = 0;
-	}
+        log_debug(3, "ws_http_client_read => %d, lenx=%d", ret, lenx);
 
 	return ret;
+}
+
+
+static void ws_http_client_read_chunk(struct lws *wsi, struct per_session_data__client *pss,
+                                     char *buf, int len)
+{
+        log_debug(3, "ws_http_client_read_chunk: len=%d", len);
+
+        if (len > 0) {
+                if ((pss->buf.len+len) < MAX_BUF_LEN) {
+                        buf_append(&pss->buf, (unsigned char *) buf, len);
+                }
+        }
+}
+
+
+static void ws_http_client_read_completed(struct lws *wsi, struct per_session_data__client *pss)
+{
+        log_debug(3, "ws_http_client_read_completed: len=%d", pss->buf.len);
+        log_debug_data(pss->buf.base, pss->buf.len);
+
+        // Callback received data
+        if (pss->func != NULL) {
+                pss->func(pss->user_data, (char *) pss->buf.base, pss->buf.len);
+        }
+ 
+        buf_cleanup(&pss->buf);
 }
 
 
@@ -156,7 +139,6 @@ static int ws_client_callback(struct lws *wsi,
 		break;
 	case LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_ESTABLISHED_CLIENT_HTTP");
-                pss->state = PSS_STATE_ESTABLISHED;
 		break;
 	case LWS_CALLBACK_CLOSED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_CLOSED_CLIENT_HTTP");
@@ -167,10 +149,11 @@ static int ws_client_callback(struct lws *wsi,
 		break;
 	case LWS_CALLBACK_COMPLETED_CLIENT_HTTP:
 		log_debug(3, "ws_client_callback LWS_CALLBACK_COMPLETED_CLIENT_HTTP");
-                pss->state = PSS_STATE_COMPLETED;
+                ws_http_client_read_completed(wsi, pss);
 		break;
 	case LWS_CALLBACK_RECEIVE_CLIENT_HTTP_READ:
-		log_debug(3, "ws_client_callback LWS_CALLBACK_RECEIVE_CLIENT_HTTP_READ");
+		log_debug(3, "ws_client_callback LWS_CALLBACK_RECEIVE_CLIENT_HTTP_READ: len=%d", len);
+                ws_http_client_read_chunk(wsi, pss, in, len);
 		break;
 
 	case LWS_CALLBACK_PROTOCOL_INIT:
