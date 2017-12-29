@@ -29,6 +29,7 @@
 #include "advertise.h"
 #include "mod_load.h"
 #include "mod.h"
+#include "trace.h"
 #include "comm.h"
 
 
@@ -47,6 +48,7 @@ typedef struct {
 #endif
 	ws_t *ws;
 	io_channel_t io_stdin;
+        hk_trace_t tr;
 } comm_t;
 
 static comm_t comm;
@@ -122,6 +124,31 @@ static void comm_wget_recv(void *user_data, char *buf, int len)
 }
 
 
+static void comm_command_trace(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+{
+        hk_ep_t *ep = NULL;
+
+        if (argc > 2) {
+                log_str("ERROR: Usage: %s [<endpoint>]", argv[0]);
+                return;
+        }
+
+        if (argc > 1) {
+                char *name = argv[1];
+                ep = HK_EP(hk_source_retrieve_by_name(&comm->eps, name));
+                if (ep == NULL) {
+                        ep = HK_EP(hk_sink_retrieve_by_name(&comm->eps, name));
+                        if (ep == NULL) {
+                                log_str("ERROR: Unknown endpoint '%s'", name);
+                                return;
+                        }
+                }
+        }
+
+        hk_trace_dump(&comm->tr, ep, out_buf);
+}
+
+
 static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 {
 	buf_t out_buf;
@@ -154,12 +181,18 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 				log_str("ERROR: Usage: %s [<uri>] <event>", argv[0]);
 			}
 		}
+		else if (strcmp(argv[0], "trace") == 0) {
+                        comm_command_trace(comm, argc, argv, &out_buf);
+                }
 		else {
 			hkcp_command(&comm->hkcp, argc, argv, &out_buf);
+		}
+
+                if (out_buf.len > 0) {
 			if (fwrite(out_buf.base, 1, out_buf.len, stdout) < 0) {
 				log_str("PANIC: Failed to write stdout: %s", strerror(errno));
 			}
-		}
+                }
 
 		buf_cleanup(&out_buf);
 	}
@@ -167,6 +200,17 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 		/* Quit if hangup from stdin */
 		sys_quit();
 	}
+}
+
+
+static void comm_command_ws(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+{
+        if (strcmp(argv[0], "trace") == 0) {
+                comm_command_trace(comm, argc, argv, out_buf);
+        }
+        else {
+                hkcp_command(&comm->hkcp, argc, argv, out_buf);
+        }
 }
 
 
@@ -256,13 +300,16 @@ int comm_init(int use_ssl, char *certs,
         ws_add_document_root(comm.ws, path);
         free(path);
 
-	ws_set_command_handler(comm.ws, (ws_command_handler_t) hkcp_command, &comm.hkcp);
+	ws_set_command_handler(comm.ws, (ws_command_handler_t) comm_command_ws, &comm);
 
 	/* Setup stdin command handler if not running as a daemon */
 	if (!opt_daemon) {
 		command_t *cmd = command_new((command_handler_t) comm_command_stdin, &comm);
 		io_channel_setup(&comm.io_stdin, fileno(stdin), (io_func_t) command_recv, cmd);
 	}
+
+	/* Init trace recording */
+        hk_trace_init(&comm.tr, 0);
 
 DONE:
 	if (ret != 0) {
@@ -345,15 +392,22 @@ void comm_sink_update_str(int id, char *value)
 {
         hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
 
-        if (sink != NULL) {
-                char *name = hk_sink_update(sink, value);
-
-                if (name != NULL) {
-                        comm_ws_send(comm.ws, &sink->ep);
-                }
-        }
-        else {
+        if (sink == NULL) {
 		log_str("PANIC: Attempting to update unknown sink #%d\n", id);
+                return;
+        }
+
+        /* Update endpoint */
+        char *name = hk_sink_update(sink, value);
+
+        /* Record sink update to trace, unless connected to local source */
+        if (sink->local_source == NULL) {
+                hk_trace_push(&comm.tr, HK_EP(sink));
+        }
+
+        /* Update websocket link */
+        if (name != NULL) {
+                comm_ws_send(comm.ws, &sink->ep);
         }
 }
 
@@ -403,8 +457,13 @@ void comm_source_update_str(int id, char *value)
 		return;
 	}
 
+        /* Update endpoint */
 	char *name = hk_source_update(source, value);
 
+        /* Record source update to trace */
+        hk_trace_push(&comm.tr, HK_EP(source));
+
+        /* Update networked links */
 	if (hk_source_is_public(source)) { 
 		hkcp_source_update(&comm.hkcp, source, value);
 
@@ -413,6 +472,7 @@ void comm_source_update_str(int id, char *value)
 #endif
 	}
 
+        /* Update websocket link */
 	comm_ws_send(comm.ws, &source->ep);
 }
 

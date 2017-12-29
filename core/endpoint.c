@@ -232,6 +232,24 @@ void hk_sink_add_handler(hk_sink_t *sink, hk_ep_func_t func, void *user_data)
 }
 
 
+static void hk_sink_local_connect(hk_sink_t *sink, hk_source_t *source)
+{
+        if (sink->local_source == NULL) {
+                hk_sink_t **psink = hk_tab_push(&source->local_sinks);
+                *psink = sink;
+                sink->local_source = HK_EP(source);
+                log_debug(2, "hk_sink_local_connect %s: sink #%d connected to source #%d",
+                          sink->ep.obj->name, sink->ep.id, source->ep.id);
+        }
+        else {
+                log_str("WARNING: Cannot connect sink %s.%s to local source %s.%s: already connected to %s.%s",
+                        sink->ep.obj->tile->name, sink->ep.obj->name,
+                        source->ep.obj->tile->name, source->ep.obj->name,
+                        sink->local_source->obj->tile->name, sink->local_source->obj->name);
+        }
+}
+
+
 hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local)
 {
 	hk_sink_t *sink;
@@ -251,9 +269,7 @@ hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local)
         if (!local) {
                 hk_source_t *source = hk_source_retrieve_by_name(eps, obj->name);
                 if (source != NULL) {
-                        hk_sink_t **psink = hk_tab_push(&source->local_sinks);
-                        *psink = sink;
-                        log_debug(2, "hk_sink_register '%s' connected to local source #%d", obj->name, source->ep.id);
+                        hk_sink_local_connect(sink, source);
                 }
         }
 
@@ -516,9 +532,7 @@ hk_source_t *hk_source_register(hk_endpoints_t *eps, hk_obj_t *obj, int local, i
         /* Establish local connection with sink, if any */
         hk_sink_t *sink = hk_sink_retrieve_by_name(eps, obj->name);
 	if (sink != NULL) {
-                hk_sink_t **psink = hk_tab_push(&source->local_sinks);
-                *psink = sink;
-                log_debug(2, "hk_source_register '%s' connected to local sink #%d", obj->name, sink->ep.id);
+                hk_sink_local_connect(sink, source);
 	}
 
 	return source;

@@ -85,6 +85,7 @@ typedef struct {
 typedef struct {
 	hk_ep_t ep;
 	hk_tab_t handlers;   // Table of (hk_sink_handler_t);
+        hk_ep_t *local_source;
 } hk_sink_t;
 
 extern hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local);
