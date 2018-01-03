@@ -11,10 +11,9 @@
 
 #include <stdio.h>
 #include <stdarg.h>
-#include <time.h>
-#include <sys/time.h>
 
 #include "options.h"
+#include "tstamp.h"
 #include "log.h"
 
 
@@ -49,15 +48,9 @@ void log_printf(const char *fmt, ...)
 
 void log_tstamp(void)
 {
-	struct timeval t;
 	char str[32];
-	int len;
-
-	gettimeofday(&t, NULL);
-
-	len = strftime(str, sizeof(str), "[%Y-%m-%d %H:%M:%S", localtime(&t.tv_sec));
-	len += snprintf(str+len, sizeof(str)-len, ".%03ld] ", t.tv_usec/1000);
-	log_put(str, len);
+	int len = tstamp_str(str, sizeof(str));
+        log_put(str, len);
 }
 
 

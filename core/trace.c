@@ -12,22 +12,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
-#include <time.h>
-#include <sys/time.h>
 
+#include "tstamp.h"
 #include "log.h"
 #include "buf.h"
 #include "endpoint.h"
 #include "trace.h"
-
-
-static inline uint64_t hk_trace_tstamp(void)
-{
-	struct timeval t;
-
-	gettimeofday(&t, NULL);
-        return (((uint64_t) t.tv_sec) * 1000) + (t.tv_usec / 1000);
-}
 
 
 void hk_trace_init(hk_trace_t *tr, int depth)
@@ -47,7 +37,7 @@ void hk_trace_init(hk_trace_t *tr, int depth)
 
         tr->tab = calloc(tr->depth, sizeof(hk_trace_entry_t));
 
-        tr->t0 = hk_trace_tstamp();
+        tr->t0 = tstamp_ms();
 }
 
 
@@ -83,7 +73,7 @@ void hk_trace_push(hk_trace_t *tr, hk_ep_t *ep)
 
         hk_trace_clear_entry(entry);
         entry->ep = ep;
-        entry->t = hk_trace_tstamp() - tr->t0;
+        entry->t = tstamp_ms() - tr->t0;
         entry->value = strdup((char *) ep->value.base);
 
         if (tr->iput >= tr->depth) {
