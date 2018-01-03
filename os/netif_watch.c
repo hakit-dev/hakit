@@ -31,7 +31,7 @@ static int netif_watch_process(netif_watch_t *w)
 {
 	w->timeout_tag = 0;
 
-	log_debug(2, "Network interface change triggered");
+	log_debug(3, "Network interface change triggered");
 
 	if (w->callback != NULL) {
 		w->callback(w->user_data);
