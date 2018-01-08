@@ -10,6 +10,7 @@
  */
 
 var hakit_signals;
+var hakit_charts_container;
 
 function hakit_widget_updated(elmt, st)
 {
@@ -299,10 +300,27 @@ function hakit_connected(connected)
 	document.getElementById("ws_status_td").style.backgroundColor = "#40ff40";
 	document.getElementById("ws_status").textContent = "Connected";
 	document.getElementById("ws_version").textContent = hakit_version;
+        var d = new Date(hakit_t0);
+	document.getElementById("ws_t0").textContent = d.toDateString()+' '+d.toTimeString();
 	hakit_signal_clear();
     }
     else {
 	document.getElementById("ws_status_td").style.backgroundColor = "#ff4040";
 	document.getElementById("ws_status").textContent = "Disconnected";
+    }
+}
+
+
+function hakit_chart(name, data)
+{
+    console.log("hakit_chart("+name+")");
+
+    if (!hakit_charts_container) {
+        hakit_charts_container = document.getElementById("charts");
+        hakit_chart_init(hakit_charts_container);
+    }
+
+    if (hakit_charts_container) {
+        hakit_chart_update(name, data);
     }
 }

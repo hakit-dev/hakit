@@ -27,13 +27,12 @@ typedef struct {
 
 typedef struct {
         int depth;
-        uint64_t t0;
         int iput, iget;
         hk_trace_entry_t *tab;
 } hk_trace_t;
 
 extern void hk_trace_init(hk_trace_t *tr, int depth);
 extern void hk_trace_push(hk_trace_t *tr, hk_ep_t *ep);
-extern void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, buf_t *out_buf);
+extern void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, uint64_t t1, uint64_t t2, buf_t *out_buf);
 
 #endif /* __HAKIT_TRACE_H__ */

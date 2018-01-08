@@ -57,6 +57,7 @@ typedef struct {
 	buf_t value;
 	unsigned int flag;
 	char *widget;
+	char *chart;
         int locked;
 } hk_ep_t;
 
@@ -69,6 +70,8 @@ typedef int (*hk_ep_foreach_func_t)(void *user_data, hk_ep_t *ep);
 extern void hk_ep_append_name(hk_ep_t *ep, buf_t *out_buf);
 extern void hk_ep_append_value(hk_ep_t *ep, buf_t *out_buf);
 extern void hk_ep_dump(hk_ep_t *ep, buf_t *out_buf);
+extern void hk_ep_set_widget(hk_ep_t *ep, char *widget_name);
+extern void hk_ep_set_chart(hk_ep_t *ep, char *chart_name);
 
 
 /*
@@ -97,7 +100,6 @@ extern void hk_sink_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void 
 
 extern int hk_sink_id(hk_sink_t *sink);
 extern void hk_sink_add_handler(hk_sink_t *sink, hk_ep_func_t func, void *user_data);
-extern void hk_sink_set_widget(hk_sink_t *sink, char *widget_name);
 extern int hk_sink_is_public(hk_sink_t *sink);
 extern char *hk_sink_update(hk_sink_t *sink, char *value);
 
@@ -119,7 +121,6 @@ extern void hk_source_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, vo
 extern void hk_source_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_data);
 
 extern int hk_source_id(hk_source_t *source);
-extern void hk_source_set_widget(hk_source_t *source, char *widget_name);
 extern int hk_source_is_public(hk_source_t *source);
 extern int hk_source_is_event(hk_source_t *source);
 extern char *hk_source_update(hk_source_t *source, char *value);

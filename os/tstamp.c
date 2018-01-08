@@ -14,6 +14,20 @@
 #include <time.h>
 #include <sys/time.h>
 
+#include "tstamp.h"
+
+
+static uint64_t _tstamp_t0 = 0;
+
+
+uint64_t tstamp_t0(void)
+{
+        if (_tstamp_t0 == 0) {
+                _tstamp_t0 = tstamp_ms();
+        }
+        return _tstamp_t0;
+}
+
 
 uint64_t tstamp_ms(void)
 {

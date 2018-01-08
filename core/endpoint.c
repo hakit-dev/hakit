@@ -36,7 +36,7 @@ static inline const char *hk_ep_type_str(hk_ep_t *ep)
 }
 
 
-static void hk_ep_set_widget(hk_ep_t *ep, char *widget_name)
+void hk_ep_set_widget(hk_ep_t *ep, char *widget_name)
 {
 	if (ep->obj != NULL) {
 		log_debug(2, "hk_ep_set_widget name='%s' widget='%s'", ep->obj->name, widget_name);
@@ -50,6 +50,24 @@ static void hk_ep_set_widget(hk_ep_t *ep, char *widget_name)
 	}
 	else {
 		log_str("PANIC: Attempting to set widget name on dead %s #%d\n", hk_ep_type_str(ep), ep->id);
+	}
+}
+
+
+void hk_ep_set_chart(hk_ep_t *ep, char *chart_name)
+{
+	if (ep->obj != NULL) {
+		log_debug(2, "hk_ep_set_chart name='%s' chart='%s'", ep->obj->name, chart_name);
+		if (ep->chart != NULL) {
+			free(ep->chart);
+			ep->chart = NULL;
+		}
+		if (chart_name != NULL) {
+			ep->chart = strdup(chart_name);
+		}
+	}
+	else {
+		log_str("PANIC: Attempting to set chart name on dead %s #%d\n", hk_ep_type_str(ep), ep->id);
 	}
 }
 
@@ -104,6 +122,8 @@ void hk_ep_dump(hk_ep_t *ep, buf_t *out_buf)
 	buf_append_str(out_buf, (char *) hk_ep_type_str(ep));
 	buf_append_byte(out_buf, ' ');
 	buf_append_str(out_buf, ep->widget);
+        buf_append_byte(out_buf, ' ');
+	buf_append_str(out_buf, ep->chart ? ep->chart : "*");
         buf_append_byte(out_buf, ' ');
         if (hk_tile_nmemb() > 1) {
                 buf_append_str(out_buf, ep->obj->tile->name);
@@ -274,14 +294,6 @@ hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local)
         }
 
 	return sink;
-}
-
-
-void hk_sink_set_widget(hk_sink_t *sink, char *widget_name)
-{
-	if (widget_name != NULL) {
-		hk_ep_set_widget(HK_EP(sink), widget_name);
-	}
 }
 
 
@@ -536,14 +548,6 @@ hk_source_t *hk_source_register(hk_endpoints_t *eps, hk_obj_t *obj, int local, i
 	}
 
 	return source;
-}
-
-
-void hk_source_set_widget(hk_source_t *source, char *widget_name)
-{
-	if (widget_name != NULL) {
-		hk_ep_set_widget(HK_EP(source), widget_name);
-	}
 }
 
 

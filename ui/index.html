@@ -19,7 +19,9 @@
     <link rel="stylesheet" type="text/css" href="switch.css">
     <link rel="stylesheet" type="text/css" href="switch3.css">
     <link rel="stylesheet" type="text/css" href="led.css">
+    <script src="vendor/Chart.bundle.min.js"></script>
     <script src="hakit.js"></script>
+    <script src="hakit_chart.js"></script>
     <script src="hakit_signal.js"></script>
   </head>
 
@@ -37,6 +39,10 @@
  	 <td>Device version:</td>
 	 <td><div id="ws_version">?</div></td>
        </tr>
+       <tr>
+ 	 <td>Device started:</td>
+	 <td><div id="ws_t0">?</div></td>
+       </tr>
     </table>
 
     <table class="pure-table">
@@ -51,6 +57,8 @@
       <tbody id="signals">
      </tbody>
     </table>
+
+    <div id="charts"></div>
 
     <script src="BrowserDetect.js"></script>
     <script type="text/javascript">

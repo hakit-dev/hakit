@@ -14,6 +14,7 @@
 
 #include "buf.h"
 #include "tab.h"
+#include "tstamp.h"
 #include "endpoint.h"
 #include "hakit_version.h"
 #include "hkcp.h"
@@ -248,7 +249,7 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 		hkcp_command_sources(hkcp, out_buf);
 	}
 	else if (strcmp(argv[0], "version") == 0) {
-		buf_append_str(out_buf, HAKIT_VERSION " " ARCH "\n.\n");
+		buf_append_fmt(out_buf, HAKIT_VERSION " " ARCH " %llu\n.\n", tstamp_t0());
 	}
 	else {
 		buf_append_str(out_buf, ".ERROR: Unknown command: ");

@@ -49,6 +49,7 @@ static int _new(hk_obj_t *obj)
 	ctx->id = comm_sink_register(obj, local, (hk_ep_func_t) _event, ctx);
 
 	comm_sink_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
+	comm_sink_set_chart(ctx->id, hk_prop_get(&obj->props, "chart"));
 
 	return 0;
 }

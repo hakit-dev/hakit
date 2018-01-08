@@ -36,8 +36,6 @@ void hk_trace_init(hk_trace_t *tr, int depth)
         }
 
         tr->tab = calloc(tr->depth, sizeof(hk_trace_entry_t));
-
-        tr->t0 = tstamp_ms();
 }
 
 
@@ -73,7 +71,7 @@ void hk_trace_push(hk_trace_t *tr, hk_ep_t *ep)
 
         hk_trace_clear_entry(entry);
         entry->ep = ep;
-        entry->t = tstamp_ms() - tr->t0;
+        entry->t = tstamp_ms() - tstamp_t0();
         entry->value = strdup((char *) ep->value.base);
 
         if (tr->iput >= tr->depth) {
@@ -90,12 +88,11 @@ void hk_trace_push(hk_trace_t *tr, hk_ep_t *ep)
 }
 
 
-void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, buf_t *out_buf)
+void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, uint64_t t1, uint64_t t2, buf_t *out_buf)
 {
-        hk_ep_t *ep0 = NULL;
+        hk_trace_entry_t *pre = NULL;
+        hk_trace_entry_t *last = NULL;
         int i;
-
-        buf_append_fmt(out_buf, "#T0 %llu\n", tr->t0);
 
         i = tr->iget;
         while (i != tr->iput) {
@@ -108,19 +105,39 @@ void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, buf_t *out_buf)
                         break;
                 }
 
-                if ((ep == NULL) || (ep == entry->ep)) {
-                        if (entry->ep != ep0) {
-                                if (ep0 != NULL) {
-                                        buf_append_str(out_buf, "\n");
+                if (entry->ep == ep) {
+                        if ((t1 == 0) || (entry->t >= t1)) {
+                                if ((t2 == 0) || (entry->t <= t2)) {
+                                        if (last == NULL) {
+                                                buf_append_str(out_buf, ep->obj->name);
+                                        }
+
+                                        if (pre != NULL) {
+                                                if (pre != entry) {
+                                                        buf_append_fmt(out_buf, " %llu,%s", t1, pre->value);
+                                                }
+                                                pre = NULL;
+                                        }
+
+                                        buf_append_fmt(out_buf, " %llu,%s", entry->t, entry->value);
+                                        last = entry;
                                 }
-                                buf_append_str(out_buf, entry->ep->obj->name);
+                                else {
+                                        if (last != NULL) {
+                                                buf_append_fmt(out_buf, " %llu,%s\n", t2, last->value);
+                                                last = NULL;
+                                        }
+                                        break;
+                                }
                         }
-                        buf_append_fmt(out_buf, " %llu,%s", entry->t, entry->value);
-                        ep0 = entry->ep;
+                        else {
+                                pre = entry;
+                        }
                 }
         }
 
-        if (ep0 != NULL) {
-                buf_append_str(out_buf, "\n");
+        if (last != NULL) {
+                uint64_t t = tstamp_ms() - tstamp_t0();
+                buf_append_fmt(out_buf, " %llu,%s\n", t, last->value);
         }
 }

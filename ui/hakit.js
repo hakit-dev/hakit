@@ -13,12 +13,15 @@ const HAKIT_ST_IDLE = 0;
 const HAKIT_ST_VERSION = 1;
 const HAKIT_ST_READY = 2;
 const HAKIT_ST_GET = 3;
+const HAKIT_ST_TRACE = 4;
 
 var hakit_sock;
 var hakit_sock_state = HAKIT_ST_IDLE;
 var hakit_sock_timeout;
 var hakit_sock_failures = 0;
 var hakit_version = '';
+var hakit_t0 = 0;
+var hakit_charts = {};
 
 
 function get_appropriate_ws_url()
@@ -74,7 +77,18 @@ function hakit_get(name)
 	hakit_sock_state = HAKIT_ST_GET;
     }
     else {
-	console.log("WARNING: Attempting to send command in sock state "+hakit_sock_state);
+	console.log("WARNING: Attempting to send command 'get' in sock state "+hakit_sock_state);
+    }
+}
+
+
+function hakit_recv_version(line)
+{
+    var fields = line.split(" ");
+    var t0 = fields[2];
+    hakit_version = fields[0]+' '+fields[1];
+    if (t0) {
+        hakit_t0 = parseInt(t0);
     }
 }
 
@@ -84,15 +98,65 @@ function hakit_recv_get(line)
     var fields = line.split(" ");
     var dir = fields[0];
     var widget = fields[1];
-    var name = fields[2];
+    var chart = fields[2];
+    var name = fields[3];
 
     var value = '';
-    for (var i = 3; i < fields.length; i++) {
+    for (var i = 4; i < fields.length; i++) {
 	value += ' '+fields[i];
     }
     value = value.trim();
 
     hakit_updated(name, value, dir, widget);
+
+    var chart_args = chart.split(",");
+    var chart_name = chart_args[0];
+
+    if (!hakit_charts[chart_name]) {
+        hakit_charts[chart_name] = {
+            signals: [],
+            config: undefined,
+            chart: undefined,
+        };
+    }
+    var chart = hakit_charts[chart_name];
+
+    var signal_names = name.split(".");
+    var signal_name = signal_names.pop();
+
+    for (var i = 0; i < chart.signals.length; i++) {
+        if (chart.signals[i].name == signal_name) {
+            return;
+        }
+    }
+
+    var signal = {
+        name: signal_name,
+        color: '',
+    };
+    if (chart_args.length > 1) {
+        signal.color = chart_args[1];
+    }
+    chart.signals.push(signal);
+}
+
+
+function hakit_recv_trace(line)
+{
+    console.log("hakit_recv_trace("+line+")");
+    var fields = line.split(" ");
+    var name = fields[0];
+
+    var data = [];
+    for (var i = 1; i < fields.length; i++) {
+        var tab = fields[i].split(",");
+        var pt = {
+            t: parseInt(tab[0]) + hakit_t0,
+            y: tab[1],
+        }
+        data.push(pt);
+    }
+    hakit_chart(name, data);
 }
 
 
@@ -115,17 +179,29 @@ function hakit_recv_line(line)
 		hakit_send("get");
 		hakit_sock_state = HAKIT_ST_GET;
 	    }
+	    else if (hakit_sock_state == HAKIT_ST_GET) {
+                if (typeof(hakit_chart) === 'function') {
+		    hakit_send("trace");
+		    hakit_sock_state = HAKIT_ST_TRACE;
+                }
+                else {
+		    hakit_sock_state = HAKIT_ST_READY;
+                }
+	    }
 	    else {
 		hakit_sock_state = HAKIT_ST_READY;
-	    }
+            }
 	}
 	else {
 	    if (hakit_sock_state == HAKIT_ST_VERSION) {
-		hakit_version = line;
+                hakit_recv_version(line);
 	    }
 	    else if (hakit_sock_state == HAKIT_ST_GET) {
                 hakit_recv_get(line);
 	    }
+	    else if (hakit_sock_state == HAKIT_ST_TRACE) {
+                hakit_recv_trace(line);
+            }
 	}
     }
 }

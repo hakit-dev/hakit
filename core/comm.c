@@ -124,28 +124,93 @@ static void comm_wget_recv(void *user_data, char *buf, int len)
 }
 
 
-static void comm_command_trace(comm_t *comm, int argc, char **argv, buf_t *out_buf)
-{
-        hk_ep_t *ep = NULL;
+typedef struct {
+        comm_t *comm;
+        buf_t *out_buf;
+        uint64_t t1;
+        uint64_t t2;
+} comm_command_ctx_t;
 
-        if (argc > 2) {
-                log_str("ERROR: Usage: %s [<endpoint>]", argv[0]);
-                return;
+static int comm_command_trace_dump(comm_command_ctx_t *ctx, hk_ep_t *ep)
+{
+        hk_trace_dump(&ctx->comm->tr, ep, 0, 0, ctx->out_buf);
+        return 1;
+}
+
+
+static int comm_command_trace(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+{
+        char *name = NULL;
+        uint64_t t1 = 0;
+        uint64_t t2 = 0;
+        int i;
+
+        if (argc > 3) {
+                goto USAGE;
         }
 
-        if (argc > 1) {
-                char *name = argv[1];
-                ep = HK_EP(hk_source_retrieve_by_name(&comm->eps, name));
+        for (i = 1; i < argc; i++) {
+                char *args = argv[i];
+                char *sep = strchr(args, ':');
+                if (sep != NULL) {
+                        *(sep++) = '\0';
+                        if (*args != '\0') {
+                                t1 = strtoull(args, NULL, 0);
+                        }
+                        if (*sep != '\0') {
+                                t2 = strtoull(sep, NULL, 0);
+                        }
+                }
+                else {
+                        if (name != NULL) {
+                                goto USAGE;
+                        }
+                        name = args;
+                }
+        }
+
+        if (name != NULL) {
+                hk_ep_t *ep = HK_EP(hk_source_retrieve_by_name(&comm->eps, name));
                 if (ep == NULL) {
                         ep = HK_EP(hk_sink_retrieve_by_name(&comm->eps, name));
                         if (ep == NULL) {
                                 log_str("ERROR: Unknown endpoint '%s'", name);
-                                return;
+                                return -1;
                         }
                 }
+
+                hk_trace_dump(&comm->tr, ep, t1, t2, out_buf);
+        }
+        else {
+                comm_command_ctx_t ctx = {
+                        .comm = comm,
+                        .out_buf = out_buf,
+                        .t1 = t1,
+                        .t2 = t2,
+                };
+
+                hk_source_foreach(&comm->eps, (hk_ep_foreach_func_t) comm_command_trace_dump, &ctx);
+                hk_sink_foreach(&comm->eps, (hk_ep_foreach_func_t) comm_command_trace_dump, &ctx);
         }
 
-        hk_trace_dump(&comm->tr, ep, out_buf);
+	buf_append_str(out_buf, ".\n");
+
+        return 0;
+
+USAGE:
+        log_str("ERROR: Usage: %s [<endpoint>] [[<t1>]:[<t2>]]", argv[0]);
+        return -1;
+}
+
+
+static void comm_command_ws(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+{
+        if (strcmp(argv[0], "trace") == 0) {
+                comm_command_trace(comm, argc, argv, out_buf);
+        }
+        else {
+                hkcp_command(&comm->hkcp, argc, argv, out_buf);
+        }
 }
 
 
@@ -181,11 +246,8 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 				log_str("ERROR: Usage: %s [<uri>] <event>", argv[0]);
 			}
 		}
-		else if (strcmp(argv[0], "trace") == 0) {
-                        comm_command_trace(comm, argc, argv, &out_buf);
-                }
 		else {
-			hkcp_command(&comm->hkcp, argc, argv, &out_buf);
+			comm_command_ws(comm, argc, argv, &out_buf);
 		}
 
                 if (out_buf.len > 0) {
@@ -200,17 +262,6 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 		/* Quit if hangup from stdin */
 		sys_quit();
 	}
-}
-
-
-static void comm_command_ws(comm_t *comm, int argc, char **argv, buf_t *out_buf)
-{
-        if (strcmp(argv[0], "trace") == 0) {
-                comm_command_trace(comm, argc, argv, out_buf);
-        }
-        else {
-                hkcp_command(&comm->hkcp, argc, argv, out_buf);
-        }
 }
 
 
@@ -377,13 +428,30 @@ int comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_d
 
 void comm_sink_set_widget(int id, char *widget_name)
 {
-        hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
+        if (widget_name != NULL) {
+                hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
 
-        if (sink != NULL) {
-                hk_sink_set_widget(sink, widget_name);
+                if (sink != NULL) {
+                        hk_ep_set_widget(HK_EP(sink), widget_name);
+                }
+                else {
+                        log_str("PANIC: Attempting to set widget on unknown sink #%d\n", id);
+                }
         }
-        else {
-		log_str("PANIC: Attempting to set widget on unknown sink #%d\n", id);
+}
+
+
+void comm_sink_set_chart(int id, char *chart_name)
+{
+        if (chart_name != NULL) {
+                hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
+
+                if (sink != NULL) {
+                        hk_ep_set_chart(HK_EP(sink), chart_name);
+                }
+                else {
+                        log_str("PANIC: Attempting to set chart on unknown sink #%d\n", id);
+                }
         }
 }
 
@@ -437,13 +505,30 @@ int comm_source_register(hk_obj_t *obj, int local, int event)
 
 void comm_source_set_widget(int id, char *widget_name)
 {
-        hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
+        if (widget_name != NULL) {
+                hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
 
-        if (source != NULL) {
-                hk_source_set_widget(source, widget_name);
+                if (source != NULL) {
+                        hk_ep_set_widget(HK_EP(source), widget_name);
+                }
+                else {
+                        log_str("PANIC: Attempting to set widget on unknown source #%d\n", id);
+                }
         }
-        else {
-		log_str("PANIC: Attempting to set widget on unknown source #%d\n", id);
+}
+
+
+void comm_source_set_chart(int id, char *chart_name)
+{
+        if (chart_name != NULL) {
+                hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
+
+                if (source != NULL) {
+                        hk_ep_set_chart(HK_EP(source), chart_name);
+                }
+                else {
+                        log_str("PANIC: Attempting to set chart on unknown source #%d\n", id);
+                }
         }
 }
 

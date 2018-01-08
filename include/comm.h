@@ -21,11 +21,13 @@ extern int comm_tile_register(char *path);
 
 extern int comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data);
 extern void comm_sink_set_widget(int id, char *widget_name);
+extern void comm_sink_set_chart(int id, char *chart_name);
 extern void comm_sink_update_str(int id, char *value);
 extern void comm_sink_update_int(int id, int value);
 
 extern int comm_source_register(hk_obj_t *obj, int local, int event);
 extern void comm_source_set_widget(int id, char *widget_name);
+extern void comm_source_set_chart(int id, char *chart_name);
 extern void comm_source_update_str(int id, char *value);
 extern void comm_source_update_int(int id, int value);
 

@@ -14,6 +14,7 @@
 
 #include <stdint.h>
 
+extern uint64_t tstamp_t0(void);
 extern uint64_t tstamp_ms(void);
 extern int tstamp_str(char *buf, int size);
 
