@@ -21,7 +21,6 @@ var hakit_sock_timeout;
 var hakit_sock_failures = 0;
 var hakit_version = '';
 var hakit_t0 = 0;
-var hakit_charts = {};
 
 
 function get_appropriate_ws_url()
@@ -98,7 +97,7 @@ function hakit_recv_get(line)
     var fields = line.split(" ");
     var dir = fields[0];
     var widget = fields[1];
-    var chart = fields[2];
+    var chart_args = fields[2].split(",");
     var name = fields[3];
 
     var value = '';
@@ -109,35 +108,7 @@ function hakit_recv_get(line)
 
     hakit_updated(name, value, dir, widget);
 
-    var chart_args = chart.split(",");
-    var chart_name = chart_args[0];
-
-    if (!hakit_charts[chart_name]) {
-        hakit_charts[chart_name] = {
-            signals: [],
-            config: undefined,
-            chart: undefined,
-        };
-    }
-    var chart = hakit_charts[chart_name];
-
-    var signal_names = name.split(".");
-    var signal_name = signal_names.pop();
-
-    for (var i = 0; i < chart.signals.length; i++) {
-        if (chart.signals[i].name == signal_name) {
-            return;
-        }
-    }
-
-    var signal = {
-        name: signal_name,
-        color: '',
-    };
-    if (chart_args.length > 1) {
-        signal.color = chart_args[1];
-    }
-    chart.signals.push(signal);
+    hakit_chart_add(chart_args[0], name, chart_args[1]);
 }
 
 

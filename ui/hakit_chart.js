@@ -9,6 +9,7 @@
  * directory for more details.
  */
 
+var hakit_charts = {};
 var hakit_chart_signals = [];
 var hakit_chart_labels = [];
 
@@ -27,18 +28,13 @@ function hakit_chart_init(container)
         '#8549ba'
     ];
 
-    var div = document.createElement('div');
-    div.classList.add('chart-container');
-    container.appendChild(div);
-
     for (var chart_name in hakit_charts) {
         var chart = hakit_charts[chart_name];
         var color_index = 0;
 
         var canvas = document.createElement('canvas');
-        div.appendChild(canvas);
+        container.appendChild(canvas);
 
-        var ctx = canvas.getContext('2d');
         chart.config = {
 	    type: 'line',
 	    data: {
@@ -67,7 +63,7 @@ function hakit_chart_init(container)
 		    yAxes: [{
 			scaleLabel: {
 			    display: true,
-			    labelString: 'value'
+			    labelString: 'Value'
 			}
 		    }]
 		},
@@ -96,8 +92,44 @@ function hakit_chart_init(container)
             };
         }
 
+        var ctx = canvas.getContext('2d');
         chart.chart = new Chart(ctx, chart.config);
     }
+}
+
+
+function hakit_chart_add(chart_name, signal_spec, signal_color)
+{
+    // Create chart if it does not already exist
+    if (!hakit_charts[chart_name]) {
+        hakit_charts[chart_name] = {
+            signals: [],
+            config: undefined,
+            chart: undefined,
+        };
+    }
+
+    var chart = hakit_charts[chart_name];
+
+    // Extract signal name from full signal spec
+    var signal_name = signal_spec.split(".").pop();
+
+    // Ignore signal if it already has a chart
+    for (var i = 0; i < chart.signals.length; i++) {
+        if (chart.signals[i].name == signal_name) {
+            return;
+        }
+    }
+
+    // Add new signal to chart
+    var signal = {
+        name: signal_name,
+        color: '',
+    };
+    if (signal_color) {
+        signal.color = signal_color;
+    }
+    chart.signals.push(signal);
 }
 
 
