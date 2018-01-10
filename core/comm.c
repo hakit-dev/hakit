@@ -470,7 +470,9 @@ void comm_sink_update_str(int id, char *value)
 
         /* Record sink update to trace, unless connected to local source */
         if (sink->local_source == NULL) {
-                hk_trace_push(&comm.tr, HK_EP(sink));
+                if (sink->ep.chart != NULL) {
+                        hk_trace_push(&comm.tr, HK_EP(sink));
+                }
         }
 
         /* Update websocket link */
@@ -546,7 +548,9 @@ void comm_source_update_str(int id, char *value)
 	char *name = hk_source_update(source, value);
 
         /* Record source update to trace */
-        hk_trace_push(&comm.tr, HK_EP(source));
+        if (source->ep.chart != NULL) {
+                hk_trace_push(&comm.tr, HK_EP(source));
+        }
 
         /* Update networked links */
 	if (hk_source_is_public(source)) { 

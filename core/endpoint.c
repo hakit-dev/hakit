@@ -123,7 +123,7 @@ void hk_ep_dump(hk_ep_t *ep, buf_t *out_buf)
 	buf_append_byte(out_buf, ' ');
 	buf_append_str(out_buf, ep->widget);
         buf_append_byte(out_buf, ' ');
-	buf_append_str(out_buf, ep->chart ? ep->chart : "*");
+	buf_append_str(out_buf, ep->chart ? ep->chart : "-");
         buf_append_byte(out_buf, ' ');
         if (hk_tile_nmemb() > 1) {
                 buf_append_str(out_buf, ep->obj->tile->name);
