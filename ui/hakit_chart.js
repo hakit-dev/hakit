@@ -9,12 +9,35 @@
  * directory for more details.
  */
 
-var hakit_charts = {};
-var hakit_chart_signals = [];
-var hakit_chart_labels = [];
+var hakit_chart = {
+    container: undefined,
+    list: {},
+    signals: [],
+};
 
 
-function hakit_chart_init(container)
+function hakit_chart_enable(container)
+{
+    console.log("hakit_chart_enable()");
+    hakit_chart.container = container;
+}
+
+
+function hakit_chart_enabled()
+{
+    return hakit_chart.container ? 1:0;
+}
+
+
+function hakit_chart_clear()
+{
+    console.log("hakit_chart_clear()");
+    hakit_chart.list = {};
+    hakit_chart.signals.length = 0;
+}
+
+
+function hakit_chart_init()
 {
     var COLORS = [
         '#4dc9f6',
@@ -28,17 +51,22 @@ function hakit_chart_init(container)
         '#8549ba'
     ];
 
-    for (var chart_name in hakit_charts) {
-        var chart = hakit_charts[chart_name];
+    if (!hakit_chart.container) {
+        return;
+    }
+
+    console.log("hakit_chart_init()");
+
+    for (var chart_name in hakit_chart.list) {
+        var chart = hakit_chart.list[chart_name];
         var color_index = 0;
 
         var canvas = document.createElement('canvas');
-        container.appendChild(canvas);
+        hakit_chart.container.appendChild(canvas);
 
         chart.config = {
 	    type: 'line',
 	    data: {
-	        labels: [],
 	        datasets: []
 	    },
 	    options: {
@@ -86,7 +114,7 @@ function hakit_chart_init(container)
                 color_index++;
             }
             chart.config.data.datasets.push(dataset);
-            hakit_chart_signals[signal.name] = {
+            hakit_chart.signals[signal.name] = {
                 chart: chart,
                 dataset: dataset,
             };
@@ -100,16 +128,22 @@ function hakit_chart_init(container)
 
 function hakit_chart_add(chart_name, signal_spec, signal_color)
 {
+    if (!hakit_chart.container) {
+        return;
+    }
+
+    console.log('hakit_chart_add(chart_name="'+chart_name+'", signal_spec="'+signal_spec+'", signal_color="'+signal_color+'")');
+
     // Create chart if it does not already exist
-    if (!hakit_charts[chart_name]) {
-        hakit_charts[chart_name] = {
+    var chart = hakit_chart.list[chart_name];
+    if (!chart) {
+        chart = {
             signals: [],
             config: undefined,
             chart: undefined,
         };
+        hakit_chart.list[chart_name] = chart;
     }
-
-    var chart = hakit_charts[chart_name];
 
     // Extract signal name from full signal spec
     var signal_name = signal_spec.split(".").pop();
@@ -135,19 +169,9 @@ function hakit_chart_add(chart_name, signal_spec, signal_color)
 
 function hakit_chart_update(name, data)
 {
-    if (hakit_chart_signals[name]) {
-        var chart = hakit_chart_signals[name].chart;
-
-        for (var i = 0; i < data.length; i++) {
-            var t = data[i].t;
-            if ((hakit_chart_labels.length <= 0) || (t > hakit_chart_labels[hakit_chart_labels.length-1])) {
-                hakit_chart_labels.push(t);
-            }
-        }
-            
-        chart.config.data.labels = hakit_chart_labels;
-        hakit_chart_signals[name].dataset.data = data;
-
-        chart.chart.update();
+    var signal = hakit_chart.signals[name];
+    if (signal) {
+        signal.dataset.data = data;
+        signal.chart.chart.update();
     }
 }

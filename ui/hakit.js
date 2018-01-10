@@ -98,7 +98,7 @@ function hakit_recv_get(line)
     var dir = fields[0];
     var widget = fields[1];
     var chart_args = fields[2].split(",");
-    var name = fields[3];
+    var signal_name = fields[3];
 
     var value = '';
     for (var i = 4; i < fields.length; i++) {
@@ -106,15 +106,18 @@ function hakit_recv_get(line)
     }
     value = value.trim();
 
-    hakit_updated(name, value, dir, widget);
+    hakit_updated(signal_name, value, dir, widget);
 
-    hakit_chart_add(chart_args[0], name, chart_args[1]);
+    var chart_name = chart_args[0];
+    if (chart_name != '-') {
+        hakit_chart_add(chart_name, signal_name, chart_args[1]);
+    }
 }
 
 
 function hakit_recv_trace(line)
 {
-    console.log("hakit_recv_trace("+line+")");
+    //console.log("hakit_recv_trace("+line+")");
     var fields = line.split(" ");
     var name = fields[0];
 
@@ -127,7 +130,7 @@ function hakit_recv_trace(line)
         }
         data.push(pt);
     }
-    hakit_chart(name, data);
+    hakit_chart_update(name, data);
 }
 
 
@@ -151,7 +154,8 @@ function hakit_recv_line(line)
 		hakit_sock_state = HAKIT_ST_GET;
 	    }
 	    else if (hakit_sock_state == HAKIT_ST_GET) {
-                if (typeof(hakit_chart) === 'function') {
+                if (hakit_chart_enabled()) {
+                    hakit_chart_init();
 		    hakit_send("trace");
 		    hakit_sock_state = HAKIT_ST_TRACE;
                 }
@@ -180,6 +184,8 @@ function hakit_recv_line(line)
 
 function hakit_connect()
 {
+    console.log("hakit_connect()");
+
     /* Clear pending connect timeout (if any) */
     if (hakit_sock_timeout) {
 	window.clearTimeout(hakit_sock_timeout);
