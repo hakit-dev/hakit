@@ -20,10 +20,19 @@
 static uint64_t _tstamp_t0 = 0;
 
 
+static inline uint64_t tstamp_ms_abs(void)
+{
+	struct timeval t;
+
+	gettimeofday(&t, NULL);
+        return (((uint64_t) t.tv_sec) * 1000) + (t.tv_usec / 1000);
+}
+
+
 uint64_t tstamp_t0(void)
 {
         if (_tstamp_t0 == 0) {
-                _tstamp_t0 = tstamp_ms();
+                _tstamp_t0 = tstamp_ms_abs();
         }
         return _tstamp_t0;
 }
@@ -31,10 +40,7 @@ uint64_t tstamp_t0(void)
 
 uint64_t tstamp_ms(void)
 {
-	struct timeval t;
-
-	gettimeofday(&t, NULL);
-        return (((uint64_t) t.tv_sec) * 1000) + (t.tv_usec / 1000);
+        return tstamp_ms_abs() - tstamp_t0();
 }
 
 

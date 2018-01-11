@@ -71,7 +71,7 @@ void hk_trace_push(hk_trace_t *tr, hk_ep_t *ep)
 
         hk_trace_clear_entry(entry);
         entry->ep = ep;
-        entry->t = tstamp_ms() - tstamp_t0();
+        entry->t = tstamp_ms();
         entry->value = strdup((char *) ep->value.base);
 
         if (tr->iput >= tr->depth) {
@@ -137,7 +137,7 @@ void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, uint64_t t1, uint64_t t2, buf_t 
         }
 
         if (last != NULL) {
-                uint64_t t = tstamp_ms() - tstamp_t0();
+                uint64_t t = tstamp_ms();
                 buf_append_fmt(out_buf, " %llu,%s\n", t, last->value);
         }
 }
