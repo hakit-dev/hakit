@@ -92,9 +92,13 @@ function hakit_chart_init()
 		    xAxes: [{
 			type: "time",
 			time: {
-			    format: 'HH:mm:ss',
-			    //round: 'day'
-			    tooltipFormat: 'll HH:mm:ss'
+			    displayFormats: {
+                                millisecond: 'HH:mm:ss.SSS',
+                                second: 'HH:mm:ss',
+                                minute: 'HH:mm',
+                                hour: 'HH',
+                            },
+			    tooltipFormat: 'll HH:mm:ss.SSS'
 			},
 			scaleLabel: {
 			    display: true,
