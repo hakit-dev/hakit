@@ -14,6 +14,7 @@
 
 #include "env.h"
 #include "options.h"
+#include "tstamp.h"
 #include "log.h"
 #include "files.h"
 #include "io.h"
@@ -59,15 +60,16 @@ static void comm_ws_send(ws_t *ws, hk_ep_t *ep)
         char *tile_name = hk_ep_get_tile_name(ep);
         char *name = hk_ep_get_name(ep);
         char *value = hk_ep_get_value(ep);
-	int size = strlen(tile_name) + strlen(name) + strlen(value) + 4;
+	int size = strlen(tile_name) + strlen(name) + strlen(value) + 24;
+        uint64_t t = tstamp_ms();
 	char str[size];
 
 	/* Send WebSocket event */
         if (hk_tile_nmemb() > 1) {
-                snprintf(str, size, "!%s.%s=%s", tile_name, name, value);
+                snprintf(str, size, "!%lu,%s.%s=%s", t, tile_name, name, value);
         }
         else {
-                snprintf(str, size, "!%s=%s", name, value);
+                snprintf(str, size, "!%lu,%s=%s", t, name, value);
         }
 
 	ws_events_send(ws, str);

@@ -32,6 +32,14 @@ function hakit_chart_enabled()
 function hakit_chart_clear()
 {
     console.log("hakit_chart_clear()");
+
+    for (var chart_name in hakit_chart.list) {
+        var chart = hakit_chart.list[chart_name];
+        chart.chart.destroy();
+        chart.config = {};
+        chart.signals.length = 0;
+    }
+
     hakit_chart.list = {};
     hakit_chart.signals.length = 0;
 }
@@ -61,8 +69,13 @@ function hakit_chart_init()
         var chart = hakit_chart.list[chart_name];
         var color_index = 0;
 
-        var canvas = document.createElement('canvas');
-        hakit_chart.container.appendChild(canvas);
+        var canvas_id = 'hakit_chart:'+chart_name+':canvas';
+	var canvas = document.getElementById(canvas_id);
+        if (!canvas) {
+            canvas = document.createElement('canvas');
+            canvas.setAttribute('id', canvas_id);
+            hakit_chart.container.appendChild(canvas);
+        }
 
         chart.config = {
 	    type: 'line',
@@ -79,8 +92,8 @@ function hakit_chart_init()
 		    xAxes: [{
 			type: "time",
 			time: {
-			    format: 'MM/DD/YYYY HH:mm:ss',
-			    // round: 'day'
+			    format: 'HH:mm:ss',
+			    //round: 'day'
 			    tooltipFormat: 'll HH:mm:ss'
 			},
 			scaleLabel: {
@@ -167,11 +180,24 @@ function hakit_chart_add(chart_name, signal_spec, signal_color)
 }
 
 
-function hakit_chart_update(name, data)
+function hakit_chart_set(signal_name, data)
 {
-    var signal = hakit_chart.signals[name];
+    var signal = hakit_chart.signals[signal_name];
     if (signal) {
         signal.dataset.data = data;
+        signal.chart.chart.update();
+    }
+}
+
+
+function hakit_chart_updated(signal_spec, pt)
+{
+    // Extract signal name from full signal spec
+    var signal_name = signal_spec.split(".").pop();
+
+    var signal = hakit_chart.signals[signal_name];
+    if (signal) {
+        signal.dataset.data.push(pt);
         signal.chart.chart.update();
     }
 }

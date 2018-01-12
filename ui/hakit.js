@@ -130,20 +130,32 @@ function hakit_recv_trace(line)
         }
         data.push(pt);
     }
-    hakit_chart_update(name, data);
+    hakit_chart_set(name, data);
 }
 
 
 function hakit_recv_line(line)
 {
-    //console.log("hakit_recv_line('"+line+"')");
+    console.log("hakit_recv_line('"+line+"')");
 
     if (line.substr(0,1) == "!") {
 	var i = line.indexOf("=");
 	if (i > 1) {
-	    var name = line.substr(1,i-1);
+            var tab = line.substr(1,i-1).split(',');
+            var signal_spec = tab.pop();
+            var t = tab.pop();
 	    var value = line.substr(i+1);
-	    hakit_updated(name, value);
+	    hakit_updated(signal_spec, value);
+
+            if (hakit_chart_enabled()) {
+                if (t) {
+                    var pt = {
+                        t: parseInt(t) + hakit_t0,
+                        y: value,
+                    }
+	            hakit_chart_updated(signal_spec, pt);
+                }
+            }
 	}
     }
     else {
