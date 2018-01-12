@@ -136,7 +136,7 @@ function hakit_recv_trace(line)
 
 function hakit_recv_line(line)
 {
-    console.log("hakit_recv_line('"+line+"')");
+    //console.log("hakit_recv_line('"+line+"')");
 
     if (line.substr(0,1) == "!") {
 	var i = line.indexOf("=");
