@@ -201,6 +201,9 @@ function hakit_chart_updated(signal_spec, pt)
 
     var signal = hakit_chart.signals[signal_name];
     if (signal) {
+        if (signal.dataset.data.length >= 1000) {
+            signal.dataset.data.shift();
+        }
         signal.dataset.data.push(pt);
         signal.chart.chart.update();
     }
