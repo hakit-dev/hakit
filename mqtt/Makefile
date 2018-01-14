@@ -11,6 +11,8 @@
 
 HAKIT_DIR := ..
 
+-include $(HAKIT_DIR)/config.mk
+
 include $(HAKIT_DIR)/tools/check.mk
 
 ifdef TARGET
@@ -22,7 +24,7 @@ OUTDIR = out/$(ARCH)
 
 SRC_DIR = mosquitto
 LIB_DIR = $(SRC_DIR)/lib
-ARCH_MARKER = $(SRC_DIR)/.arch-$(ARCH)
+ARCH_MARKER = .arch-$(ARCH)
 
 #USE_CMAKE = 1
 
@@ -32,12 +34,18 @@ ifdef USE_CMAKE
   ifdef CROSS_COMPILE
     CMAKE_FLAGS = -DCMAKE_TOOLCHAIN_FILE=../../cross-openwrt.cmake
   endif
-  CMAKE_FLAGS += -DWITH_SRV=OFF
+  CMAKE_FLAGS += -DWITH_SRV=no
+  ifdef WITHOUT_SSL
+    CMAKE_FLAGS += -DWITH_TLS=no
+  endif
 else
   LIB_NAME = libmosquitto.a
   LIB = $(OUTDIR)/$(LIB_NAME)
-  MAKE_FLAGS += WITH_SRV=no WITH_UUID=no WITH_DOCS=no WITH_THREADING=yes DIRS=lib
   MAKE_FLAGS += CFLAGS="-Wall -O2"
+  MAKE_FLAGS += WITH_SRV=no WITH_UUID=no WITH_DOCS=no WITH_THREADING=yes DIRS=lib
+  ifdef WITHOUT_SSL
+    MAKE_FLAGS += WITH_TLS=no
+  endif
   ifdef TARGET
     MAKE_FLAGS += CROSS_COMPILE=$(CROSS_PATH)/bin/$(CROSS_COMPILE) CC=gcc
   endif

@@ -256,18 +256,7 @@ static void tcp_sock_ssl_shutdown(tcp_sock_t *tcp_sock)
         }
 }
 
-#else /* WITH_SSL */
-
-static SSL_CTX *tcp_sock_ssl_ctx(char *certs)
-{
-        if (certs != NULL) {
-                log_str("ERROR: TLS/SSL not available");
-        }
-
-        return NULL;
-}
-
-#endif /* !WITH_SSL */
+#endif /* WITH_SSL */
 
 
 /*
@@ -423,14 +412,17 @@ int tcp_sock_connect(tcp_sock_t *tcp_sock, char *host, int port, char *certs,
 
         /* Setup SSL gears */
         if (certs != NULL) {
+#ifdef WITH_SSL
                 tcp_sock->ssl_ctx = tcp_sock_ssl_ctx(certs, 0);
                 if (tcp_sock->ssl_ctx == NULL) {
                         goto FAILED;
                 }
-#ifdef WITH_SSL
                 if (tcp_sock_ssl_setup(tcp_sock, sock, tcp_sock->ssl_ctx, 0) < 0) {
                         goto FAILED;
                 }
+#else
+                log_str("ERROR: TLS/SSL not available");
+                goto FAILED;
 #endif
         }
 
@@ -649,10 +641,15 @@ int tcp_srv_init(tcp_srv_t *srv, int port, char *certs,
 
         /* Set SSL mode */
         if (certs != NULL) {
+#ifdef WITH_SSL
                 srv->csock.ssl_ctx = tcp_sock_ssl_ctx(certs, 1);
                 if (srv->csock.ssl_ctx == NULL) {
                         goto FAILED;
                 }
+#else
+                log_str("ERROR: TLS/SSL not available");
+                goto FAILED;
+#endif
         }
 
 	return 0;
