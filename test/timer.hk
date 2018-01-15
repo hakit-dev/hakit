@@ -13,26 +13,25 @@ pulse: timer-pulse
   in=$input.out
 pulse-output: source
   in=$pulse.out
-  chart=timer
+  chart=timer/output
 
 on: timer-on
   delay=1000
   in=$input.out
 on-output: source
   in=$on.out
-  chart=timer
+  chart=timer/output
 
 off: timer-off
   delay=5000
   in=$input.out
 off-output: source
   in=$off.out
-  chart=timer
+  chart=timer/output
 
 meter: source
   widget=meter:min=0,low=20,high=80,max=100
-  chart=slider
+  chart=timer/slider
   in=$slider.out
 slider: sink local
   widget=slider:min=0,max=100,step=10
-  chart=slider

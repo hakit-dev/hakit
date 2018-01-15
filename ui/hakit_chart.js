@@ -102,18 +102,16 @@ function hakit_chart_init()
 			},
 			scaleLabel: {
 			    display: true,
-			    labelString: 'Date'
+			    //labelString: 'Date'
 			}
 		    }, ],
-		    yAxes: [{
-			scaleLabel: {
-			    display: true,
-			    labelString: 'Value'
-			}
-		    }]
+		    yAxes: [],
 		},
 	    }
         };
+
+        var yaxis_shown = {};
+        var yaxis_count = 0;
 
         for (var i=0; i < chart.signals.length; i++) {
             var signal = chart.signals[i];
@@ -122,6 +120,7 @@ function hakit_chart_init()
 		steppedLine: true,
 		data: [],
 		fill: false,
+                yAxisID: signal.yaxis
             };
             if (signal.color) {
                 dataset.borderColor = signal.color;
@@ -135,6 +134,26 @@ function hakit_chart_init()
                 chart: chart,
                 dataset: dataset,
             };
+
+            if (signal.yaxis) {
+                if (!yaxis_shown[signal.yaxis]) {
+                    position = (yaxis_count > 0) ? 'right':'left';
+
+                    var yaxis = {
+			display: true,
+                        position: position,
+			id: signal.yaxis,
+			scaleLabel: {
+			    display: true,
+			    labelString: signal.yaxis,
+			}
+                    };
+                    chart.config.options.scales.yAxes.push(yaxis);
+
+                    yaxis_shown[signal.yaxis] = 1;
+                    yaxis_count++;
+                }
+            }
         }
 
         var ctx = canvas.getContext('2d');
@@ -143,13 +162,18 @@ function hakit_chart_init()
 }
 
 
-function hakit_chart_add(chart_name, signal_spec, signal_color)
+function hakit_chart_add(chart_spec, signal_spec, signal_color)
 {
     if (!hakit_chart.container) {
         return;
     }
 
-    console.log('hakit_chart_add(chart_name="'+chart_name+'", signal_spec="'+signal_spec+'", signal_color="'+signal_color+'")');
+    console.log('hakit_chart_add(chart_spec="'+chart_spec+'", signal_spec="'+signal_spec+'", signal_color="'+signal_color+'")');
+
+    // Split chart name from Y axis name
+    var tab = chart_spec.split('/');
+    var chart_name = tab[0];
+    var yaxis = tab[1];
 
     // Create chart if it does not already exist
     var chart = hakit_chart.list[chart_name];
@@ -176,6 +200,7 @@ function hakit_chart_add(chart_name, signal_spec, signal_color)
     var signal = {
         name: signal_name,
         color: '',
+        yaxis: yaxis,
     };
     if (signal_color) {
         signal.color = signal_color;
