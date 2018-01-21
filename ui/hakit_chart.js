@@ -296,7 +296,7 @@ function hakit_chart_updated(signal_spec, pt)
     if (signal) {
         hakit_chart_ext_remove(signal);
 
-        if (signal.dataset.data.length >= 100) {
+        if (signal.dataset.data.length >= 500) {
             signal.dataset.data.shift();
         }
         signal.dataset.data.push(pt);
