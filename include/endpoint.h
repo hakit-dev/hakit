@@ -15,6 +15,7 @@
 #include "buf.h"
 #include "tab.h"
 #include "mod.h"
+#include "trace.h"
 
 
 /*
@@ -59,6 +60,7 @@ typedef struct {
 	char *widget;
 	char *chart;
         int locked;
+        hk_trace_t tr;
 } hk_ep_t;
 
 typedef int (*hk_ep_foreach_func_t)(void *user_data, hk_ep_t *ep);

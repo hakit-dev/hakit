@@ -14,25 +14,23 @@
 
 #include <stdint.h>
 
-#include "endpoint.h"
-
-#define HK_TRACE_MAX_DEPTH 1000
+#define HK_TRACE_MAX_DEPTH 200
 
 typedef struct {
-        hk_ep_t *ep;
         uint64_t t;
         char *value;
 } hk_trace_entry_t;
 
 
 typedef struct {
+        char *name;
         int depth;
         int iput, iget;
         hk_trace_entry_t *tab;
 } hk_trace_t;
 
-extern void hk_trace_init(hk_trace_t *tr, int depth);
-extern void hk_trace_push(hk_trace_t *tr, hk_ep_t *ep);
-extern void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, uint64_t t1, uint64_t t2, buf_t *out_buf);
+extern void hk_trace_init(hk_trace_t *tr, char *name, int depth);
+extern void hk_trace_push(hk_trace_t *tr, char *value);
+extern void hk_trace_dump(hk_trace_t *tr, uint64_t t1, uint64_t t2, buf_t *out_buf);
 
 #endif /* __HAKIT_TRACE_H__ */

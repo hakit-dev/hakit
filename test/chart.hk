@@ -1,0 +1,14 @@
+clock-enable: sink local
+clock: timer-clock
+  period=2000
+  enable=$clock-enable.out
+clock-output: source
+  in=$clock.out
+  chart=chart/clock
+
+meter: source
+  widget=meter:min=0,low=20,high=80,max=100
+  chart=chart/slider
+  in=$slider.out
+slider: sink local
+  widget=slider:min=0,max=100,step=10

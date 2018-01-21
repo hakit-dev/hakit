@@ -41,13 +41,16 @@ ifdef USE_CMAKE
 else
   LIB_NAME = libmosquitto.a
   LIB = $(OUTDIR)/$(LIB_NAME)
-  MAKE_FLAGS += CFLAGS="-Wall -O2"
   MAKE_FLAGS += WITH_SRV=no WITH_UUID=no WITH_DOCS=no WITH_THREADING=yes DIRS=lib
   ifdef WITHOUT_SSL
     MAKE_FLAGS += WITH_TLS=no
   endif
+
   ifdef TARGET
     MAKE_FLAGS += CROSS_COMPILE=$(CROSS_PATH)/bin/$(CROSS_COMPILE) CC=gcc
+    MAKE_FLAGS += CFLAGS="-Wall -O2 -I$(realpath $(LIB_DIR)) -I$(CROSS_ROOT_PATH)/usr/include"
+  else
+    MAKE_FLAGS += CFLAGS="-Wall -O2"
   endif
 endif
 

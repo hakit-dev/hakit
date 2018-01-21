@@ -49,7 +49,6 @@ typedef struct {
 #endif
 	ws_t *ws;
 	io_channel_t io_stdin;
-        hk_trace_t tr;
 } comm_t;
 
 static comm_t comm;
@@ -135,7 +134,7 @@ typedef struct {
 
 static int comm_command_trace_dump(comm_command_ctx_t *ctx, hk_ep_t *ep)
 {
-        hk_trace_dump(&ctx->comm->tr, ep, 0, 0, ctx->out_buf);
+        hk_trace_dump(&ep->tr, ctx->t1, ctx->t2, ctx->out_buf);
         return 1;
 }
 
@@ -181,7 +180,7 @@ static int comm_command_trace(comm_t *comm, int argc, char **argv, buf_t *out_bu
                         }
                 }
 
-                hk_trace_dump(&comm->tr, ep, t1, t2, out_buf);
+                hk_trace_dump(&ep->tr, t1, t2, out_buf);
         }
         else {
                 comm_command_ctx_t ctx = {
@@ -361,9 +360,6 @@ int comm_init(int use_ssl, char *certs,
 		io_channel_setup(&comm.io_stdin, fileno(stdin), (io_func_t) command_recv, cmd);
 	}
 
-	/* Init trace recording */
-        hk_trace_init(&comm.tr, 0);
-
 DONE:
 	if (ret != 0) {
 #ifdef WITH_MQTT
@@ -468,19 +464,10 @@ void comm_sink_update_str(int id, char *value)
         }
 
         /* Update endpoint */
-        char *name = hk_sink_update(sink, value);
-
-        /* Record sink update to trace, unless connected to local source */
-        if (sink->local_source == NULL) {
-                if (sink->ep.chart != NULL) {
-                        hk_trace_push(&comm.tr, HK_EP(sink));
-                }
-        }
+        hk_sink_update(sink, value);
 
         /* Update websocket link */
-        if (name != NULL) {
-                comm_ws_send(comm.ws, &sink->ep);
-        }
+        comm_ws_send(comm.ws, &sink->ep);
 }
 
 
@@ -547,19 +534,14 @@ void comm_source_update_str(int id, char *value)
 	}
 
         /* Update endpoint */
-	char *name = hk_source_update(source, value);
-
-        /* Record source update to trace */
-        if (source->ep.chart != NULL) {
-                hk_trace_push(&comm.tr, HK_EP(source));
-        }
+	hk_source_update(source, value);
 
         /* Update networked links */
 	if (hk_source_is_public(source)) { 
 		hkcp_source_update(&comm.hkcp, source, value);
 
 #ifdef WITH_MQTT
-		mqtt_publish(&comm.mqtt, name, value, hk_ep_flag_retain(&source->ep));
+		mqtt_publish(&comm.mqtt, hk_ep_get_name(HK_EP(source)), value, hk_ep_flag_retain(&source->ep));
 #endif
 	}
 

@@ -22,6 +22,21 @@
  * Generic endpoint operations
  */
 
+static void hk_ep_init(hk_ep_t *ep, hk_ep_type_t type, int id, hk_obj_t *obj)
+{
+	ep->type = HK_EP_SOURCE;
+	ep->id = id;
+        ep->obj = obj;
+
+        /* Set value to empty string */
+	buf_init(&ep->value);
+	buf_set_str(&ep->value, "");
+
+	/* Init trace recording */
+        hk_trace_init(&ep->tr, obj->name, 0);
+}
+
+
 static inline const char *hk_ep_type_str(hk_ep_t *ep)
 {
 	static const char *tab[HK_EP_NTYPES] = {
@@ -209,11 +224,7 @@ static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local)
                 memset(sink, 0, sizeof(hk_sink_t));
         }
 
-	sink->ep.type = HK_EP_SINK;
-	sink->ep.id = i;
-	sink->ep.obj = obj;
-	buf_init(&sink->ep.value);
-	buf_set_str(&sink->ep.value, "");
+        hk_ep_init(&sink->ep, HK_EP_SINK, i, obj);
 
 	if (local) {
 		sink->ep.flag |= HK_FLAG_LOCAL;
@@ -223,6 +234,7 @@ static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local)
                 hk_ep_set_widget(HK_EP(sink), "led-green");
         }
 
+        /* Init list of update handlers */
 	hk_tab_init(&sink->handlers, sizeof(hk_sink_handler_t));
 
 	return sink;
@@ -345,6 +357,13 @@ char *hk_sink_update(hk_sink_t *sink, char *value)
 
 	/* Update sink value */
 	buf_set_str(&sink->ep.value, value);
+
+        /* Record sink update to trace, unless connected to local source */
+        if (sink->local_source == NULL) {
+                if (sink->ep.chart != NULL) {
+                        hk_trace_push(&sink->ep.tr, value);
+                }
+        }
 
 	/* Invoke sink event callback */
         sink->ep.locked = 1;
@@ -489,11 +508,7 @@ static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int loca
                 memset(source, 0, sizeof(hk_source_t));
         }
 
-	source->ep.type = HK_EP_SOURCE;
-	source->ep.id = i;
-	source->ep.obj = obj;
-	buf_init(&source->ep.value);
-	buf_set_str(&source->ep.value, "");
+        hk_ep_init(&source->ep, HK_EP_SOURCE, i, obj);
 
 	if (local) {
 		source->ep.flag |= HK_FLAG_LOCAL;
@@ -505,6 +520,7 @@ static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int loca
 
         hk_ep_set_widget(HK_EP(source), "led-red");
 
+        /* Init locally resolved links */
 	hk_tab_init(&source->local_sinks, sizeof(hk_sink_t *));
 
 	return source;
@@ -627,6 +643,11 @@ char *hk_source_update(hk_source_t *source, char *value)
 
         /* Update value */
         buf_set_str(&source->ep.value, value);
+
+        /* Record source update to trace */
+        if (source->ep.chart != NULL) {
+                hk_trace_push(&source->ep.tr, value);
+        }
 
         /* Invoke update handlers of locally connected sinks */
         source->ep.locked = 1;

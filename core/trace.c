@@ -16,13 +16,14 @@
 #include "tstamp.h"
 #include "log.h"
 #include "buf.h"
-#include "endpoint.h"
 #include "trace.h"
 
 
-void hk_trace_init(hk_trace_t *tr, int depth)
+void hk_trace_init(hk_trace_t *tr, char *name, int depth)
 {
         memset(tr, 0, sizeof(hk_trace_t));
+
+        tr->name = name;
 
         if (depth > HK_TRACE_MAX_DEPTH) {
                 log_str("WARNING: Configuring trace to %d entries is too deep. Clamping to %d entries.", depth, HK_TRACE_MAX_DEPTH);
@@ -41,7 +42,6 @@ void hk_trace_init(hk_trace_t *tr, int depth)
 
 static int hk_trace_clear_entry(hk_trace_entry_t *entry)
 {
-        entry->ep = NULL;
         entry->t = 0;
 
         if (entry->value != NULL) {
@@ -65,14 +65,13 @@ void hk_trace_clear(hk_trace_t *tr)
 }
 
 
-void hk_trace_push(hk_trace_t *tr, hk_ep_t *ep)
+void hk_trace_push(hk_trace_t *tr, char *value)
 {
         hk_trace_entry_t *entry = &tr->tab[tr->iput++];
 
         hk_trace_clear_entry(entry);
-        entry->ep = ep;
         entry->t = tstamp_ms();
-        entry->value = strdup((char *) ep->value.base);
+        entry->value = strdup(value);
 
         if (tr->iput >= tr->depth) {
                 tr->iput = 0;
@@ -88,7 +87,7 @@ void hk_trace_push(hk_trace_t *tr, hk_ep_t *ep)
 }
 
 
-void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, uint64_t t1, uint64_t t2, buf_t *out_buf)
+void hk_trace_dump(hk_trace_t *tr, uint64_t t1, uint64_t t2, buf_t *out_buf)
 {
         hk_trace_entry_t *pre = NULL;
         hk_trace_entry_t *last = NULL;
@@ -101,38 +100,36 @@ void hk_trace_dump(hk_trace_t *tr, hk_ep_t *ep, uint64_t t1, uint64_t t2, buf_t 
                         i = 0;
                 }
 
-                if (entry->ep == NULL) {
+                if (entry->value == NULL) {
                         break;
                 }
 
-                if (entry->ep == ep) {
-                        if ((t1 == 0) || (entry->t >= t1)) {
-                                if ((t2 == 0) || (entry->t <= t2)) {
-                                        if (last == NULL) {
-                                                buf_append_str(out_buf, ep->obj->name);
-                                        }
-
-                                        if (pre != NULL) {
-                                                if (pre != entry) {
-                                                        buf_append_fmt(out_buf, " %llu,%s", t1, pre->value);
-                                                }
-                                                pre = NULL;
-                                        }
-
-                                        buf_append_fmt(out_buf, " %llu,%s", entry->t, entry->value);
-                                        last = entry;
+                if ((t1 == 0) || (entry->t >= t1)) {
+                        if ((t2 == 0) || (entry->t <= t2)) {
+                                if (last == NULL) {
+                                        buf_append_str(out_buf, tr->name);
                                 }
-                                else {
-                                        if (last != NULL) {
-                                                buf_append_fmt(out_buf, " %llu,%s\n", t2, last->value);
-                                                last = NULL;
+
+                                if (pre != NULL) {
+                                        if (pre != entry) {
+                                                buf_append_fmt(out_buf, " %llu,%s", t1, pre->value);
                                         }
-                                        break;
+                                        pre = NULL;
                                 }
+
+                                buf_append_fmt(out_buf, " %llu,%s", entry->t, entry->value);
+                                last = entry;
                         }
                         else {
-                                pre = entry;
+                                if (last != NULL) {
+                                        buf_append_fmt(out_buf, " %llu,%s\n", t2, last->value);
+                                        last = NULL;
+                                }
+                                break;
                         }
+                }
+                else {
+                        pre = entry;
                 }
         }
 

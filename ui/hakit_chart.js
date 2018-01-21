@@ -201,6 +201,7 @@ function hakit_chart_add(chart_spec, signal_spec, signal_color)
         name: signal_name,
         color: '',
         yaxis: yaxis,
+        rank: chart.signals.length,
     };
     if (signal_color) {
         signal.color = signal_color;
@@ -214,7 +215,74 @@ function hakit_chart_set(signal_name, data)
     var signal = hakit_chart.signals[signal_name];
     if (signal) {
         signal.dataset.data = data;
+        hakit_chart_cut_first(signal.chart);
         signal.chart.chart.update();
+    }
+}
+
+
+function hakit_chart_cut_first(chart)
+{
+    // Get earliest time stamp of the first trace
+    var signal0 = hakit_chart.signals[chart.signals[0].name];
+    var t0 = signal0.dataset.data[0].t;
+
+    // Clip all other traces from this time stamp
+    for (var i = 1; i < chart.signals.length; i++) {
+        var signal = hakit_chart.signals[chart.signals[i].name];
+        var iprev = -1;
+        for (var j = 0; j < signal.dataset.data.length; j++) {
+            if (signal.dataset.data[j].t >= t0) {
+                break;
+            }
+            iprev = j;
+        }
+        if (iprev >= 0) {
+            signal.dataset.data[iprev].t = t0;
+            if (iprev > 0) {
+                signal.dataset.data.splice(0,iprev);
+            }
+        }
+    }
+}
+
+function hakit_chart_ext_remove(signal)
+{
+    if (signal.dataset.data.length > 0) {
+        var pt = signal.dataset.data[signal.dataset.data.length-1];
+        if (pt.ext) {
+            signal.dataset.data.pop();
+        }
+    }
+}
+
+
+function hakit_chart_ext(signal)
+{
+    var chart = signal.chart;
+    var pt = signal.dataset.data[signal.dataset.data.length-1];
+
+    // Extend all traces to the latest time stamp
+    for (var i = 0; i < chart.signals.length; i++) {
+        var signal1 = hakit_chart.signals[chart.signals[i].name];
+        if (signal1 != signal) {
+            if (signal1.dataset.data.length > 0) {
+                var pt1 = signal1.dataset.data[signal1.dataset.data.length-1];
+                if (pt1.t < pt.t) {
+                    if (pt1.ext) {
+                        pt1.t = pt.t;
+                    }
+                    else {
+                        var pt2 = {
+                            t: pt.t,
+                            y: pt1.y,
+                            ext: true,
+                        };
+                        signal1.dataset.data.push(pt2);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -226,10 +294,19 @@ function hakit_chart_updated(signal_spec, pt)
 
     var signal = hakit_chart.signals[signal_name];
     if (signal) {
-        if (signal.dataset.data.length >= 1000) {
+        hakit_chart_ext_remove(signal);
+
+        if (signal.dataset.data.length >= 100) {
             signal.dataset.data.shift();
         }
         signal.dataset.data.push(pt);
+
+        // Clamp traces if chart has multiple traces
+        if (signal.chart.signals.length > 1) {
+            hakit_chart_cut_first(signal.chart);
+            hakit_chart_ext(signal);
+        }
+
         signal.chart.chart.update();
     }
 }
