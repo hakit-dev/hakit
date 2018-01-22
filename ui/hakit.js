@@ -127,6 +127,7 @@ function hakit_recv_trace(line)
         var pt = {
             t: parseInt(tab[0]) + hakit_t0,
             y: tab[1],
+            ext: (tab[0].substr(0,1) == '+'),
         }
         data.push(pt);
     }

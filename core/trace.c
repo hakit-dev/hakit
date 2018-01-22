@@ -135,6 +135,6 @@ void hk_trace_dump(hk_trace_t *tr, uint64_t t1, uint64_t t2, buf_t *out_buf)
 
         if (last != NULL) {
                 uint64_t t = tstamp_ms();
-                buf_append_fmt(out_buf, " %llu,%s\n", t, last->value);
+                buf_append_fmt(out_buf, " +%llu,%s\n", t, last->value);
         }
 }
