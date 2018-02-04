@@ -62,7 +62,7 @@ static void _start(hk_obj_t *obj)
 {
 	ctx_t *ctx = obj->ctx;
 
-        log_debug(2, "----- cmp(%s) _start %d", obj->name, ctx->out->state);
+        log_debug(2, "cmp(%s) _start %d", obj->name, ctx->out->state);
 
         ctx->started = 1;
 
@@ -85,7 +85,7 @@ static void _input(hk_pad_t *pad, char *value)
                 out_state = 1;
         }
 
-        log_debug(2, "----- cmp(%s) _input %d / %d => %d", pad->obj->name, in_value, ctx->out->state, out_state);
+        log_debug(2, "cmp(%s) _input %d / %d => %d", pad->obj->name, in_value, ctx->out->state, out_state);
 
         if ((out_state != ctx->out->state) || (ctx->out->state < 0)) {
                 ctx->out->state = out_state;
