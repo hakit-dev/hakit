@@ -29,7 +29,7 @@ typedef struct {
 	hk_pad_t *ref;
 	hk_pad_t *in;
 	hk_pad_t *out;
-	int refresh;
+	int started;
 } ctx_t;
 
 
@@ -52,10 +52,23 @@ static int _new(hk_obj_t *obj)
 	ctx->in = hk_pad_create(obj, HK_PAD_IN, "in");
 
 	ctx->out = hk_pad_create(obj, HK_PAD_OUT, "out");
-
-	ctx->refresh = 1;
+        ctx->out->state = -1;
 
 	return 0;
+}
+
+
+static void _start(hk_obj_t *obj)
+{
+	ctx_t *ctx = obj->ctx;
+
+        log_debug(2, "----- cmp(%s) _start %d", obj->name, ctx->out->state);
+
+        ctx->started = 1;
+
+        if (ctx->out->state >= 0) {
+                hk_pad_update_int(ctx->out, ctx->out->state);
+        }
 }
 
 
@@ -63,25 +76,23 @@ static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
 	int out_state = ctx->out->state;
+        int in_value = atoi(value);
 
-	pad->state = atoi(value);
+        if (in_value <= (ctx->ref->state - ctx->hysteresis)) {
+                out_state = 0;
+        }
+        else if (in_value > (ctx->ref->state + ctx->hysteresis)) {
+                out_state = 1;
+        }
 
-	if (ctx->out->state) {
-		if (ctx->in->state <= (ctx->ref->state - ctx->hysteresis)) {
-			out_state = 0;
-		}
-	}
-	else {
-		if (ctx->in->state > (ctx->ref->state + ctx->hysteresis)) {
-			out_state = 1;
-		}
-	}
+        log_debug(2, "----- cmp(%s) _input %d / %d => %d", pad->obj->name, in_value, ctx->out->state, out_state);
 
-	if ((out_state != ctx->out->state) || ctx->refresh) {
-		ctx->refresh = 0;
-		ctx->out->state = out_state;
-		hk_pad_update_int(ctx->out, out_state);
-	}
+        if ((out_state != ctx->out->state) || (ctx->out->state < 0)) {
+                ctx->out->state = out_state;
+                if (ctx->started && (ctx->out->state >= 0)) {
+                        hk_pad_update_int(ctx->out, out_state);
+                }
+        }
 }
 
 
@@ -89,5 +100,6 @@ hk_class_t _class = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
+	.start = _start,
 	.input = _input,
 };
