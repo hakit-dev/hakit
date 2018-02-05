@@ -1,0 +1,7 @@
+input: sink local
+  widget=slider:min=0,max=100,step=1
+trigger: cmp
+  ref=50 hysteresis=5
+  in=$input.out
+output: source local
+  in=$trigger.out

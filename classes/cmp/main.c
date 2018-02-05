@@ -75,17 +75,18 @@ static void _start(hk_obj_t *obj)
 static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
-	int out_state = ctx->out->state;
-        int in_value = atoi(value);
+        int out_state = ctx->out->state;
 
-        if (in_value <= (ctx->ref->state - ctx->hysteresis)) {
+        pad->state = atoi(value);
+
+        if (ctx->in->state <= (ctx->ref->state - ctx->hysteresis)) {
                 out_state = 0;
         }
-        else if (in_value > (ctx->ref->state + ctx->hysteresis)) {
+        else if (ctx->in->state > (ctx->ref->state + ctx->hysteresis)) {
                 out_state = 1;
         }
 
-        log_debug(2, "cmp(%s) _input %d / %d => %d", pad->obj->name, in_value, ctx->out->state, out_state);
+        log_debug(2, "cmp(%s) _input %d/%d/%d : %d => %d", pad->obj->name, ctx->ref->state - ctx->hysteresis, ctx->in->state, ctx->ref->state + ctx->hysteresis, ctx->out->state, out_state);
 
         if ((out_state != ctx->out->state) || (ctx->out->state < 0)) {
                 ctx->out->state = out_state;
