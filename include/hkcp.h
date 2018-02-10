@@ -30,7 +30,6 @@ typedef struct hkcp_s hkcp_t;
 typedef enum {
 	HKCP_NODE_IDLE=0,
 	HKCP_NODE_CONNECT,
-	HKCP_NODE_VERSION,
 	HKCP_NODE_SINKS,
 	HKCP_NODE_READY,
 	HKCP_NODE_NSTATES
@@ -45,7 +44,6 @@ typedef struct {
 	sys_tag_t timeout_tag;
 	hk_tab_t sources;       // Table of (hk_source_t *)
 	hkcp_t *hkcp;
-	char *version;
 	buf_t rbuf;
 } hkcp_node_t;
 

@@ -162,22 +162,6 @@ static void hkcp_node_set_state(hkcp_node_t *node, hkcp_node_state_t state)
 }
 
 
-static void hkcp_node_recv_version(hkcp_node_t *node, char *str)
-{
-	log_debug(2, "hkcp_node_recv_version node=#%d='%s' str='%s'", node->id, node->name, str);
-
-	if (*str == '.') {
-		/* Send command to get list of sinks */
-		hkcp_node_set_state(node, HKCP_NODE_SINKS);
-		tcp_sock_write(&node->tcp_sock, "sinks\n", 6);
-	}
-	else if (node->version == NULL) {
-		node->version = strdup(str);
-		log_debug(2, " => '%s'", node->version);
-	}
-}
-
-
 static void hkcp_node_recv_sinks(hkcp_node_t *node, char *str)
 {
 	log_debug(2, "hkcp_node_recv_sinks node=#%d='%s' str='%s'", node->id, node->name, str);
@@ -228,9 +212,6 @@ static void hkcp_node_recv_line(hkcp_node_t *node, char *str)
 	log_debug(3, "hkcp_node_recv_line node=#%d='%s' state=%d str='%s'", node->id, node->name, node->state, str);
 
 	switch (node->state) {
-	case HKCP_NODE_VERSION:
-		hkcp_node_recv_version(node, str);
-		break;
 	case HKCP_NODE_SINKS:
 		hkcp_node_recv_sinks(node, str);
 		break;
@@ -335,9 +316,6 @@ static void hkcp_node_remove(hkcp_node_t *node)
 	tcp_sock_shutdown(&node->tcp_sock);
 
 	/* Clear data buffering */
-	if (node->version != NULL) {
-		free(node->version);
-	}
 	buf_cleanup(&node->rbuf);
 
 	/* Free node name */
@@ -358,8 +336,8 @@ static int hkcp_node_connect(hkcp_node_t *node)
 	if (tcp_sock_connect(&node->tcp_sock, node->name, node->hkcp->port, node->hkcp->certs, hkcp_node_event, node) > 0) {
 		node->timeout_tag = 0;
 		/* Get list of sinks from this node */
-		hkcp_node_set_state(node, HKCP_NODE_VERSION);
-		tcp_sock_write(&node->tcp_sock, "version\n", 8);
+		hkcp_node_set_state(node, HKCP_NODE_SINKS);
+		tcp_sock_write(&node->tcp_sock, "sinks\n", 6);
 		return 0;
 	}
 
