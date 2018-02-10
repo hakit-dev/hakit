@@ -9,6 +9,8 @@
  * directory for more details.
  */
 
+const TRACE_MAX_DEPTH = 500;
+
 var hakit_chart = {
     container: undefined,
     list: {},
@@ -210,41 +212,61 @@ function hakit_chart_add(chart_spec, signal_spec, signal_color)
 }
 
 
+function hakit_chart_latest_start(chart)
+{
+    var t1 = 0;
+
+    for (var i = 0; i < chart.signals.length; i++) {
+        var signal1 = hakit_chart.signals[chart.signals[i].name];
+        if (signal1.dataset.data.length >= TRACE_MAX_DEPTH) {
+            var pt = signal1.dataset.data[0];
+            if (pt.t > t1) {
+                t1 = pt.t;
+            }
+        }
+    }
+
+    return t1;
+}
+
+
+function hakit_chart_cut_from_start(signal)
+{
+    var chart = signal.chart;
+
+    // Get latest start date among all traces
+    var t1 = hakit_chart_latest_start(chart);
+
+    // Cut all traces from this date
+    for (var i = 0; i < chart.signals.length; i++) {
+        var signal1 = hakit_chart.signals[chart.signals[i].name];
+        if (signal1 != signal) {
+            var data1 = signal1.dataset.data;
+            while ((data1.length > 0) && (data1[0].t < t1)) {
+                if ((data1.length > 2) && (data1[1].t < t1)) {
+                    data1.shift();
+                }
+                else {
+                    data1[0].t = t1;
+                }
+            }
+        }
+    }
+}
+
+
 function hakit_chart_set(signal_name, data)
 {
     var signal = hakit_chart.signals[signal_name];
     if (signal) {
         signal.dataset.data = data;
-        hakit_chart_cut_first(signal.chart);
+        if (signal.chart.signals.length > 1) {
+            hakit_chart_cut_from_start(signal);
+        }
         signal.chart.chart.update();
     }
 }
 
-
-function hakit_chart_cut_first(chart)
-{
-    // Get earliest time stamp of the first trace
-    var signal0 = hakit_chart.signals[chart.signals[0].name];
-    var t0 = signal0.dataset.data[0].t;
-
-    // Clip all other traces from this time stamp
-    for (var i = 1; i < chart.signals.length; i++) {
-        var signal = hakit_chart.signals[chart.signals[i].name];
-        var iprev = -1;
-        for (var j = 0; j < signal.dataset.data.length; j++) {
-            if (signal.dataset.data[j].t >= t0) {
-                break;
-            }
-            iprev = j;
-        }
-        if (iprev >= 0) {
-            signal.dataset.data[iprev].t = t0;
-            if (iprev > 0) {
-                signal.dataset.data.splice(0,iprev);
-            }
-        }
-    }
-}
 
 function hakit_chart_ext_remove(signal)
 {
@@ -296,14 +318,14 @@ function hakit_chart_updated(signal_spec, pt)
     if (signal) {
         hakit_chart_ext_remove(signal);
 
-        if (signal.dataset.data.length >= 500) {
+        if (signal.dataset.data.length >= TRACE_MAX_DEPTH) {
             signal.dataset.data.shift();
         }
         signal.dataset.data.push(pt);
 
         // Clamp traces if chart has multiple traces
         if (signal.chart.signals.length > 1) {
-            hakit_chart_cut_first(signal.chart);
+            hakit_chart_cut_from_start(signal);
             hakit_chart_ext(signal);
         }
 
