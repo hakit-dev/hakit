@@ -10,7 +10,7 @@
  */
 
 const HAKIT_ST_IDLE = 0;
-const HAKIT_ST_VERSION = 1;
+const HAKIT_ST_PROPS = 1;
 const HAKIT_ST_READY = 2;
 const HAKIT_ST_GET = 3;
 const HAKIT_ST_TRACE = 4;
@@ -19,7 +19,7 @@ var hakit_sock;
 var hakit_sock_state = HAKIT_ST_IDLE;
 var hakit_sock_timeout;
 var hakit_sock_failures = 0;
-var hakit_version = '';
+var hakit_props = {};
 var hakit_t0 = 0;
 
 
@@ -81,13 +81,15 @@ function hakit_get(name)
 }
 
 
-function hakit_recv_version(line)
+function hakit_recv_props(line)
 {
-    var fields = line.split(" ");
-    var t0 = fields[2];
-    hakit_version = fields[0]+' '+fields[1];
-    if (t0) {
-        hakit_t0 = parseInt(t0);
+    var i = line.indexOf(':');
+    var key = line.substr(0,i);
+    var value = line.substr(i+1).trim();
+    hakit_props[key] = value;
+
+    if (key == 'T0') {
+        hakit_t0 = parseInt(value);
     }
 }
 
@@ -135,40 +137,50 @@ function hakit_recv_trace(line)
 }
 
 
+function hakit_recv_event(line)
+{
+    var i = line.indexOf("=");
+    if (i > 1) {
+        var tab = line.substr(1,i-1).split(',');
+        var signal_spec = tab.pop();
+        var t = tab.pop();
+	var value = line.substr(i+1);
+	hakit_updated(signal_spec, value);
+
+        if (hakit_chart_enabled()) {
+            if (t) {
+                var pt = {
+                    t: parseInt(t) + hakit_t0,
+                    y: value,
+                }
+	        hakit_chart_updated(signal_spec, pt);
+            }
+        }
+    }
+}
+
+
 function hakit_recv_line(line)
 {
     //console.log("hakit_recv_line('"+line+"')");
 
     if (line.substr(0,1) == "!") {
-	var i = line.indexOf("=");
-	if (i > 1) {
-            var tab = line.substr(1,i-1).split(',');
-            var signal_spec = tab.pop();
-            var t = tab.pop();
-	    var value = line.substr(i+1);
-	    hakit_updated(signal_spec, value);
-
-            if (hakit_chart_enabled()) {
-                if (t) {
-                    var pt = {
-                        t: parseInt(t) + hakit_t0,
-                        y: value,
-                    }
-	            hakit_chart_updated(signal_spec, pt);
-                }
-            }
-	}
+        hakit_recv_event(line);
     }
     else {
 	if (line == ".") {
-	    if (hakit_sock_state == HAKIT_ST_VERSION) {
+	    if (hakit_sock_state == HAKIT_ST_PROPS) {
 		hakit_connected(true);
 		hakit_send("get");
 		hakit_sock_state = HAKIT_ST_GET;
 	    }
 	    else if (hakit_sock_state == HAKIT_ST_GET) {
                 if (hakit_chart_enabled()) {
-                    hakit_chart_init();
+                    var depth = undefined;
+                    if (hakit_props['TRACE_DEPTH']) {
+                        depth = parseInt(hakit_props['TRACE_DEPTH']);
+                    }
+                    hakit_chart_init(depth);
 		    hakit_send("trace");
 		    hakit_sock_state = HAKIT_ST_TRACE;
                 }
@@ -181,8 +193,8 @@ function hakit_recv_line(line)
             }
 	}
 	else {
-	    if (hakit_sock_state == HAKIT_ST_VERSION) {
-                hakit_recv_version(line);
+	    if (hakit_sock_state == HAKIT_ST_PROPS) {
+                hakit_recv_props(line);
 	    }
 	    else if (hakit_sock_state == HAKIT_ST_GET) {
                 hakit_recv_get(line);
@@ -215,8 +227,8 @@ function hakit_connect()
     try {
 	hakit_sock.onopen = function() {
 	    console.log("hakit_connect: connection established");
-	    hakit_sock_state = HAKIT_ST_VERSION;
-	    hakit_send("version");
+	    hakit_sock_state = HAKIT_ST_PROPS;
+	    hakit_send("props");
 	} 
 
 	hakit_sock.onmessage = function got_packet(msg) {

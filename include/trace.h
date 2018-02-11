@@ -14,7 +14,8 @@
 
 #include <stdint.h>
 
-#define HK_TRACE_MAX_DEPTH 500
+#define HK_TRACE_DEFAULT_DEPTH 500
+#define HK_TRACE_MAX_DEPTH 10000
 
 typedef struct {
         uint64_t t;

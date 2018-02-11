@@ -42,11 +42,13 @@ static char *opt_http_auth = NULL;
 static char *opt_certs = NULL;
 static int opt_no_mqtt = 0;
 static char *opt_mqtt_broker = NULL;
+static int opt_trace_depth = 0;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
+	{ "trace-depth", 't', 0, OPTIONS_TYPE_INT,       &opt_trace_depth, "Set trace recording depth for user interface charts.", "DEPTH" },
 #ifdef WITH_SSL
 	{ "no-https", 's', 0, OPTIONS_TYPE_NONE,   &opt_no_https,       "Use HTTP instead of HTTPS" },
 	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure HTTP TLS/SSL for client connections (self-signed certificates)" },
@@ -97,10 +99,17 @@ int main(int argc, char *argv[])
 	}
 
 	if (comm_init(use_ssl, opt_certs,
-                      opt_no_hkcp ? 0:1,
-                      opt_no_mqtt ? 0:1, opt_mqtt_broker)) {
+                      opt_no_hkcp ? 0:1)) {
 		return 2;
 	}
+
+        if (!opt_no_mqtt) {
+                if (comm_enable_mqtt(opt_certs, opt_mqtt_broker)) {
+                        return 2;
+                }
+        }
+
+        comm_set_trace_depth(opt_trace_depth);
 
 	if (opt_http_auth != NULL) {
 		ws_auth_init(opt_http_auth);

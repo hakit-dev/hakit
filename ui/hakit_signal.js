@@ -302,7 +302,7 @@ function hakit_connected(connected)
     if (connected) {
 	document.getElementById("ws_status_td").style.backgroundColor = "#40ff40";
 	document.getElementById("ws_status").textContent = "Connected";
-	document.getElementById("ws_version").textContent = hakit_version;
+	document.getElementById("ws_version").textContent = hakit_props['VERSION']+' '+hakit_props['ARCH'];
         var d = new Date(hakit_t0);
 	document.getElementById("ws_t0").textContent = d.toDateString()+' '+d.toTimeString();
 	hakit_signal_clear();

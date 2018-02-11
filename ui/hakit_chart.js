@@ -9,10 +9,9 @@
  * directory for more details.
  */
 
-const TRACE_MAX_DEPTH = 500;
-
 var hakit_chart = {
     container: undefined,
+    depth: 500,
     list: {},
     signals: [],
 };
@@ -47,7 +46,7 @@ function hakit_chart_clear()
 }
 
 
-function hakit_chart_init()
+function hakit_chart_init(depth)
 {
     var COLORS = [
         '#4dc9f6',
@@ -65,7 +64,9 @@ function hakit_chart_init()
         return;
     }
 
-    console.log("hakit_chart_init()");
+    console.log("hakit_chart_init("+depth+")");
+
+    hakit_chart.depth = depth;
 
     for (var chart_name in hakit_chart.list) {
         var chart = hakit_chart.list[chart_name];
@@ -218,7 +219,7 @@ function hakit_chart_latest_start(chart)
 
     for (var i = 0; i < chart.signals.length; i++) {
         var signal1 = hakit_chart.signals[chart.signals[i].name];
-        if (signal1.dataset.data.length >= TRACE_MAX_DEPTH) {
+        if (signal1.dataset.data.length >= hakit_chart.depth) {
             var pt = signal1.dataset.data[0];
             if (pt.t > t1) {
                 t1 = pt.t;
@@ -318,7 +319,7 @@ function hakit_chart_updated(signal_spec, pt)
     if (signal) {
         hakit_chart_ext_remove(signal);
 
-        if (signal.dataset.data.length >= TRACE_MAX_DEPTH) {
+        if (signal.dataset.data.length >= hakit_chart.depth) {
             signal.dataset.data.shift();
         }
         signal.dataset.data.push(pt);

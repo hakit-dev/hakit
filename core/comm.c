@@ -266,9 +266,7 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 }
 
 
-int comm_init(int use_ssl, char *certs,
-              int use_hkcp,
-              int use_mqtt, char *mqtt_broker)
+int comm_init(int use_ssl, char *certs, int use_hkcp)
 {
 	char *path = NULL;
 	int ret = 0;
@@ -295,31 +293,6 @@ int comm_init(int use_ssl, char *certs,
 		/* Handle HKCP advertisement */
 		hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_HKCP, (hk_advertise_func_t) hkcp_node_add, &comm.hkcp);
 	}
-
-#ifdef WITH_MQTT
-        if (use_mqtt) {
-                /* Init MQTT gears */
-                if (mqtt_init(&comm.mqtt, certs, (mqtt_update_func_t) comm_mqtt_update, &comm)) {
-                        ret = -1;
-                        goto DONE;
-                }
-
-                if (mqtt_broker != NULL) {
-                        /* Connect to broker */
-                        if (mqtt_connect(&comm.mqtt, mqtt_broker)) {
-                                ret = -1;
-                                goto DONE;
-                        }
-                }
-                else {
-                        /* Handle MQTT advertisement */
-                        hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_MQTT, (hk_advertise_func_t) comm_mqtt_discover, &comm);
-                }
-
-                /* Advertise MQTT protocol */
-                hk_advertise_mqtt(&comm.adv, mqtt_broker);
-        }
-#endif /* WITH_MQTT */
 
 	/* Search for SSL cert directory */
 	if (use_ssl) {
@@ -362,15 +335,49 @@ int comm_init(int use_ssl, char *certs,
 
 DONE:
 	if (ret != 0) {
-#ifdef WITH_MQTT
-		mqtt_shutdown(&comm.mqtt);
-#endif
 		hkcp_shutdown(&comm.hkcp);
 		hk_advertise_shutdown(&comm.adv);
 		hk_endpoints_shutdown(&comm.eps);
 	}
 
 	return ret;
+}
+
+
+int comm_enable_mqtt(char *certs, char *mqtt_broker)
+{
+#ifdef WITH_MQTT
+        /* Init MQTT gears */
+        if (mqtt_init(&comm.mqtt, certs, (mqtt_update_func_t) comm_mqtt_update, &comm)) {
+                return -1;
+        }
+
+        if (mqtt_broker != NULL) {
+                /* Connect to broker */
+                if (mqtt_connect(&comm.mqtt, mqtt_broker)) {
+                        mqtt_shutdown(&comm.mqtt);
+                        return -1;
+                }
+        }
+        else {
+                /* Handle MQTT advertisement */
+                hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_MQTT, (hk_advertise_func_t) comm_mqtt_discover, &comm);
+        }
+
+        /* Advertise MQTT protocol */
+        hk_advertise_mqtt(&comm.adv, mqtt_broker);
+
+        return 0;
+#else /* WITH_MQTT */
+        log_str("ERROR: MQTT not available in this release");
+        return -1;
+#endif /* !WITH_MQTT */
+}
+
+
+int comm_set_trace_depth(int depth)
+{
+	hk_endpoints_set_trace_depth(&comm.eps, depth);
 }
 
 

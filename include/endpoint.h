@@ -33,9 +33,11 @@
 typedef struct {
 	hk_tab_t sinks;       // Table of (hk_sink_t *)
 	hk_tab_t sources;     // Table of (hk_source_t *)
+        int trace_depth;
 } hk_endpoints_t;
 
 extern int hk_endpoints_init(hk_endpoints_t *eps);
+extern void hk_endpoints_set_trace_depth(hk_endpoints_t *eps, int trace_depth);
 extern void hk_endpoints_shutdown(hk_endpoints_t *eps);
 
 

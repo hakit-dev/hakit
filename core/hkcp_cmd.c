@@ -248,8 +248,12 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 	else if (strcmp(argv[0], "sources") == 0) {
 		hkcp_command_sources(hkcp, out_buf);
 	}
-	else if (strcmp(argv[0], "version") == 0) {
-		buf_append_fmt(out_buf, HAKIT_VERSION " " ARCH " %llu\n.\n", tstamp_t0());
+	else if (strcmp(argv[0], "props") == 0) {
+		buf_append_str(out_buf, "VERSION: " HAKIT_VERSION "\n");
+		buf_append_str(out_buf, "ARCH: " ARCH "\n");
+		buf_append_fmt(out_buf, "T0: %llu\n", tstamp_t0());
+		buf_append_fmt(out_buf, "TRACE_DEPTH: %d\n", hkcp->eps->trace_depth);
+		buf_append_str(out_buf, ".\n");
 	}
 	else {
 		buf_append_str(out_buf, ".ERROR: Unknown command: ");

@@ -22,7 +22,7 @@
  * Generic endpoint operations
  */
 
-static void hk_ep_init(hk_ep_t *ep, hk_ep_type_t type, int id, hk_obj_t *obj)
+static void hk_ep_init(hk_ep_t *ep, hk_ep_type_t type, int id, hk_obj_t *obj, int trace_depth)
 {
 	ep->type = HK_EP_SOURCE;
 	ep->id = id;
@@ -33,7 +33,7 @@ static void hk_ep_init(hk_ep_t *ep, hk_ep_type_t type, int id, hk_obj_t *obj)
 	buf_set_str(&ep->value, "");
 
 	/* Init trace recording */
-        hk_trace_init(&ep->tr, obj->name, 0);
+        hk_trace_init(&ep->tr, obj->name, trace_depth);
 }
 
 
@@ -224,7 +224,7 @@ static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local)
                 memset(sink, 0, sizeof(hk_sink_t));
         }
 
-        hk_ep_init(&sink->ep, HK_EP_SINK, i, obj);
+        hk_ep_init(&sink->ep, HK_EP_SINK, i, obj, eps->trace_depth);
 
 	if (local) {
 		sink->ep.flag |= HK_FLAG_LOCAL;
@@ -508,7 +508,7 @@ static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int loca
                 memset(source, 0, sizeof(hk_source_t));
         }
 
-        hk_ep_init(&source->ep, HK_EP_SOURCE, i, obj);
+        hk_ep_init(&source->ep, HK_EP_SOURCE, i, obj, eps->trace_depth);
 
 	if (local) {
 		source->ep.flag |= HK_FLAG_LOCAL;
@@ -680,6 +680,20 @@ int hk_endpoints_init(hk_endpoints_t *eps)
 	hk_tab_init(&eps->sinks, sizeof(hk_sink_t *));
 	hk_tab_init(&eps->sources, sizeof(hk_source_t *));
 	return 0;
+}
+
+
+void hk_endpoints_set_trace_depth(hk_endpoints_t *eps, int depth)
+{
+        if (depth > HK_TRACE_MAX_DEPTH) {
+                log_str("WARNING: Trace depth too high: limiting to %d points.", depth, HK_TRACE_MAX_DEPTH);
+                depth = HK_TRACE_MAX_DEPTH;
+        }
+        else if (depth <= 0) {
+                depth = HK_TRACE_DEFAULT_DEPTH;
+        }
+
+        eps->trace_depth = depth;
 }
 
 

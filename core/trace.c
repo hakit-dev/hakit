@@ -26,11 +26,11 @@ void hk_trace_init(hk_trace_t *tr, char *name, int depth)
         tr->name = name;
 
         if (depth > HK_TRACE_MAX_DEPTH) {
-                log_str("WARNING: Configuring trace to %d entries is too deep. Clamping to %d entries.", depth, HK_TRACE_MAX_DEPTH);
+                log_str("WARNING: Configuring trace to %d points is too deep. Clamped to %d points.", depth, HK_TRACE_MAX_DEPTH);
                 tr->depth = HK_TRACE_MAX_DEPTH;
         }
         else if (depth <= 0) {
-                tr->depth = HK_TRACE_MAX_DEPTH;
+                tr->depth = HK_TRACE_DEFAULT_DEPTH;
         }
         else {
                 tr->depth = depth;
