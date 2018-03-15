@@ -83,8 +83,7 @@ static int gpio_entry_set_value(gpio_entry_t *entry, int value)
 		return -1;
 	}
 
-	/* Return integer value from buffer */
-	return atoi(buf);
+	return value;
 }
 
 
@@ -92,7 +91,6 @@ static int gpio_entry_get_value(gpio_entry_t *entry)
 {
 	char buf[8];
 	int len;
-	int i;
 
 	/* Read GPIO value */
 	lseek(entry->fd, 0, SEEK_SET);
@@ -102,17 +100,7 @@ static int gpio_entry_get_value(gpio_entry_t *entry)
 		return -1;
 	}
 
-	buf[len] = 0;
-
-	for (i = 0; i < len; i++) {
-		if (buf[i] < ' ') {
-			buf[i] = 0;
-			break;
-		}
-	}
-
-	/* Return integer value from buffer */
-	return atoi(buf);
+	return (buf[0] == '0') ? 0:1;
 }
 
 
