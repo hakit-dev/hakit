@@ -29,15 +29,16 @@ typedef struct {
 	int port;
 	int input;
 	hk_pad_t *pad;
+	hk_pad_t *blink;
 	int value;
 	int debounce_delay;
-	sys_tag_t debounce_tag;
+	sys_tag_t timeout_tag;
 } ctx_t;
 
 
 static int input_update(ctx_t *ctx)
 {
-	ctx->debounce_tag = 0;
+	ctx->timeout_tag = 0;
 
 	if (ctx->pad->state != ctx->value) {
 		ctx->pad->state = ctx->value;
@@ -48,6 +49,15 @@ static int input_update(ctx_t *ctx)
 }
 
 
+static void timeout_clear(ctx_t *ctx)
+{
+	if (ctx->timeout_tag != 0) {
+		sys_remove(ctx->timeout_tag);
+		ctx->timeout_tag = 0;
+	}
+}
+
+
 static void input_changed(ctx_t *ctx, int n, int value)
 {
 	log_debug(2, "%s: gpio[%d] = %d", ctx->obj->name, n, value);
@@ -55,17 +65,22 @@ static void input_changed(ctx_t *ctx, int n, int value)
 	ctx->value = value;
 
 	/* Update pad event after debounce delay */
-	if (ctx->debounce_tag != 0) {
-		sys_remove(ctx->debounce_tag);
-		ctx->debounce_tag = 0;
-	}
+        timeout_clear(ctx);
 
 	if (ctx->debounce_delay > 0) {
-		ctx->debounce_tag = sys_timeout(ctx->debounce_delay, (sys_func_t) input_update, ctx);
+		ctx->timeout_tag = sys_timeout(ctx->debounce_delay, (sys_func_t) input_update, ctx);
 	}
 	else {
 		input_update(ctx);
 	}
+}
+
+
+static int blink_timer(ctx_t *ctx)
+{
+	ctx->pad->state = 1 - ctx->pad->state;
+	gpio_set_value(ctx->port, ctx->pad->state);
+        return 1;
 }
 
 
@@ -118,6 +133,7 @@ static int _new(hk_obj_t *obj)
 	else {
 		gpio_set_output(ctx->port);
 		ctx->pad = hk_pad_create(obj, HK_PAD_IN, "in");
+                ctx->blink = hk_pad_create(obj, HK_PAD_IN, "blink");
 	}
 
 	return 0;
@@ -140,8 +156,35 @@ static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
 
-	pad->state = atoi(value);
-	gpio_set_value(ctx->port, pad->state);
+        timeout_clear(ctx);
+
+        pad->state = atoi(value);
+
+        if (pad == ctx->pad) {
+                if (ctx->pad->state != 0) {
+                        ctx->pad->state = 1;
+                        if (ctx->blink->state > 0) {
+                                ctx->timeout_tag = sys_timeout(ctx->blink->state, (sys_func_t) blink_timer, ctx);
+                        }
+                }
+                log_debug(2, "%s: gpio[%d] = %d", ctx->obj->name, ctx->port, ctx->pad->state);
+
+                ctx->value = ctx->pad->state;
+                gpio_set_value(ctx->port, ctx->pad->state);
+        }
+        else {
+                if (ctx->blink->state > 0) {
+                        if (ctx->value > 0) {
+                                ctx->timeout_tag = sys_timeout(ctx->blink->state, (sys_func_t) blink_timer, ctx);
+                        }
+                }
+                else {
+                        if ((ctx->value >= 0) && (ctx->pad->state != ctx->value)) {
+                                ctx->pad->state = ctx->value;
+                                gpio_set_value(ctx->port, ctx->pad->state);
+                        }
+                }
+        }
 }
 
 
