@@ -24,7 +24,7 @@
 #include "sys.h"
 
 
-#define NSOURCES 32
+#define NSOURCES 256
 
 typedef enum {
 	SYS_TYPE_NONE=0,
