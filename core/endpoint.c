@@ -24,7 +24,7 @@
 
 static void hk_ep_init(hk_ep_t *ep, hk_ep_type_t type, int id, hk_obj_t *obj, int trace_depth)
 {
-	ep->type = HK_EP_SOURCE;
+	ep->type = type;
 	ep->id = id;
         ep->obj = obj;
 
