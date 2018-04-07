@@ -91,7 +91,7 @@ static const options_entry_t options_entries[] = {
 	{ "no-mqtt",   'm', 0, OPTIONS_TYPE_NONE,   &opt_no_mqtt, "Disable MQTT protocol" },
 	{ "mqtt-port", 'p', 0, OPTIONS_TYPE_INT, &opt_mqtt_port, "MQTT broker port number (default: " xstr(MQTT_PORT) ")", "PORT" },
 #endif
-	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl, "Disable SSL for HKCP and MQTT" },
+	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl, "Disable SSL for all engine protocols (HKCP, MQTT and HTTP)" },
 	{ NULL }
 };
 
@@ -508,9 +508,11 @@ static void engine_start(ctx_t *ctx)
                 HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(debug));
         }
 
-        if (opt_no_ssl == 0) {
-                char args[strlen(opt_lib_dir)+32];
-
+        if (opt_no_ssl) {
+                HK_TAB_PUSH_VALUE(engine_argv, strdup("--no-https"));
+        }
+        else {
+                char args[strlen(opt_lib_dir)+16];
                 snprintf(args, sizeof(args), "--certs=%s/certs", opt_lib_dir);
                 HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(args));
         }
