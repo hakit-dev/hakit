@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 {
 	log_init(NAME);
 
-	if (options_parse(options_entries, &argc, argv) != 0) {
+	if (options_parse(options_entries, NULL, &argc, argv) != 0) {
 		exit(1);
 	}
 

@@ -1347,7 +1347,7 @@ static int stdin_recv(void *user_data, char *buf, int len)
 
 int main(int argc, char *argv[])
 {
-	if (options_parse(options_entries, &argc, argv) != 0) {
+	if (options_parse(options_entries, "launcher", &argc, argv) != 0) {
 		exit(1);
 	}
 
@@ -1411,7 +1411,6 @@ int main(int argc, char *argv[])
                 /* Start local tiles, if any */
 		for (i = 1; i < argc; i++) {
 			char *path = argv[i];
-			
 			ctx_tile_feed_local(ctx, path);
 		}
 

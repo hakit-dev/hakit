@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
         char *host;
         int port = 5678;
 
-	if (options_parse(options_entries, &argc, argv) != 0) {
+	if (options_parse(options_entries, "engine", &argc, argv) != 0) {
 		return 1;
 	}
 

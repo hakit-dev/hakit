@@ -39,7 +39,7 @@ extern const char *options_summary;
 extern int opt_debug;
 extern int opt_daemon;
 
-extern int options_parse(const options_entry_t *entries, int *_argc, char *argv[]);
+extern int options_parse(const options_entry_t *entries, char *conf_file, int *_argc, char *argv[]);
 extern int options_conf_parse(const options_entry_t *entries, char *conf_file);
 
 #ifdef __cplusplus

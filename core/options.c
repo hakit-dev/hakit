@@ -100,6 +100,7 @@ static void options_set_conf_dir(int argc, char *argv[])
 	char *dir = NULL;
 	int i;
 
+        /* Search for option --config= */
 	for (i = 1; (i < argc) && (dir == NULL); i++) {
 		char *args = argv[i];
 
@@ -258,7 +259,7 @@ int options_conf_parse(const options_entry_t *entries, char *conf_file)
 }
 
 
-int options_parse(const options_entry_t *entries, int *_argc, char *argv[])
+int options_parse(const options_entry_t *entries, char *conf_file, int *_argc, char *argv[])
 {
 	int argc = *_argc;
 	char *command;
@@ -280,7 +281,9 @@ int options_parse(const options_entry_t *entries, int *_argc, char *argv[])
 	options_set_conf_dir(argc, argv);
 
 	/* Parse options from config file */
-	options_conf_parse(entries, "config");
+        if (conf_file != NULL) {
+                options_conf_parse(entries, conf_file);
+        }
 
 	/* Parse options from command line */
 	i = 1;

@@ -72,7 +72,7 @@ int main(int argc, char *argv[])
 	int use_ssl = 1;  // 0 = disable SSL, 2 = allow insecure SSL
 	int i;
 
-	if (options_parse(options_entries, &argc, argv) != 0) {
+	if (options_parse(options_entries, "engine", &argc, argv) != 0) {
 		exit(1);
 	}
 
