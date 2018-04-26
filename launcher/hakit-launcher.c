@@ -78,6 +78,7 @@ static int opt_no_mqtt = 0;
 static int opt_mqtt_port = MQTT_PORT;
 #endif
 static int opt_no_ssl = 0;
+static char *opt_tile = NULL;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
@@ -92,6 +93,7 @@ static const options_entry_t options_entries[] = {
 	{ "mqtt-port", 'p', 0, OPTIONS_TYPE_INT, &opt_mqtt_port, "MQTT broker port number (default: " xstr(MQTT_PORT) ")", "PORT" },
 #endif
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl, "Disable SSL for all engine protocols (HKCP, MQTT and HTTP)" },
+	{ "tile",    't', 0, OPTIONS_TYPE_STRING,  &opt_tile, "Start local tile (implies --offline)" },
 	{ NULL }
 };
 
@@ -1374,7 +1376,7 @@ int main(int argc, char *argv[])
 	log_str(options_summary);
 
         /* If a local tile is given in command line arguments, force off-line mode */
-        if (argc > 1) {
+        if ((argc > 1) || (opt_tile != NULL)) {
                 log_str("Using local tile(s): off-line mode forced");
                 opt_offline = 1;
         }
@@ -1403,12 +1405,16 @@ int main(int argc, char *argv[])
 	}
 
         /* Start it all, either on- or off-line */
-        if (argc > 1) {
+        if ((argc > 1) || (opt_tile != NULL)) {
 		int i;
 
 		ctx_t *ctx = ctx_alloc();
 
                 /* Start local tiles, if any */
+                if (opt_tile != NULL) {
+			ctx_tile_feed_local(ctx, opt_tile);
+                }
+
 		for (i = 1; i < argc; i++) {
 			char *path = argv[i];
 			ctx_tile_feed_local(ctx, path);
