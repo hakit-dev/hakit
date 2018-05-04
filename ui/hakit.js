@@ -147,7 +147,7 @@ function hakit_recv_event(line)
 	var value = line.substr(i+1);
 	hakit_updated(signal_spec, value);
 
-        if (hakit_chart_enabled()) {
+        if ((typeof hakit_chart_enabled === "function") && hakit_chart_enabled()) {
             if (t) {
                 var pt = {
                     t: parseInt(t) + hakit_t0,
@@ -175,7 +175,7 @@ function hakit_recv_line(line)
 		hakit_sock_state = HAKIT_ST_GET;
 	    }
 	    else if (hakit_sock_state == HAKIT_ST_GET) {
-                if (hakit_chart_enabled()) {
+                if ((typeof hakit_chart_enabled === "function") && hakit_chart_enabled()) {
                     var depth = undefined;
                     if (hakit_props['TRACE_DEPTH']) {
                         depth = parseInt(hakit_props['TRACE_DEPTH']);
@@ -209,7 +209,7 @@ function hakit_recv_line(line)
 
 function hakit_connect()
 {
-    console.log("hakit_connect()");
+    console.log("hakit_connect() "+hakit_sock_state);
 
     /* Clear pending connect timeout (if any) */
     if (hakit_sock_timeout) {
