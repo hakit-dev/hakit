@@ -375,7 +375,7 @@ int comm_enable_mqtt(char *certs, char *mqtt_broker)
 }
 
 
-int comm_set_trace_depth(int depth)
+void comm_set_trace_depth(int depth)
 {
 	hk_endpoints_set_trace_depth(&comm.eps, depth);
 }
@@ -531,7 +531,7 @@ void comm_source_set_chart(int id, char *chart_name)
 }
 
 
-void comm_source_update_str(int id, char *value)
+static void comm_source_update_str(int id, char *value)
 {
 	hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
 

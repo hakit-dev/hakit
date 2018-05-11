@@ -15,7 +15,7 @@
 
 extern int comm_init(int use_ssl, char *certs, int use_hkcp);
 extern int comm_enable_mqtt(char *certs, char *mqtt_broker);
-extern int comm_set_trace_depth(int depth);
+extern void comm_set_trace_depth(int depth);
 
 extern int comm_tile_register(char *path);
 
