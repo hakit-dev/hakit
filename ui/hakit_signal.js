@@ -95,7 +95,7 @@ function hakit_widget_switch3(id, value, options)
 
 function hakit_widget_slider(id, value, options)
 {
-    var str = '<input type="range" class="slider" id="'+id+':slider" onchange="hakit_widget_updated(this,this.value);"';
+    var str = '<input type="range" class="slider" id="'+id+':value" onchange="hakit_widget_updated(this,this.value);"';
 
     if (value) {
 	str += ' value="'+value+'"';
@@ -114,15 +114,17 @@ function hakit_widget_slider(id, value, options)
 
 function hakit_widget_meter(id, value, options)
 {
-    var str = '<meter id="'+id+':meter"';
+    var str = '<meter id="'+id+':value"';
 
     if (value) {
 	str += ' value="'+value+'"';
     }
 
-    var list = options.split(',');
-    for (var i = 0; i < list.length; i++) {
-	str += ' '+list[i];
+    if (options) {
+        var list = options.split(',');
+        for (var i = 0; i < list.length; i++) {
+	    str += ' '+list[i];
+        }
     }
 
     str += '>'+value+'</meter>';
@@ -133,19 +135,44 @@ function hakit_widget_meter(id, value, options)
 
 function hakit_widget_select(id, value, options)
 {
-    var str = '<select id="'+id+':select" onchange="hakit_widget_updated(this,this.value);">';
+    var str = '<select id="'+id+':value" onchange="hakit_widget_updated(this,this.value);">';
 
-    var list = options.split(',');
-    for (var i = 0; i < list.length; i++) {
-        var item = list[i];
-	str += '<option value="'+item+'"';
-        if (item == value) {
-            str += ' selected';
+    if (options) {
+        var list = options.split(',');
+        for (var i = 0; i < list.length; i++) {
+            var item = list[i];
+	    str += '<option value="'+item+'"';
+            if (item == value) {
+                str += ' selected';
+            }
+            str += '>'+item+'</option>';
         }
-        str += '>'+item+'</option>';
     }
 
     str += '</select>';
+
+    return str;
+}
+
+
+function hakit_widget_text(id, value, options)
+{
+    var str = '<textarea id="'+id+'"';
+
+    if (options) {
+        var list = options.split(',');
+        for (var i = 0; i < list.length; i++) {
+	    str += ' '+list[i];
+        }
+    }
+
+    str += ' onchange="hakit_widget_updated(this,this.value);">';
+
+    if (value) {
+	str += value;
+    }
+
+    str += '</textarea>';
 
     return str;
 }
@@ -229,6 +256,9 @@ function hakit_signal_add(name, value, dir, widget)
     else if (wname == 'select') {
 	str = hakit_widget_select(name, value, options);
     }
+    else if (wname == 'text') {
+	str = hakit_widget_text(name, value, options);
+    }
 
     row.insertCell(3).innerHTML = str;
 
@@ -269,21 +299,15 @@ function hakit_updated(name, value, dir, widget)
 	    }
 	}
 	else {
-	    var elmt = document.getElementById(name+':meter');
+	    var elmt = document.getElementById(name+':value');
 	    if (elmt) {
 		elmt.value = value;
 	    }
             else {
-	        elmt = document.getElementById(name+':slider');
+	        var elmt = document.getElementById(name);
 	        if (elmt) {
-		    elmt.value = value;
+		    elmt.innerHTML = value;
 	        }
-                else {
-	            elmt = document.getElementById(name+':select');
-	            if (elmt) {
-		        elmt.value = value;
-	            }
-                }
             }
 	}
 	return;

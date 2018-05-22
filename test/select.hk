@@ -1,0 +1,6 @@
+select: sink local
+  widget=select:0,1,2,4,8,16
+meter: source
+  widget=meter:min=0,low=2,high=8,max=16
+  chart=chart/slider
+  in=$select.out

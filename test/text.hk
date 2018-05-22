@@ -1,0 +1,5 @@
+text_input: sink
+  widget=text:rows=1,cols=8
+text_output: source
+  widget=none
+  in=$text_input.out
