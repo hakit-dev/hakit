@@ -531,7 +531,7 @@ void comm_source_set_chart(int id, char *chart_name)
 }
 
 
-static void comm_source_update_str(int id, char *value)
+void comm_source_update_str(int id, char *value)
 {
 	hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
 
