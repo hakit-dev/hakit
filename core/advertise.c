@@ -185,20 +185,22 @@ void hk_advertise_mqtt(hk_advertise_t *adv, char *broker)
 
 int hk_advertise_init(hk_advertise_t *adv, int port)
 {
-	log_debug(3, "hk_advertise_init");
+	log_debug(3, "hk_advertise_init port=%d", port);
 
 	memset(adv, 0, sizeof(hk_advertise_t));
 
 	hk_tab_init(&adv->handlers, sizeof(hk_advertise_handler_t));
 
-	/* Init UDP server */
-	udp_srv_clear(&adv->udp_srv);
-	if (udp_srv_init(&adv->udp_srv, port, (io_func_t) hk_advertise_event, adv)) {
-		return -1;
-	}
+        if (port > 0) {
+                /* Init UDP server */
+                udp_srv_clear(&adv->udp_srv);
+                if (udp_srv_init(&adv->udp_srv, port, (io_func_t) hk_advertise_event, adv)) {
+                        return -1;
+                }
 		
-	/* Init network interface check */
-	netif_init(&adv->ifs, (netif_change_callback_t) hk_advertise, adv);
+                /* Init network interface check */
+                netif_init(&adv->ifs, (netif_change_callback_t) hk_advertise, adv);
+        }
 
 	return 0;
 }

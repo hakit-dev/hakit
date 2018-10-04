@@ -596,6 +596,8 @@ int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port, char *certs)
 {
 	int ret = -1;
 
+	log_debug(3, "hkcp_init port=%d", port);
+
 	memset(hkcp, 0, sizeof(hkcp_t));
 
 	hkcp->eps = eps;

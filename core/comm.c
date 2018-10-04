@@ -266,7 +266,7 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 }
 
 
-int comm_init(int use_ssl, char *certs, int use_hkcp)
+int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise)
 {
 	char *path = NULL;
 	int ret = 0;
@@ -277,10 +277,10 @@ int comm_init(int use_ssl, char *certs, int use_hkcp)
 	hk_endpoints_init(&comm.eps);
 
 	/* Init advertising protocol */
-	if (hk_advertise_init(&comm.adv, HAKIT_HKCP_PORT)) {
-		ret = -1;
-		goto DONE;
-	}
+        if (hk_advertise_init(&comm.adv, advertise ? HAKIT_HKCP_PORT:0)) {
+                ret = -1;
+                goto DONE;
+        }
 
 	/* Init HKCP gears */
 	comm.use_hkcp = use_hkcp;

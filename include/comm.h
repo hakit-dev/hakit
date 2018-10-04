@@ -13,7 +13,7 @@
 #include "mod.h"
 #include "endpoint.h"
 
-extern int comm_init(int use_ssl, char *certs, int use_hkcp);
+extern int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise);
 extern int comm_enable_mqtt(char *certs, char *mqtt_broker);
 extern void comm_set_trace_depth(int depth);
 

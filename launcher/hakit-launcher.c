@@ -72,6 +72,7 @@ static char *opt_pid_file = PID_FILE;
 static char *opt_platform_url = PLATFORM_URL;
 static char *opt_lib_dir = NULL;
 static int opt_offline = 0;
+static int opt_no_advertise = 0;
 static int opt_no_hkcp = 0;
 #ifdef WITH_MQTT
 static int opt_no_mqtt = 0;
@@ -87,6 +88,7 @@ static const options_entry_t options_entries[] = {
 	{ "platform-url", 'U', 0, OPTIONS_TYPE_STRING,   &opt_platform_url,  "HAKit web platform URL (default: " PLATFORM_URL ")", "URL" },
 	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store tiles and config files (default: " LIB_DIR ")", "DIR" },
 	{ "offline", 'l', 0,   OPTIONS_TYPE_NONE,  &opt_offline,  "Work off-line. Do not access the HAKit platform server" },
+	{ "no-advertise", 'N', 0, OPTIONS_TYPE_NONE,   &opt_no_advertise, "Disable HKCP/MQTT advertising" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 #ifdef WITH_MQTT
 	{ "no-mqtt",   'm', 0, OPTIONS_TYPE_NONE,   &opt_no_mqtt, "Disable MQTT protocol" },
@@ -538,6 +540,10 @@ static void engine_start(ctx_t *ctx)
 
 	if (opt_no_hkcp) {
 		HK_TAB_PUSH_VALUE(engine_argv, strdup("--no-hkcp"));
+	}
+
+	if (opt_no_advertise) {
+		HK_TAB_PUSH_VALUE(engine_argv, strdup("--no-advertise"));
 	}
 
         for (i = 0; i < ctx->tiles.nmemb; i++) {

@@ -35,6 +35,7 @@
 const char *options_summary = "HAKit engine " HAKIT_VERSION " (" ARCH ")";
 
 static char *opt_class_path = NULL;
+static int opt_no_advertise = 0;
 static int opt_no_hkcp = 0;
 static int opt_no_https = 0;
 static int opt_insecure_ssl = 0;
@@ -46,6 +47,7 @@ static int opt_trace_depth = 0;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",   'd', 0, OPTIONS_TYPE_INT,    &opt_debug,   "Set debug level", "N" },
+	{ "no-advertise", 'N', 0, OPTIONS_TYPE_NONE,   &opt_no_advertise, "Disable HKCP/MQTT advertising" },
 	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
 	{ "class-path", 'C', 0, OPTIONS_TYPE_STRING, &opt_class_path, "Comma-separated list of class directory pathes", "DIRS" },
 	{ "trace-depth", 't', 0, OPTIONS_TYPE_INT,       &opt_trace_depth, "Set trace recording depth for user interface charts.", "DEPTH" },
@@ -99,7 +101,8 @@ int main(int argc, char *argv[])
 	}
 
 	if (comm_init(use_ssl, opt_certs,
-                      opt_no_hkcp ? 0:1)) {
+                      opt_no_hkcp ? 0:1,
+                      opt_no_advertise ? 0:1)) {
 		return 2;
 	}
 
