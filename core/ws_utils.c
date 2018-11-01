@@ -13,6 +13,7 @@
 #include <poll.h>
 #include <libwebsockets.h>
 
+#include "types.h"
 #include "log.h"
 #include "sys.h"
 #include "ws_utils.h"
