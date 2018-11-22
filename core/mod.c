@@ -648,10 +648,7 @@ void hk_tile_start(hk_tile_t *tile)
 }
 
 
-char *hk_tile_path(hk_tile_t *tile, char *subpath)
+char *hk_tile_rootdir(hk_tile_t *tile)
 {
-	int size = strlen(tile->dir) + strlen(subpath) + 2;
-	char *buf = malloc(size);
-	snprintf(buf, size, "%s/%s", tile->dir, subpath);
-	return buf;
+        return dirname(strdup(tile->dir));
 }

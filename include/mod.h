@@ -116,7 +116,7 @@ extern hk_tile_t *hk_tile_create(char *path);
 extern hk_tile_t *hk_tile_find(char *name);
 extern void hk_tile_destroy(hk_tile_t *tile);
 extern void hk_tile_start(hk_tile_t *tile);
-extern char *hk_tile_path(hk_tile_t *tile, char *subdir);
+extern char *hk_tile_rootdir(hk_tile_t *tile);
 extern int hk_tile_nmemb(void);
 
 #endif /* __HAKIT_MOD_H__ */

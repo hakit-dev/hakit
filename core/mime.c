@@ -27,6 +27,7 @@ static const ws_mime_t ws_mimes[] = {
 	{"html", "text/html"},
 	{"js",   "text/javascript"},
 	{"css",  "text/css"},
+	{"txt",  "text/plain"},
 	{NULL, NULL}
 };
 

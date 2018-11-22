@@ -314,16 +314,16 @@ int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise)
 	}
 
 	/* Setup document root directory stack */
-	path = env_devdir("ui");
+	path = env_devdir(NULL);
 	if (path != NULL) {
-		log_debug(2, "Running from development environment!");
+		log_debug(2, "Running from development environment: %s", path);
+                ws_add_document_root(comm.ws, path);
+                free(path);
 	}
 	else {
-		path = strdup(HAKIT_SHARE_DIR "ui");
+                ws_add_document_root(comm.ws, HAKIT_SHARE_DIR);
 	}
 
-        ws_add_document_root(comm.ws, path);
-        free(path);
 
 	ws_set_command_handler(comm.ws, (ws_command_handler_t) comm_command_ws, &comm);
 
@@ -401,14 +401,9 @@ int comm_tile_register(char *path)
 	hk_tile_start(tile);
 
 	/* Add this tile to document root directory stack */
-	char *ui = hk_tile_path(tile, "ui");
-	if (ui != NULL) {
-		if (is_dir(ui)) {
-			ws_add_document_root(comm.ws, ui);
-		}
-
-		free(ui);
-	}
+	char *rootdir = hk_tile_rootdir(tile);
+        ws_add_document_root(comm.ws, rootdir);
+        free(rootdir);
 
 	return 0;
 }

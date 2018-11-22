@@ -41,19 +41,48 @@ struct per_session_data__http {
 
 static char *search_file(ws_t *ws, char *uri, size_t uri_len)
 {
+        char *subdir = NULL;
+        int subdir_len = 0;
+        char *file_path = NULL;
 	int i;
 
-	for (i = 0; i < ws->server.document_roots.nmemb; i++) {
+        log_debug(3, "search_file('%s')", uri);
+
+        char *s = uri;
+        if (*s == '/') {
+                s++;
+        }
+        while ((*s != '\0') && (*s != '/')) {
+                s++;
+        }
+        if (*s != '\0') {
+                subdir_len = s - uri;
+                subdir = malloc(subdir_len+1);
+                memcpy(subdir, uri, subdir_len);
+                subdir[subdir_len] = '\0';
+                uri = s;
+        }
+
+        log_debug(3, "  subdir='%s' uri='%s'", subdir, uri);
+
+	for (i = 0; (file_path == NULL) && (i < ws->server.document_roots.nmemb); i++) {
 		char *dir = HK_TAB_VALUE(ws->server.document_roots, char *, i);
 		int file_path_len = strlen(dir);
 		int file_path_size = file_path_len + uri_len + 20;
-		char *file_path = malloc(file_path_size);
+		file_path = malloc(file_path_size);
 
 		strcpy(file_path, dir);
 
-		if (uri[0] != '/') {
-			file_path[file_path_len++] = '/';
-		}
+                if (subdir != NULL) {
+                        strcpy(file_path+file_path_len, subdir);
+                        file_path_len += subdir_len;
+                }
+
+                if (file_path[file_path_len-1] != '/') {
+                        file_path[file_path_len++] = '/';
+                }
+                strcpy(file_path+file_path_len, "ui");
+		file_path_len += 2;
 
 		strcpy(file_path+file_path_len, uri);
 		file_path_len += uri_len;
@@ -73,14 +102,25 @@ static char *search_file(ws_t *ws, char *uri, size_t uri_len)
 		FILE *f = fopen(file_path, "r");
 		if (f != NULL) {
 			fclose(f);
-			return file_path;
 		}
-
-		free(file_path);
-		file_path = NULL;
+                else {
+                        free(file_path);
+                        file_path = NULL;
+                }
 	}
 
-	return NULL;
+        if (subdir != NULL) {
+                free(subdir);
+        }
+
+        if (file_path != NULL) {
+                log_debug(3, "  -> '%s'", file_path);
+        }
+        else {
+                log_debug(3, "  -> Not found");
+        }
+
+        return file_path;
 }
 
 
@@ -703,9 +743,22 @@ void ws_destroy(ws_t *ws)
 
 void ws_add_document_root(ws_t *ws, char *dir)
 {
+        int i;
+
 	log_debug(2, "ws_add_document_root '%s'", dir);
+
+	for (i = 0; i < ws->server.document_roots.nmemb; i++) {
+		char *dir0 = HK_TAB_VALUE(ws->server.document_roots, char *, i);
+                if (strcmp(dir0, dir) == 0) {
+                        log_debug(2, "  -> Already exists");
+                        return;
+                }
+        }
+
 	char **p = hk_tab_push(&ws->server.document_roots);
 	*p = strdup(dir);
+
+        log_debug(2, "  -> Added");
 }
 
 
