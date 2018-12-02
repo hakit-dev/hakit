@@ -67,7 +67,7 @@ $(LIB_DIR)/$(LIB_NAME): $(ARCH_MARKER)
 
 $(ARCH_MARKER):
 	make -C $(LIB_DIR) reallyclean
-	rm -f $(SRC_DIR)/.arch-*
+	rm -f .arch-*
 	touch $@
 
 $(LIB): $(LIB_DIR)/$(LIB_NAME)
