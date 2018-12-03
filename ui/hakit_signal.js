@@ -190,6 +190,13 @@ function hakit_signal_clear()
 
 window.onload = function()
 {
+    /* Detect browser */
+    if (typeof BrowserDetect === "object") {
+        BrowserDetect.init();
+        document.getElementById("brow").textContent = " " + BrowserDetect.browser + " " + BrowserDetect.version +" " + BrowserDetect.OS +" ";
+    }
+
+    /* Show ws connection status */
     document.getElementById("ws_status_td").style.backgroundColor = "#ffff00";
     document.getElementById("ws_status").textContent = "Connecting...";
 
