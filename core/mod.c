@@ -512,6 +512,18 @@ int hk_tile_nmemb(void)
 }
 
 
+void hk_tile_foreach(hk_tile_foreach_func func, void *user_data)
+{
+	int i;
+
+	/* Remove tile from list */
+	for (i = 0; i < tiles.nmemb; i++) {
+		hk_tile_t *tile = HK_TILE_ENTRY(i);
+                func(user_data, tile);
+	}
+}
+
+
 hk_tile_t *hk_tile_find(char *name)
 {
 	int i;

@@ -204,10 +204,28 @@ USAGE:
 }
 
 
+static void comm_command_tiles_dump(buf_t *out_buf, hk_tile_t *tile)
+{
+	buf_append_str(out_buf, tile->name);
+	buf_append_str(out_buf, "\n");
+}
+
+
+static int comm_command_tiles(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+{
+        hk_tile_foreach((hk_tile_foreach_func) comm_command_tiles_dump, out_buf);
+	buf_append_str(out_buf, ".\n");
+        return 0;
+}
+
+
 static void comm_command_ws(comm_t *comm, int argc, char **argv, buf_t *out_buf)
 {
         if (strcmp(argv[0], "trace") == 0) {
                 comm_command_trace(comm, argc, argv, out_buf);
+        }
+        else if (strcmp(argv[0], "tiles") == 0) {
+                comm_command_tiles(comm, argc, argv, out_buf);
         }
         else {
                 hkcp_command(&comm->hkcp, argc, argv, out_buf);

@@ -112,7 +112,10 @@ struct hk_tile_s {
 	hk_tab_t nets;       /**< Nets : table of (hk_net_t *) */
 };
 
+typedef void (*hk_tile_foreach_func)(void *user_data, hk_tile_t *tile);
+
 extern hk_tile_t *hk_tile_create(char *path);
+extern void hk_tile_foreach(hk_tile_foreach_func func, void *user_data);
 extern hk_tile_t *hk_tile_find(char *name);
 extern void hk_tile_destroy(hk_tile_t *tile);
 extern void hk_tile_start(hk_tile_t *tile);
