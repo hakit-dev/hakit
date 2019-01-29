@@ -13,7 +13,7 @@
 #include "serial.h"
 
 
-int serial_set_custom_speed(int fd, unsigned int speed)
+static int serial_set_custom_speed(int fd, unsigned int speed)
 {
 	struct serial_struct serial;
 
@@ -140,4 +140,79 @@ failed:
 void serial_close(int fd)
 {
 	close(fd);
+}
+
+
+int serial_modem_get(int fd)
+{
+        unsigned int status = 0;
+        int ret = 0;
+
+        if (ioctl(fd, TIOCMGET, &status) < 0) {
+		log_str("ERROR: ioctl(TIOCMGET): %s", strerror(errno));
+                return -1;
+        }
+
+        if (status & TIOCM_CTS) {
+                ret |= SERIAL_CTS;
+        }
+
+        if (status & TIOCM_CD) {
+                ret |= SERIAL_CD;
+        }
+
+        if (status & TIOCM_RI) {
+                ret |= SERIAL_RI;
+        }
+
+        if (status & TIOCM_DSR) {
+                ret |= SERIAL_DSR;
+        }
+
+        return ret;
+}
+
+
+int serial_modem_wait(int fd)
+{
+        unsigned int mask = TIOCM_CTS | TIOCM_CD | TIOCM_RI | TIOCM_DSR;
+
+        if (ioctl(fd, TIOCMIWAIT, mask) < 0) {
+		log_str("ERROR: ioctl(TIOCMIWAIT): %s", strerror(errno));
+                return -1;
+        }
+
+        return serial_modem_get(fd);
+}
+
+
+int serial_modem_set(int fd, int flags)
+{
+        unsigned int status = 0;
+
+        if (ioctl(fd, TIOCMGET, &status) < 0) {
+		log_str("ERROR: ioctl(TIOCMGET): %s", strerror(errno));
+                return -1;
+        }
+
+        if (flags & SERIAL_RTS) {
+                status |= TIOCM_RTS;
+        }
+        else {
+                status &= ~TIOCM_RTS;
+        }
+
+        if (flags & SERIAL_DTR) {
+                status |= TIOCM_DTR;
+        }
+        else {
+                status &= ~TIOCM_DTR;
+        }
+
+        if (ioctl(fd, TIOCMSET, &status) < 0) {
+		log_str("ERROR: ioctl(TIOCMSET): %s", strerror(errno));
+                return -1;
+        }
+
+        return 0;
 }
