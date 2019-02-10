@@ -39,7 +39,7 @@ struct per_session_data__http {
 };
 
 
-static char *search_file(ws_t *ws, char *uri, size_t uri_len)
+static char *search_file(ws_t *ws, char *uri)
 {
         char *subdir = NULL;
         int subdir_len = 0;
@@ -62,6 +62,8 @@ static char *search_file(ws_t *ws, char *uri, size_t uri_len)
                 subdir[subdir_len] = '\0';
                 uri = s;
         }
+
+        int uri_len = strlen(uri);
 
         log_debug(3, "  subdir='%s' uri='%s'", subdir, uri);
 
@@ -111,6 +113,7 @@ static char *search_file(ws_t *ws, char *uri, size_t uri_len)
 
         if (subdir != NULL) {
                 free(subdir);
+                subdir = NULL;
         }
 
         if (file_path != NULL) {
@@ -236,7 +239,16 @@ static int ws_http_request(ws_t *ws,
 	}
 	else {
 		/* Search file among root directory list */
-		file_path = search_file(ws, uri, len);
+		file_path = search_file(ws, uri);
+                if (file_path == NULL) {
+                        int len = strlen(uri);
+                        char uri2[len+2];
+                        memcpy(uri2, uri, len);
+                        uri2[len++] = '/';
+                        uri2[len] = '\0';
+                        file_path = search_file(ws, uri2);
+                }
+
 		if (file_path == NULL) {
 			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
 			lws_return_http_status(wsi, HTTP_STATUS_NOT_FOUND, NULL);
