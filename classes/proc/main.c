@@ -57,7 +57,7 @@ static int _new(hk_obj_t *obj)
 	/* Get command */
 	str = hk_prop_get(&obj->props, "cmd");
 	if (str == NULL) {
-		log_str("ERROR: %s: No command defined", obj->name, str);
+		log_str("ERROR: %s: No command defined", obj->name);
 		return -1;
 	}
 
