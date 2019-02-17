@@ -1,6 +1,6 @@
 CLASSES := sink source and or not cmp history \
 	timer-pulse timer-on timer-off timer-clock \
-	proc mux \
+	fwrite proc mux \
 	gpio link-serial
 
 all::
