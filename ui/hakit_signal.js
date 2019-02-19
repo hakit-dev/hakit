@@ -9,7 +9,7 @@
  * directory for more details.
  */
 
-var hakit_signals;
+var hakit_signals = {};
 
 
 function hakit_widget_updated(elmt, st)
@@ -180,9 +180,10 @@ function hakit_widget_text(id, value, options)
 
 function hakit_signal_clear()
 {
-    if (hakit_signals) {
-	while (hakit_signals.rows.length > 1) {
-	    hakit_signals.deleteRow(1);
+    for (var tile_name in hakit_signals) {
+        var rows = hakit_signals[tile_name].rows;
+	while (rows.length > 1) {
+	    rows.deleteRow(1);
 	}
     }
 }
@@ -203,23 +204,7 @@ window.onload = function()
     /* Enable charts */
     hakit_chart_enable(document.getElementById("charts"));
 
-    /* Get table and chart elements */
-    hakit_signals = document.getElementById("signals");
     hakit_connect();
-}
-
-
-function hakit_signal_row(name)
-{
-    var rows = hakit_signals.rows;
-    for (var i = 0; i < rows.length; i++) {
-	var row = rows[i];
-	if (row.cells[1].innerHTML == name) {
-	    return row;
-	}
-    }
-
-    return null;
 }
 
 
@@ -227,14 +212,53 @@ function hakit_signal_add(name, value, dir, widget)
 {
     console.log('hakit_signal_add(name="'+name+'", value="'+value+'", dir='+dir+', widget='+widget+')');
 
-    var len = hakit_signals.rows.length;
-    var row = hakit_signals.insertRow(len);
+    var tab = name.split('.');
+    var tile_name;
+    var signal_name;
+    if (tab.length > 1) {
+        tile_name = tab[0];
+        signal_name = tab[1];
+    }
+    else {
+        tile_name = '';
+        signal_name = tab[0];
+    }
+
+    var table;
+    if (tile_name in hakit_signals) {
+        table = hakit_signals[tile_name];
+    }
+    else {
+        var table_id = 'signals:'+tile_name;
+	console.log("hakit_signal_add: Create table "+table_id);
+
+        var signals = document.getElementById("signals");
+        var div = document.createElement('div');
+        signals.appendChild(div);
+
+        var str = '<br/>';
+        if (tile_name != '') {
+            str += tile_name + ':';
+        }
+        str += '<table class="pure-table">' +
+            '<thead><tr><th>Direction</th><th>Signal</th><th>Value</th><th>Control</th></tr></thead>' +
+            '<tbody id="'+table_id+'"></tbody>' +
+            '</table>';
+        div.innerHTML = str;
+
+        table =  document.getElementById(table_id);
+        hakit_signals[tile_name] = table;
+    }
+
+    var len = table.rows.length;
+    var row = table.insertRow(len);
+    row.id = name;
     if (len % 2) {
 	row.className = "pure-table-odd";
     }
 
     row.insertCell(0).innerHTML = dir;
-    row.insertCell(1).innerHTML = name;
+    row.insertCell(1).innerHTML = signal_name;
     row.insertCell(2).innerHTML = value;
 
     var args = widget.split(':');
@@ -279,7 +303,7 @@ function hakit_updated(name, value, dir, widget)
 {
     console.log('hakit_updated(name="'+name+'", value="'+value+'")');
 
-    var row = hakit_signal_row(name);
+    var row = document.getElementById(name);
     if (row) {
 	// If row exists, update its value
 	row.cells[2].innerHTML = value;
