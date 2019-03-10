@@ -212,6 +212,11 @@ function hakit_signal_add(name, value, dir, widget)
 {
     console.log('hakit_signal_add(name="'+name+'", value="'+value+'", dir='+dir+', widget='+widget+')');
 
+    var valueStr = value;
+    if (valueStr.length > 16) {
+        valueStr = valueStr.substring(0,13)+"...";
+    }
+
     var tab = name.split('.');
     var tile_name;
     var signal_name;
@@ -224,21 +229,19 @@ function hakit_signal_add(name, value, dir, widget)
         signal_name = tab[0];
     }
 
-    var table;
-    if (tile_name in hakit_signals) {
-        table = hakit_signals[tile_name];
-    }
-    else {
-        var table_id = 'signals:'+tile_name;
+    var table_id = 'signal:'+tile_name;
+    var table = document.getElementById(table_id);
+
+    if (table == null) {
 	console.log("hakit_signal_add: Create table "+table_id);
 
         var signals = document.getElementById("signals");
-        var div = document.createElement('div');
+        var div = document.createElement('section');
         signals.appendChild(div);
 
-        var str = '<br/>';
+        var str = '';
         if (tile_name != '') {
-            str += tile_name + ':';
+            str += '<h3>'+tile_name + '</h3>';
         }
         str += '<table class="pure-table">' +
             '<thead><tr><th>Direction</th><th>Signal</th><th>Value</th><th>Control</th></tr></thead>' +
@@ -246,7 +249,7 @@ function hakit_signal_add(name, value, dir, widget)
             '</table>';
         div.innerHTML = str;
 
-        table =  document.getElementById(table_id);
+        table = document.getElementById(table_id);
         hakit_signals[tile_name] = table;
     }
 
@@ -259,7 +262,7 @@ function hakit_signal_add(name, value, dir, widget)
 
     row.insertCell(0).innerHTML = dir;
     row.insertCell(1).innerHTML = signal_name;
-    row.insertCell(2).innerHTML = value;
+    row.insertCell(2).innerHTML = valueStr;
 
     var args = widget.split(':');
     var wname = args[0];
@@ -305,8 +308,13 @@ function hakit_updated(name, value, dir, widget)
 
     var row = document.getElementById(name);
     if (row) {
+        var valueStr = value;
+        if (valueStr.length > 16) {
+            valueStr = valueStr.substring(0,13)+"...";
+        }
+
 	// If row exists, update its value
-	row.cells[2].innerHTML = value;
+	row.cells[2].innerHTML = valueStr;
 	var widget = row.cells[4].innerHTML;
 
 	if (widget.substr(0, 4) == 'led-') {
