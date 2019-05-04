@@ -37,6 +37,7 @@
 #define LIB_DIR "/var/lib/hakit"
 #define TILE_FILE_NAME "tile.hk"
 
+#define HELLO_RETRY_INIT_DELAY 30
 #define HELLO_RETRY_DELAY (3*60)
 #define PING_DELAY (30*60)
 #define MQTT_RETRY_DELAY 10
@@ -131,7 +132,7 @@ static const options_entry_t api_auth_entries[] = {
 };
 
 
-static void platform_request(char *script, buf_t *header, ws_client_func_t *callback, void *callback_data)
+static int platform_request(char *script, buf_t *header, ws_client_func_t *callback, void *callback_data)
 {
 	// Construct request URL
 	char url[strlen(opt_platform_url) + strlen(script) + 8];
@@ -140,9 +141,11 @@ static void platform_request(char *script, buf_t *header, ws_client_func_t *call
         // Add API key in HTTP header
         buf_append_fmt(header, "HAKit-Api-Key: %s\r\n", opt_api_key);
 
-	ws_client_get(&ws_client, url, (char *) header->base, callback, callback_data);
+	int ret = ws_client_get(&ws_client, url, (char *) header->base, callback, callback_data);
 
 	buf_cleanup(header);
+
+        return ret;
 }
 
 
@@ -1254,9 +1257,7 @@ static int hello_request(void)
                 }
         }
 
-	platform_request("hello.php", &header, (ws_client_func_t *) hello_response, NULL);
-
-	return 0;
+	return platform_request("hello.php", &header, (ws_client_func_t *) hello_response, NULL);
 }
 
 
@@ -1373,6 +1374,7 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	log_str("-----");
 	if (opt_daemon) {
 		run_as_daemon();
 	}
@@ -1438,7 +1440,10 @@ int main(int argc, char *argv[])
 
                 if (opt_api_key != NULL) {
                         /* Advertise device */
-                        hello_request();
+                        if (hello_request() < 0) {
+                                log_str("INFO    : New HELLO attempt in %d seconds", HELLO_RETRY_INIT_DELAY);
+                                sys_timeout(HELLO_RETRY_INIT_DELAY*1000, (sys_func_t) hello_request, NULL);
+                        }
                 }
                 else {
                         /* Off-line mode: try to get tile from the cache */
