@@ -116,6 +116,7 @@ endif
 # WebSockets
 #
 LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
+LWS_INC_DIR = $(LWS_DIR)/include
 LWS_LIB_DIR = $(LWS_DIR)/lib
 LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 

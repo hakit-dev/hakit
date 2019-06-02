@@ -67,8 +67,7 @@ ssl:
 #
 # WebSockets
 #
-LWS_SRC_DIR = lws/libwebsockets/lib
-CFLAGS += -I$(LWS_SRC_DIR) -I$(LWS_DIR)
+CFLAGS += -I$(LWS_INC_DIR) -I$(LWS_DIR)
 
 .PHONY: lws
 lws:
