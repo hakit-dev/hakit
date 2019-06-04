@@ -305,7 +305,7 @@ static void ctx_tile_feed(ctx_t *ctx, char *str)
                 }
         }
 
-        strcpy(tile->basename, TILE_FILE_NAME);
+        tile->basename[0] = '\0';
 }
 
 
@@ -447,7 +447,15 @@ static void engine_terminated(void *user_data, int status)
 
 static void engine_start_now(void)
 {
+        int i;
+
         log_debug(2, "engine_start_now");
+        for (i = 0; i < engine_argv.nmemb; i++) {
+                char *args = HK_TAB_VALUE(engine_argv, char *, i);
+                if (args != NULL) {
+                        log_debug(2, "  [%d]='%s'", i, args);
+                }
+        }
 
         // Start engine process
         engine_proc = hk_proc_start(engine_argv.buf, NULL, engine_stdout, engine_stderr, engine_terminated, NULL);
