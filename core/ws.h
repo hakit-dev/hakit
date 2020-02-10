@@ -33,7 +33,6 @@ typedef struct {
 	ws_command_handler_t command_handler;
 	void *command_user_data;
 	int salt;
-        sys_tag_t tick;
 } ws_server_t;
 
 typedef struct {

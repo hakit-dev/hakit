@@ -108,13 +108,6 @@ void ws_poll_remove(struct lws_pollargs *pa)
 }
 
 
-int ws_tick(struct lws_context *context)
-{
-	lws_service_fd(context, NULL);
-        return 1;
-}
-
-
 void ws_dump_handshake_info(struct lws *wsi)
 {
 	int n = 0;
