@@ -15,9 +15,8 @@ OUTDIR = ../out/$(ARCH)
 
 ENGINE_BIN = $(OUTDIR)/hakit-engine
 CLIENT_BIN = $(OUTDIR)/hakit-client
-TEST_USB_BIN = $(OUTDIR)/hakit-test-usb
 LAUNCHER_BIN = $(OUTDIR)/hakit-launcher
-ARCH_BINS = $(CLIENT_BIN) $(TEST_USB_BIN) $(LAUNCHER_BIN)
+ARCH_BINS = $(CLIENT_BIN) $(LAUNCHER_BIN)
 
 include ../defs.mk
 
@@ -34,7 +33,6 @@ $(ENGINE_BIN): $(ENGINE_BIN).o $(ARCH_LIBS)
 	$(CC) -o $@ $< $(LIB_OBJS) $(LDFLAGS) $(STD_LDFLAGS)
 
 $(CLIENT_BIN): $(CLIENT_BIN).o $(ARCH_LIB)
-$(TEST_USB_BIN): $(TEST_USB_BIN).o $(ARCH_LIB)
 $(LAUNCHER_BIN): $(LAUNCHER_BIN).o $(ARCH_LIB)
 
 INSTALL_BIN = $(DESTDIR)/usr/bin
