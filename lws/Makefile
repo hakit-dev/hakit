@@ -59,3 +59,6 @@ clean::
 
 mrproper:: clean
 	rm -rf $(SRC_DIR) 
+
+install::
+	@true

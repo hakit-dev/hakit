@@ -81,3 +81,6 @@ clean::
 
 mrproper::
 	rm -rf $(SRC_DIR) $(OUTDIR)
+
+install::
+	@true

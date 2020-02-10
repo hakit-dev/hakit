@@ -38,10 +38,7 @@ else
 CFLAGS += -O2
 endif
 
-ifdef HAKIT_BUILD
-VPATH = os:core
-CFLAGS  += -I. -Ios
-else
+ifndef HAKIT_BUILD
 LDFLAGS += -L$(HAKIT_DIR)out/$(ARCH) -lhakit
 endif
 
@@ -117,7 +114,9 @@ endif
 #
 LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
 LWS_INC_DIR = $(LWS_DIR)/include
+LWS_SRC_DIR = $(HAKIT_DIR)lws/libwebsockets/lib
 LWS_LIB_DIR = $(LWS_DIR)/lib
+CFLAGS += -I$(LWS_INC_DIR) -I$(LWS_DIR)
 LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 
 #
@@ -125,7 +124,7 @@ LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 #
 ifneq ($(WITHOUT_MQTT),yes) 
 MQTT_DIR = $(HAKIT_DIR)mqtt/mosquitto/lib
-CFLAGS += -DWITH_MQTT
+CFLAGS += -DWITH_MQTT -I$(MQTT_DIR)
 LDFLAGS += -L$(MQTT_DIR) -lmosquitto -lpthread -lrt
 endif
 
@@ -181,9 +180,8 @@ $(ARCH_BINS):
 	  \( -clone 0 -resize 16x16 \) \( -clone 0 -resize 32x32 \) \( -clone 0 -resize 48x48 \) \( -clone 0 -resize 64x64 \) \
 	  -delete 0 -alpha off -colors 256 $@
 
-
 clean::
-	$(RM) $(OUTDIR) *~
+	$(RM) *~
 
 #
 # Packaging

@@ -14,30 +14,15 @@ DISTRO ?= debian
 
 OUTDIR = out/$(ARCH)
 
-ARCH_LIB = $(OUTDIR)/libhakit.a
-ARCH_LIBS = $(ARCH_LIB)
-
-BINS = hakit-engine hakit-client
-ifdef BUILD_TEST
-BINS += hakit-test-proc hakit-test-comm hakit-test-usb
-endif
-
-ARCH_BINS = $(BINS:%=$(OUTDIR)/%)
-
 include defs.mk
 
-SUBDIRS := classes ui launcher
+SUBDIRS = lws
+ifneq ($(WITHOUT_MQTT),yes)
+SUBDIRS += mqtt
+endif
+SUBDIRS += os core classes ui main
 
-OS_SRCS = env.c tstamp.c logio.c sys.c io.c iputils.c netif.c netif_watch.c udpio.c tcpio.c uevent.c sysfs.c \
-	gpio.c serial.c proc.c files.c mod_init.c \
-	usb_io.c usb_device.c
-CORE_SRCS = options.c log.c buf.c tab.c str_argv.c command.c endpoint.c mod.c mod_load.c prop.c \
-	advertise.c hkcp.c hkcp_cmd.c mqtt.c comm.c trace.c \
-	mime.c eventq.c ws.c ws_utils.c ws_auth.c ws_events.c ws_client.c
-SRCS = $(OS_SRCS) $(CORE_SRCS)
-OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
-
-all:: submodules $(OUTDIR) lws mqtt $(ARCH_LIBS) $(ARCH_BINS)
+all:: submodules $(OUTDIR)
 	for dir in $(SUBDIRS); do \
 	  make -C "$$dir" TARGET=$(TARGET) ;\
 	done
@@ -55,7 +40,7 @@ endif
 #
 .PHONY: submodules
 submodules:
-	git submodule update --init
+	git submodule update --init --recursive
 
 #
 # SSL certificate
@@ -89,24 +74,14 @@ else
 endif
 
 #
-# HAKit libs and bins
+# Clean
 #
-LDFLAGS += -rdynamic -ldl
-
-$(ARCH_LIB): $(OBJS)
-
-$(OUTDIR)/hakit-test-proc: $(OUTDIR)/proc-test.o $(ARCH_LIBS)
-$(OUTDIR)/hakit-test-comm: $(OUTDIR)/comm-test.o $(ARCH_LIBS)
-$(OUTDIR)/hakit-test-usb: $(OUTDIR)/usb-test.o $(ARCH_LIBS)
-$(OUTDIR)/hakit-engine: $(OUTDIR)/hakit-engine.o $(OBJS)
-$(OUTDIR)/hakit-client: $(OUTDIR)/hakit-client.o $(ARCH_LIBS)
 
 clean::
-	for dir in lws mqtt $(SUBDIRS); do \
+	$(RM) *~ $(OUTDIR)
+	for dir in $(SUBDIRS); do \
 	  make -C "$$dir" clean ;\
 	done
-	$(RM) os/*~ core/*~
-
 
 #
 # Install and packaging
@@ -114,14 +89,12 @@ clean::
 
 INSTALL_DESTDIR = $(abspath $(HAKIT_DIR)$(DESTDIR))
 
-INSTALL_BIN = $(DESTDIR)/usr/bin
 INSTALL_SHARE = $(DESTDIR)/usr/share/hakit
 INSTALL_INIT = $(DESTDIR)/etc/init.d
 INSTALL_SYSTEMD = $(DESTDIR)/lib/systemd/system
 
 install:: all
-	$(MKDIR) $(INSTALL_BIN) $(INSTALL_SHARE)
-	$(CP) $(ARCH_BINS) $(INSTALL_BIN)/
+	$(MKDIR) $(INSTALL_SHARE)
 	$(CP) -a test/timer.hk $(INSTALL_SHARE)/test.hk
 	for dir in $(SUBDIRS); do \
 	  make -C "$$dir" DESTDIR=$(INSTALL_DESTDIR) install ;\
