@@ -16,7 +16,6 @@
 #include "options.h"
 #include "tstamp.h"
 #include "log.h"
-#include "files.h"
 #include "io.h"
 #include "ws.h"
 #include "ws_events.h"
@@ -24,7 +23,6 @@
 #include "hkcp.h"
 #include "hkcp_cmd.h"
 #include "mqtt.h"
-#include "eventq.h"
 #include "command.h"
 #include "endpoint.h"
 #include "advertise.h"
@@ -248,21 +246,6 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 			}
 			else {
 				log_str("ERROR: Usage: %s <uri>", argv[0]);
-			}
-		}
-		else if (strcmp(argv[0], "eventq") == 0) {
-			if (argc > 1) {
-				int argi = 1;
-
-				// HTTP/HTTPS event push. This command is for debug/testing purpose only.
-				// Result will be displayed to the debug log
-				if (argc > 2) {
-					eventq_init(argv[argi++]);
-				}
-				eventq_push(argv[argi]);
-			}
-			else {
-				log_str("ERROR: Usage: %s [<uri>] <event>", argv[0]);
 			}
 		}
 		else {
