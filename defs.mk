@@ -39,7 +39,7 @@ CFLAGS += -O2
 endif
 
 ifndef HAKIT_BUILD
-LDFLAGS += -L$(HAKIT_DIR)out/$(ARCH) -lhakit
+LDFLAGS += -L$(HAKIT_DIR)build/$(ARCH) -lhakit
 endif
 
 #
@@ -93,7 +93,7 @@ all:: version-h
 endif
 
 ifndef HAKIT_BUILD
-CFLAGS  += -I$(HAKIT_DIR)out/$(ARCH)
+CFLAGS  += -I$(HAKIT_DIR)build/$(ARCH)
 endif
 CFLAGS  += -I$(OUTDIR)
 
@@ -112,7 +112,7 @@ endif
 #
 # WebSockets
 #
-LWS_DIR = $(HAKIT_DIR)lws/out/$(ARCH)
+LWS_DIR = $(HAKIT_DIR)lws/build/$(ARCH)
 LWS_INC_DIR = $(LWS_DIR)/include
 LWS_SRC_DIR = $(HAKIT_DIR)lws/libwebsockets/lib
 LWS_LIB_DIR = $(LWS_DIR)/lib

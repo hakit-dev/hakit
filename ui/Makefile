@@ -11,7 +11,7 @@ CHECK_PACKAGES_deb += imagemagick ruby-sass
 CHECK_PACKAGES_rpm += ImageMagick
 
 ARCH ?= $(shell arch)
-OUTDIR = out/$(ARCH)
+OUTDIR = build/$(ARCH)
 
 include ../defs.mk
 

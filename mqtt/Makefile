@@ -20,7 +20,7 @@ include $(HAKIT_DIR)/targets/$(TARGET).mk
 endif
 
 ARCH ?= $(shell arch)
-OUTDIR = out/$(ARCH)
+OUTDIR = build/$(ARCH)
 
 SRC_DIR = mosquitto
 LIB_DIR = $(SRC_DIR)/lib

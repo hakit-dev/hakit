@@ -11,7 +11,7 @@ HAKIT_BUILD := 1
 ARCH ?= $(shell arch)
 DISTRO ?= debian
 
-OUTDIR = ../out/$(ARCH)
+OUTDIR = ../build/$(ARCH)
 
 ENGINE_BIN = $(OUTDIR)/hakit-engine
 CLIENT_BIN = $(OUTDIR)/hakit-client

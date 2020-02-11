@@ -21,7 +21,7 @@ include $(HAKIT_DIR)/targets/$(TARGET).mk
 endif
 
 ARCH ?= $(shell arch)
-OUTDIR = out/$(ARCH)
+OUTDIR = build/$(ARCH)
 
 SRC_DIR = libwebsockets
 LIB_DIR = $(OUTDIR)/lib

@@ -12,7 +12,7 @@ PKGNAME := hakit
 ARCH ?= $(shell arch)
 DISTRO ?= debian
 
-OUTDIR = out/$(ARCH)
+OUTDIR = build/$(ARCH)
 
 include defs.mk
 

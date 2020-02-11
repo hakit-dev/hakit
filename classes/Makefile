@@ -1,7 +1,4 @@
-CLASSES := sink source and or not cmp history \
-	timer-pulse timer-on timer-off timer-clock \
-	fwrite proc mux \
-	gpio link-serial
+CLASSES := $(subst /,,$(dir $(wildcard */main.c)))
 
 all::
 	for dir in $(CLASSES); do \
