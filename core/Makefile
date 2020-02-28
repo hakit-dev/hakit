@@ -20,7 +20,7 @@ include ../defs.mk
 CFLAGS += -I$(HAKIT_DIR)os
 LDFLAGS += -rdynamic -ldl
 
-LIB_SRCS = options.c log.c buf.c tab.c str_argv.c command.c endpoint.c mod.c mod_load.c prop.c \
+LIB_SRCS = options.c log.c buf.c tab.c str_argv.c tstamp.c command.c endpoint.c mod.c mod_load.c prop.c \
 	advertise.c hkcp.c hkcp_cmd.c mqtt.c comm.c trace.c \
 	mime.c ws.c ws_utils.c ws_auth.c ws_events.c ws_client.c
 LIB_OBJS = $(LIB_SRCS:%.c=$(OUTDIR)/%.o)

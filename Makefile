@@ -20,7 +20,7 @@ SUBDIRS = lws
 ifneq ($(WITHOUT_MQTT),yes)
 SUBDIRS += mqtt
 endif
-SUBDIRS += os core classes ui main
+SUBDIRS += utils os core classes ui main
 
 all:: submodules $(OUTDIR)
 	for dir in $(SUBDIRS); do \

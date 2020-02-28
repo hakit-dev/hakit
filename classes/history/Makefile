@@ -1,7 +1,7 @@
 NAME := history
 
 ARCH ?= $(shell arch)
-OUTDIR = device/$(ARCH)
+OUTDIR = build/$(ARCH)
 
 HISTORY_TOOL = $(OUTDIR)/hakit-history
 ARCH_BINS = $(HISTORY_TOOL)
