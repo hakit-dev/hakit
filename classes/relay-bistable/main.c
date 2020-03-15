@@ -21,7 +21,8 @@
 
 #define CLASS_NAME "relay-bistable"
 
-#define PULSE 1000   // Pulse width in ms
+#define PULSE 1000     // Pulse width in ms
+#define REFRESH 3600   // Refresh delay in seconds
 
 typedef struct {
 	hk_obj_t *obj;
@@ -29,6 +30,8 @@ typedef struct {
 	hk_pad_t *output[2];
 	sys_tag_t timeout_tag;
 } ctx_t;
+
+static void set_output(ctx_t *ctx, int state);
 
 
 static int _new(hk_obj_t *obj)
@@ -48,13 +51,22 @@ static int _new(hk_obj_t *obj)
 }
 
 
+static int refresh(ctx_t *ctx)
+{
+        set_output(ctx, ctx->input->state);
+	return 0;
+}
+
+
 static int timeout(ctx_t *ctx)
 {
-	ctx->timeout_tag = 0;
         ctx->output[0]->state = 0;
         hk_pad_update_int(ctx->output[0], 0);
         ctx->output[1]->state = 0;
         hk_pad_update_int(ctx->output[1], 0);
+
+        ctx->timeout_tag = sys_timeout(REFRESH*1000, (sys_func_t) refresh, ctx);
+
 	return 0;
 }
 
