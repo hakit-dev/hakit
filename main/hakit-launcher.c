@@ -638,7 +638,7 @@ static void app_response(ctx_t *ctx, char *buf, int len)
                                         errcode = -1;
                                 }
 
-                                strcpy(tile->basename, TILE_FILE_NAME);
+                                tile->basename[0] = '\0';
                         }
                 }
 
