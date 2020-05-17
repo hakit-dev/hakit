@@ -84,7 +84,7 @@ static void history_bucket_start(history_t *h)
 		free(bucket->fname);
 	}
 
-	size = strlen(history_filename_prefix) + 10;
+	size = strlen(history_filename_prefix) + 12;
 	bucket->fname = malloc(size);
 	snprintf(bucket->fname, size, "%s-%010llx", history_filename_prefix, bucket->t0);
 
