@@ -1,8 +1,9 @@
-test_input_1: sink
-  comment="Toto est \"rigolo\""
-test_input_2: sink
-nand_gate: and ninputs=2 inv
-  in1=$test_input_1.out
-  in2=$test_input_2.out
+test_in1: sink
+  widget=switch-slide
+test_in2: sink
+  widget=switch-slide
+nand_gate: and inv
+  in0=$test_in1.out
+  in1=$test_in2.out
 test_output: source
   in=$nand_gate.out

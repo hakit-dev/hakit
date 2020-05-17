@@ -20,75 +20,49 @@
 
 #define CLASS_NAME "and"
 
-
 typedef struct {
 	hk_obj_t *obj;
 	int ninputs;
+        int inv;
 	hk_pad_t **inputs;
 	hk_pad_t *output;
 	int refresh;
 } ctx_t;
 
 
-static int is_inverted(char *prop_inv, char *name)
+static int add_input(void *user_data, char *name, char *value)
 {
-	char *s1 = prop_inv;
+	hk_obj_t *obj = user_data;
+	ctx_t *ctx = obj->ctx;
+        int num = -1;
 
-	while (s1 != NULL) {
-		char *s2 = strchr(s1, ',');
-		if (s2 != NULL) {
-			*(s2++) = '\0';
-		}
+        if ((sscanf(name, "in%d", &num) == 1) && (num >= 0)) {
+                ctx->inputs = realloc(ctx->inputs, sizeof(hk_pad_t *)*(ctx->ninputs+1));
+		ctx->inputs[ctx->ninputs] = hk_pad_create(obj, HK_PAD_IN, name);
+                ctx->ninputs++;
+                log_str(CLASS_NAME ": add input '%s'", name);
+        }
 
-		if (strcmp(s1, name) == 0) {
-			return 1;
-		}
-
-		s1 = s2;
-	}
-
-	return 0;
+        return 1;
 }
 
 
 static int _new(hk_obj_t *obj)
 {
-	ctx_t *ctx;
-	int ninputs = 1;
-	char *str;
-	char *prop_inv;
-	int i;
-
-	str = hk_prop_get(&obj->props, "ninputs");
-	if (str != NULL) {
-		ninputs = atoi(str);
-		if (ninputs < 1) {
-			log_str("ERROR: Class '" CLASS_NAME "': cannot instanciate object '%s' with less than 1 input", obj->name);
-			return -1;
-		}
-	}
-
-	ctx = malloc(sizeof(ctx_t));
+	ctx_t *ctx = malloc(sizeof(ctx_t));
 	memset(ctx, 0, sizeof(ctx_t));
 	ctx->obj = obj;
-	ctx->ninputs = ninputs;
-	ctx->inputs = calloc(ninputs, sizeof(hk_pad_t *));
 	obj->ctx = ctx;
 
-	prop_inv = hk_prop_get(&obj->props, "inv");
+	if (hk_prop_get(&obj->props, "inv") != NULL) {
+                ctx->inv = 1;
+                log_str(CLASS_NAME ": inverted output, NAND gate mode enabled");
+        }
 
-	for (i = 0; i < ninputs; i++) {
-		hk_pad_t *input = hk_pad_create(obj, HK_PAD_IN, "in%d", i);
-		if (is_inverted(prop_inv, input->name)) {
-			input->state = 2;
-		}
-		ctx->inputs[i] = input;
-	}
+        hk_prop_foreach(&obj->props, add_input, (void *) obj);
+        log_str(CLASS_NAME ": %d inputs probed", ctx->ninputs);
 
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
-	if (is_inverted(prop_inv, ctx->output->name)) {
-		ctx->output->state = 2;
-	}
 
 	ctx->refresh = 1;
 
@@ -96,32 +70,40 @@ static int _new(hk_obj_t *obj)
 }
 
 
-static void _input(hk_pad_t *pad, char *value)
+static void _update(ctx_t *ctx)
 {
-	static const int tt[4] = {0,1,1,0};
-	ctx_t *ctx = pad->obj->ctx;
-	int in_state = atoi(value) ? 1:0;
 	int out_state = 1;
 	int i;
 
-	pad->state = (pad->state & ~1) | in_state;
-
 	for (i = 0; i < ctx->ninputs; i++) {
-		if (tt[ctx->inputs[i]->state & 3] == 0) {
+		if (ctx->inputs[i]->state == 0) {
 			out_state = 0;
 			break;
 		}
 	}
 
-	if (ctx->output->state & 2) {
+	if (ctx->inv) {
 		out_state ^= 1;
 	}
 
-	if ((out_state != (ctx->output->state & 1)) || ctx->refresh) {
+	if ((out_state != ctx->output->state) || ctx->refresh) {
 		ctx->refresh = 0;
-		ctx->output->state = (ctx->output->state & ~1) | out_state;
+		ctx->output->state = out_state;
 		hk_pad_update_int(ctx->output, out_state);
 	}
+}
+
+
+static void _input(hk_pad_t *pad, char *value)
+{
+	pad->state = atoi(value) ? 1:0;
+        _update(pad->obj->ctx);
+}
+
+
+static void _start(hk_obj_t *obj)
+{
+        _update(obj->ctx);
 }
 
 
@@ -129,5 +111,6 @@ hk_class_t _class = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
+	.start = _start,
 	.input = _input,
 };
