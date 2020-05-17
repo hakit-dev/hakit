@@ -1,7 +1,7 @@
 HAKIT_DIR := $(dir $(lastword $(MAKEFILE_LIST)))../
 
 ARCH ?= $(shell arch)
-OUTDIR = build/$(ARCH)
+OUTDIR = $(HAKIT_DIR)build/$(ARCH)/classes/$(NAME)/device
 
 include $(HAKIT_DIR)defs.mk
 

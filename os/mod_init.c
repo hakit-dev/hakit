@@ -51,13 +51,8 @@ static int hk_mod_init_dir(char *dir)
 			}
 
 			/* Open device library */
-			snprintf(path, sizeof(path), "%s/%s/device/" ARCH "/%s.so", dir, name, name);
-			void *dl = dlopen(path, RTLD_LAZY);
-
-			if (dl == NULL) {
-				snprintf(path, sizeof(path), "%s/%s/device/%s.so", dir, name, name);
-				dl = dlopen(path, RTLD_LAZY);
-			}
+                        snprintf(path, sizeof(path), "%s/%s/device/%s.so", dir, name, name);
+                        void *dl = dlopen(path, RTLD_LAZY);
 
 			if (dl != NULL) {
 				hk_class_t *class = dlsym(dl, "_class");
@@ -103,11 +98,12 @@ int hk_mod_init(char *class_path)
 	}
 
 	if (ret == 0) {
-		hk_mod_init_dir("classes");
-		/* Don't care if this directory does not exist */
-	}
+                char *dir = env_bindir("classes");
+                if ((dir != NULL) && is_dir(dir)) {
+                        hk_mod_init_dir(dir);
+                        /* Don't care if this directory does not exist */
+                }
 
-	if (ret == 0) {
 		hk_mod_init_dir("/usr/lib/hakit/classes");
 		/* Don't care if this directory does not exist */
 	}
