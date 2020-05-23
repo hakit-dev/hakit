@@ -55,7 +55,7 @@ static void _input(hk_pad_t *pad, char *value)
 }
 
 
-hk_class_t _class = {
+hk_class_t _class_source = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,

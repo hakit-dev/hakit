@@ -42,7 +42,8 @@ static int hk_mod_init_dir(char *dir)
 	while ((ent = readdir(d)) != NULL) {
 		char *name = ent->d_name;
 		if (name[0] != '.') {
-			char path[dirlen + strlen(name)*2 + 32];
+                        int namelen = strlen(name);
+			char path[dirlen + namelen*2 + 32];
 
 			/* Class should be stored in a directory */
 			snprintf(path, sizeof(path), "%s/%s", dir, name);
@@ -55,7 +56,22 @@ static int hk_mod_init_dir(char *dir)
                         void *dl = dlopen(path, RTLD_LAZY);
 
 			if (dl != NULL) {
-				hk_class_t *class = dlsym(dl, "_class");
+                                char varname[namelen+8];
+                                snprintf(varname, sizeof(varname), "_class_%s", name);
+                                char *s = varname;
+                                while (*s != '\0') {
+                                        if (*s == '-') {
+                                                *s = '_';
+                                        }
+                                        s++;
+                                }
+
+				hk_class_t *class = dlsym(dl, varname);
+                                if (class == NULL) {
+                                        log_debug(3, "Class '%s': symbol '%s' not found, trying '_class'", varname);
+                                        class = dlsym(dl, "_class");
+                                }
+
 				if (class != NULL) {
 					hk_class_register(class);
 					log_str("%s: Class '%s' registered (%s)", path, class->name, class->version ? class->version:"");

@@ -107,7 +107,7 @@ static void _start(hk_obj_t *obj)
 }
 
 
-hk_class_t _class = {
+hk_class_t _class_and = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
