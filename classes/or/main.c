@@ -56,7 +56,7 @@ static int _new(hk_obj_t *obj)
 
 	if (hk_prop_get(&obj->props, "inv") != NULL) {
                 ctx->inv = 1;
-                log_str(CLASS_NAME ": inverted output, NAND gate mode enabled");
+                log_str(CLASS_NAME ": inverted output, NOR gate mode enabled");
         }
 
         hk_prop_foreach(&obj->props, add_input, (void *) obj);
