@@ -35,11 +35,19 @@ static int add_input(void *user_data, char *name, char *value)
 	hk_obj_t *obj = user_data;
 	ctx_t *ctx = obj->ctx;
         int num = -1;
+        int i;
 
         if ((sscanf(name, "in%d", &num) == 1) && (num >= 0)) {
-                ctx->inputs = realloc(ctx->inputs, sizeof(hk_pad_t *)*(ctx->ninputs+1));
-		ctx->inputs[ctx->ninputs] = hk_pad_create(obj, HK_PAD_IN, name);
-                ctx->ninputs++;
+                int ninputs2 = num + 1;
+                if (ninputs2 > ctx->ninputs) {
+                        log_debug(2, CLASS_NAME ": grow input table %d -> %d", ctx->ninputs, ninputs2);
+                        ctx->inputs = realloc(ctx->inputs, sizeof(hk_pad_t *)*ninputs2);
+                        for (i = ctx->ninputs; i < ninputs2; i++) {
+                                ctx->inputs[i] = NULL;
+                        }
+                        ctx->ninputs = ninputs2;
+                }
+		ctx->inputs[num] = hk_pad_create(obj, HK_PAD_IN, name);
                 log_str(CLASS_NAME ": add input '%s'", name);
         }
 
@@ -76,7 +84,7 @@ static void _update(ctx_t *ctx)
 	int i;
 
 	for (i = 0; i < ctx->ninputs; i++) {
-		if (ctx->inputs[i]->state) {
+		if ((ctx->inputs[i] != NULL) && ctx->inputs[i]->state) {
 			out_state = 1;
 			break;
 		}
