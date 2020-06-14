@@ -30,34 +30,42 @@ typedef struct {
 } ctx_t;
 
 
+static int add_input(void *user_data, char *name, char *value)
+{
+	hk_obj_t *obj = user_data;
+	ctx_t *ctx = obj->ctx;
+        int num = -1;
+        int i;
+
+        if ((sscanf(name, "in%d", &num) == 1) && (num >= 0)) {
+                int ninputs2 = num + 1;
+                if (ninputs2 > ctx->ninputs) {
+                        log_debug(2, CLASS_NAME ": grow input table %d -> %d", ctx->ninputs, ninputs2);
+                        ctx->inputs = realloc(ctx->inputs, sizeof(hk_pad_t *)*ninputs2);
+                        for (i = ctx->ninputs; i < ninputs2; i++) {
+                                ctx->inputs[i] = NULL;
+                        }
+                        ctx->ninputs = ninputs2;
+                }
+		ctx->inputs[num] = hk_pad_create(obj, HK_PAD_IN, name);
+                log_str(CLASS_NAME ": add input '%s'", name);
+        }
+
+        return 1;
+}
+
+
 static int _new(hk_obj_t *obj)
 {
-	ctx_t *ctx;
-	int ninputs = 1;
-	char *str;
-	int i;
-
-	str = hk_prop_get(&obj->props, "ninputs");
-	if (str != NULL) {
-		ninputs = atoi(str);
-		if (ninputs < 2) {
-			log_str("ERROR: Class '" CLASS_NAME "': cannot instanciate object '%s' with less than 2 inputs", obj->name);
-			return -1;
-		}
-	}
-
-	ctx = malloc(sizeof(ctx_t));
+	ctx_t *ctx = malloc(sizeof(ctx_t));
 	memset(ctx, 0, sizeof(ctx_t));
 	ctx->obj = obj;
-	ctx->ninputs = ninputs;
-	ctx->inputs = calloc(ninputs, sizeof(hk_pad_t *));
 	obj->ctx = ctx;
 
 	ctx->sel = hk_pad_create(obj, HK_PAD_IN, "sel");
 
-	for (i = 0; i < ninputs; i++) {
-		ctx->inputs[i] = hk_pad_create(obj, HK_PAD_IN, "in%d", i);
-	}
+        hk_prop_foreach(&obj->props, add_input, (void *) obj);
+        log_str(CLASS_NAME ": %d inputs probed", ctx->ninputs);
 
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 
@@ -71,7 +79,7 @@ static void update_output(ctx_t *ctx)
 
 	log_debug(3, CLASS_NAME ".update_output: sel=%d", sel);
 
-	if ((sel >= 0) && (sel < ctx->ninputs)) {
+	if ((sel >= 0) && (sel < ctx->ninputs) && (ctx->inputs[sel] != NULL)) {
 		char *str = (char *) ctx->inputs[sel]->value.base;
 		log_debug(3, "  -> '%s'", str);
 		if (str != NULL) {
@@ -100,9 +108,16 @@ static void _input(hk_pad_t *pad, char *value)
 }
 
 
+static void _start(hk_obj_t *obj)
+{
+	update_output(obj->ctx);
+}
+
+
 hk_class_t _class_mux = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,
+	.start = _start,
 	.input = _input,
 };
