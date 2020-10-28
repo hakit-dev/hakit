@@ -311,12 +311,18 @@ static void ctx_tile_feed(ctx_t *ctx, char *str)
 
 static void ctx_tile_feed_local(ctx_t *ctx, char *path)
 {
+        char *rpath = realpath(path, NULL);
+        if (rpath == NULL) {
+                log_str("ERROR: Local tile '%s' not found", path);
+                return;
+        }
+
         tile_t *tile = hk_tab_push(&ctx->tiles);
         int ofs;
 
         tile->name = NULL;
         tile->rev = NULL;
-        tile->path = realpath(path, NULL);
+        tile->path = rpath;
         tile->ready = 1;
 
         ofs = strlen(tile->path);
@@ -1428,7 +1434,15 @@ int main(int argc, char *argv[])
 
                 /* Start local tiles, if any */
                 if (opt_tile != NULL) {
-			ctx_tile_feed_local(ctx, opt_tile);
+                        char *s = opt_tile;
+                        while (s != NULL) {
+                                char *sep = strchr(s, ',');
+                                if (sep != NULL) {
+                                        *(sep++) = '\0';
+                                }
+                                ctx_tile_feed_local(ctx, s);
+                                s = sep;
+                        }
                 }
 
 		for (i = 1; i < argc; i++) {
