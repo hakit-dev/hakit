@@ -17,14 +17,13 @@ include ../defs.mk
 
 INSTALL_SHARE = $(DESTDIR)/usr/share/hakit/ui
 
-all:: check favicon css
+all:: check css
 
-.PHONY: favicon css
-favicon: favicon.ico
+.PHONY: css
 css: switch3.css
 
 clean::
-	$(RM) *~ favicon.ico
+	$(RM) *~
 
 install: all
 	$(MKDIR) $(INSTALL_SHARE)
