@@ -559,9 +559,3 @@ void comm_source_update_int(int id, int value)
 	snprintf(str, sizeof(str), "%d", value);
 	comm_source_update_str(id, str);
 }
-
-
-int comm_wget(char *uri, comm_recv_func_t *func, void *user_data)
-{
-	return ws_client_get(&comm.ws->client, uri, NULL, func, user_data);
-}
