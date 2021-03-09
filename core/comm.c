@@ -474,14 +474,6 @@ void comm_sink_update_str(int id, char *value)
 }
 
 
-void comm_sink_update_int(int id, int value)
-{
-	char str[32];
-	snprintf(str, sizeof(str), "%d", value);
-	comm_sink_update_str(id, str);
-}
-
-
 int comm_source_register(hk_obj_t *obj, int local, int event)
 {
 	hk_source_t *source = hk_source_register(&comm.eps, obj, local, event);
@@ -550,12 +542,4 @@ void comm_source_update_str(int id, char *value)
 
         /* Update websocket link */
 	comm_ws_send(comm.ws, &source->ep);
-}
-
-
-void comm_source_update_int(int id, int value)
-{
-	char str[32];
-	snprintf(str, sizeof(str), "%d", value);
-	comm_source_update_str(id, str);
 }
