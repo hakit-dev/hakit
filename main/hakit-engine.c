@@ -69,6 +69,9 @@ static const options_entry_t options_entries[] = {
 // Program body
 //===================================================
 
+extern const hk_class_t *static_classes[];
+
+
 int main(int argc, char *argv[])
 {
 	int use_ssl = 1;  // 0 = disable SSL, 2 = allow insecure SSL
@@ -118,7 +121,12 @@ int main(int argc, char *argv[])
 		ws_auth_init(opt_http_auth);
 	}
 
-	/* Init module management */
+        /* Init static class modules */
+        for (i = 0; static_classes[i] != NULL; i++) {
+                hk_class_register((hk_class_t *) static_classes[i]);
+        }
+        
+	/* Init loadable class module management */
 	if (hk_mod_init(opt_class_path)) {
 		return 2;
 	}

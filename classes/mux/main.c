@@ -114,7 +114,7 @@ static void _start(hk_obj_t *obj)
 }
 
 
-hk_class_t _class_mux = {
+const hk_class_t _class_mux = {
 	.name = CLASS_NAME,
 	.version = VERSION,
 	.new = _new,

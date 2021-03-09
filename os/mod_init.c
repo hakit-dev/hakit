@@ -53,8 +53,11 @@ static int hk_mod_init_dir(char *dir)
 
 			/* Open device library */
                         snprintf(path, sizeof(path), "%s/%s/device/%s.so", dir, name, name);
-                        void *dl = dlopen(path, RTLD_LAZY);
+                        if (!is_file(path)) {
+                                continue;
+                        }
 
+                        void *dl = dlopen(path, RTLD_LAZY);
 			if (dl != NULL) {
                                 char varname[namelen+8];
                                 snprintf(varname, sizeof(varname), "_class_%s", name);
@@ -83,7 +86,7 @@ static int hk_mod_init_dir(char *dir)
 				}
 			}
 			else {
-				log_str("Class '%s': %s: %s", name, path, dlerror());
+				log_str("Class '%s': %s", name, dlerror());
 			}
 		}
 	}
