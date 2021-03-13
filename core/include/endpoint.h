@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation KIT - www.hakit.net
- * Copyright (C) 2014-2017 Sylvain Giroudon
+ * Copyright (C) 2014-2021 Sylvain Giroudon
  *
  * HAKit Endpoints management
  *
@@ -30,15 +30,10 @@
  * Endpoint collection
  */
 
-typedef struct {
-	hk_tab_t sinks;       // Table of (hk_sink_t *)
-	hk_tab_t sources;     // Table of (hk_source_t *)
-        int trace_depth;
-} hk_endpoints_t;
-
-extern int hk_endpoints_init(hk_endpoints_t *eps);
-extern void hk_endpoints_set_trace_depth(hk_endpoints_t *eps, int trace_depth);
-extern void hk_endpoints_shutdown(hk_endpoints_t *eps);
+extern int hk_endpoints_init(void);
+extern void hk_endpoints_shutdown(void);
+extern void hk_endpoints_set_trace_depth(int trace_depth);
+extern int hk_endpoints_get_trace_depth(void);
 
 
 /*
@@ -95,13 +90,12 @@ typedef struct {
         hk_ep_t *local_source;
 } hk_sink_t;
 
-extern hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local);
-extern hk_sink_t *hk_sink_retrieve_by_name(hk_endpoints_t *eps, char *name);
-extern void hk_sink_update_by_name(hk_endpoints_t *eps, char *name, char *value);
-extern void hk_sink_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *user_data);
-extern void hk_sink_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_data);
+extern hk_sink_t *hk_sink_register(hk_obj_t *obj, int local);
+extern hk_sink_t *hk_sink_retrieve_by_name(char *name);
+extern void hk_sink_update_by_name(char *name, char *value);
+extern void hk_sink_foreach(hk_ep_foreach_func_t func, void *user_data);
+extern void hk_sink_foreach_public(hk_ep_func_t func, void *user_data);
 
-extern int hk_sink_id(hk_sink_t *sink);
 extern void hk_sink_add_handler(hk_sink_t *sink, hk_ep_func_t func, void *user_data);
 extern int hk_sink_is_public(hk_sink_t *sink);
 extern char *hk_sink_update(hk_sink_t *sink, char *value);
@@ -116,13 +110,12 @@ typedef struct {
 	hk_tab_t local_sinks;   // Table of (hk_sink_t *);
 } hk_source_t;
 
-extern hk_source_t *hk_source_register(hk_endpoints_t *eps, hk_obj_t *obj, int local, int event);
-extern hk_source_t *hk_source_retrieve_by_name(hk_endpoints_t *eps, char *name);
-extern int hk_source_to_advertise(hk_endpoints_t *eps);
-extern void hk_source_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *user_data);
-extern void hk_source_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_data);
+extern hk_source_t *hk_source_register(hk_obj_t *obj, int local, int event);
+extern hk_source_t *hk_source_retrieve_by_name(char *name);
+extern int hk_source_to_advertise(void);
+extern void hk_source_foreach(hk_ep_foreach_func_t func, void *user_data);
+extern void hk_source_foreach_public(hk_ep_func_t func, void *user_data);
 
-extern int hk_source_id(hk_source_t *source);
 extern int hk_source_is_public(hk_source_t *source);
 extern int hk_source_is_event(hk_source_t *source);
 extern char *hk_source_update(hk_source_t *source, char *value);

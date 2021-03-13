@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation KIT - www.hakit.net
- * Copyright (C) 2014-2017 Sylvain Giroudon
+ * Copyright (C) 2014-2021 Sylvain Giroudon
  *
  * HAKit Connectivity Protocol - command processing
  *
@@ -21,13 +21,7 @@
 #include "hkcp_cmd.h"
 
 
-typedef struct {
-        hk_endpoints_t *eps;
-        hkcp_t *hkcp;
-} hkcp_cmd_t;
-
-
-static void hkcp_command_set(hk_endpoints_t *eps, int argc, char **argv, buf_t *out_buf)
+static void hkcp_command_set(int argc, char **argv, buf_t *out_buf)
 {
 	int i;
 
@@ -47,7 +41,7 @@ static void hkcp_command_set(hk_endpoints_t *eps, int argc, char **argv, buf_t *
                                 name = args;
                         }
 
-			sink = hk_sink_retrieve_by_name(eps, name);
+			sink = hk_sink_retrieve_by_name(name);
 			if (sink != NULL) {
 				/* Update sink value and invoke sink event callback */
 				hk_sink_update(sink, value);
@@ -82,23 +76,23 @@ static int hkcp_command_get_sink(buf_t *out_buf, hk_sink_t *sink)
 }
 
 
-static void hkcp_command_get(hk_endpoints_t *eps, int argc, char **argv, buf_t *out_buf)
+static void hkcp_command_get(int argc, char **argv, buf_t *out_buf)
 {
 	int i;
 
 	if (argc > 1) {
 		for (i = 1; i < argc; i++) {
-                        hk_source_t *source = hk_source_retrieve_by_name(eps, argv[i]);
+                        hk_source_t *source = hk_source_retrieve_by_name(argv[i]);
 			hk_ep_dump(HK_EP(source), out_buf);
 		}
 		for (i = 1; i < argc; i++) {
-                        hk_sink_t *sink = hk_sink_retrieve_by_name(eps, argv[i]);
+                        hk_sink_t *sink = hk_sink_retrieve_by_name(argv[i]);
 			hk_ep_dump(HK_EP(sink), out_buf);
 		}
 	}
 	else {
-                hk_source_foreach(eps, (hk_ep_foreach_func_t) hkcp_command_get_source, out_buf);
-                hk_sink_foreach(eps, (hk_ep_foreach_func_t) hkcp_command_get_sink, out_buf);
+                hk_source_foreach((hk_ep_foreach_func_t) hkcp_command_get_source, out_buf);
+                hk_sink_foreach((hk_ep_foreach_func_t) hkcp_command_get_sink, out_buf);
 	}
 
 	buf_append_str(out_buf, ".\n");
@@ -121,7 +115,7 @@ static void hkcp_command_nodes(buf_t *out_buf, hkcp_t *hkcp)
 
 		if (node != NULL) {
 			buf_append_str(out_buf, node->name);
-                        hk_source_foreach(hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_nodes_source, out_buf);
+                        hk_source_foreach((hk_ep_foreach_func_t) hkcp_command_nodes_source, out_buf);
 			buf_append_str(out_buf, "\n");
 		}
 	}
@@ -161,7 +155,7 @@ static void hkcp_command_sources(hkcp_t *hkcp, buf_t *out_buf)
                 .out_buf = out_buf,
         };
 
-        hk_source_foreach(hkcp->eps, (hk_ep_foreach_func_t) hkcp_command_sources_dump, &ctx);
+        hk_source_foreach((hk_ep_foreach_func_t) hkcp_command_sources_dump, &ctx);
 	buf_append_str(out_buf, ".\n");
 }
 
@@ -179,9 +173,9 @@ static int hkcp_command_sinks_dump(buf_t *out_buf, hk_sink_t *sink)
 }
 
 
-static void hkcp_command_sinks(hk_endpoints_t *eps, buf_t *out_buf)
+static void hkcp_command_sinks(buf_t *out_buf)
 {
-        hk_sink_foreach(eps, (hk_ep_foreach_func_t) hkcp_command_sinks_dump, out_buf);
+        hk_sink_foreach((hk_ep_foreach_func_t) hkcp_command_sinks_dump, out_buf);
 	buf_append_str(out_buf, ".\n");
 }
 
@@ -198,7 +192,7 @@ static int hkcp_command_watch_source(buf_t *out_buf, hk_source_t *source)
 }
 
 
-void hkcp_command_watch(hk_endpoints_t *eps, int argc, char **argv, buf_t *out_buf, int *pwatch)
+void hkcp_command_watch(int argc, char **argv, buf_t *out_buf, int *pwatch)
 {
 	int err = 0;
 
@@ -225,7 +219,7 @@ void hkcp_command_watch(hk_endpoints_t *eps, int argc, char **argv, buf_t *out_b
 	else {
                 buf_append_str(out_buf, ".\n");
                 if (*pwatch) {
-                        hk_source_foreach(eps, (hk_ep_foreach_func_t) hkcp_command_watch_source, out_buf);
+                        hk_source_foreach((hk_ep_foreach_func_t) hkcp_command_watch_source, out_buf);
                 }
 	}
 }
@@ -234,16 +228,16 @@ void hkcp_command_watch(hk_endpoints_t *eps, int argc, char **argv, buf_t *out_b
 void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 {
 	if (strcmp(argv[0], "set") == 0) {
-		hkcp_command_set(hkcp->eps, argc, argv, out_buf);
+		hkcp_command_set(argc, argv, out_buf);
 	}
 	else if (strcmp(argv[0], "get") == 0) {
-		hkcp_command_get(hkcp->eps, argc, argv, out_buf);
+		hkcp_command_get(argc, argv, out_buf);
 	}
 	else if (strcmp(argv[0], "nodes") == 0) {
 		hkcp_command_nodes(out_buf, hkcp);
 	}
 	else if (strcmp(argv[0], "sinks") == 0) {
-		hkcp_command_sinks(hkcp->eps, out_buf);
+		hkcp_command_sinks(out_buf);
 	}
 	else if (strcmp(argv[0], "sources") == 0) {
 		hkcp_command_sources(hkcp, out_buf);
@@ -252,7 +246,7 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 		buf_append_str(out_buf, "VERSION: " HAKIT_VERSION "\n");
 		buf_append_str(out_buf, "ARCH: " ARCH "\n");
 		buf_append_fmt(out_buf, "T0: %llu\n", tstamp_t0());
-		buf_append_fmt(out_buf, "TRACE_DEPTH: %d\n", hkcp->eps->trace_depth);
+		buf_append_fmt(out_buf, "TRACE_DEPTH: %d\n", hk_endpoints_get_trace_depth());
 		buf_append_str(out_buf, ".\n");
 	}
 	else {

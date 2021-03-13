@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation KIT - www.hakit.net
- * Copyright (C) 2014-2017 Sylvain Giroudon
+ * Copyright (C) 2014-2021 Sylvain Giroudon
  *
  * HAKit Endpoints management
  *
@@ -16,6 +16,62 @@
 #include "tab.h"
 #include "log.h"
 #include "endpoint.h"
+
+
+static int hk_sink_free(void *user_data, hk_sink_t *sink);
+static int hk_source_free(void *user_data, hk_source_t *source);
+
+
+/*
+ * Endpoint collection
+ */
+
+typedef struct {
+	hk_tab_t sinks;       // Table of (hk_sink_t *)
+	hk_tab_t sources;     // Table of (hk_source_t *)
+        int trace_depth;
+} hk_endpoints_t;
+
+static hk_endpoints_t hk_endpoints;
+
+
+int hk_endpoints_init(void)
+{
+	memset(&hk_endpoints, 0, sizeof(hk_endpoints));
+	hk_tab_init(&hk_endpoints.sinks, sizeof(hk_sink_t *));
+	hk_tab_init(&hk_endpoints.sources, sizeof(hk_source_t *));
+	return 0;
+}
+
+
+void hk_endpoints_shutdown(void)
+{
+        hk_sink_foreach((hk_ep_foreach_func_t) hk_sink_free, NULL);
+	hk_tab_cleanup(&hk_endpoints.sinks);
+
+        hk_source_foreach((hk_ep_foreach_func_t) hk_source_free, NULL);
+	hk_tab_cleanup(&hk_endpoints.sources);
+}
+
+
+void hk_endpoints_set_trace_depth(int depth)
+{
+        if (depth > HK_TRACE_MAX_DEPTH) {
+                log_str("WARNING: Trace depth too high: limiting to %d points.", depth, HK_TRACE_MAX_DEPTH);
+                depth = HK_TRACE_MAX_DEPTH;
+        }
+        else if (depth <= 0) {
+                depth = HK_TRACE_DEFAULT_DEPTH;
+        }
+
+        hk_endpoints.trace_depth = depth;
+}
+
+
+int hk_endpoints_get_trace_depth(void)
+{
+        return hk_endpoints.trace_depth;
+}
 
 
 /*
@@ -99,19 +155,6 @@ void hk_ep_append_value(hk_ep_t *ep, buf_t *out_buf)
 }
 
 
-static int hk_ep_id(hk_ep_t *ep)
-{
-        if (ep == NULL) {
-                return -1;
-        }
-        if (ep->obj == NULL) {
-                return -1;
-        }
-
-        return ep->id;
-}
-
-
 static int hk_ep_is_public(hk_ep_t *ep)
 {
         if (ep == NULL) {
@@ -167,12 +210,12 @@ static void hk_ep_cleanup(hk_ep_t *ep)
  * Sinks
  */
 
-hk_sink_t *hk_sink_retrieve_by_name(hk_endpoints_t *eps, char *name)
+hk_sink_t *hk_sink_retrieve_by_name(char *name)
 {
 	int i;
 
-	for (i = 0; i < eps->sinks.nmemb; i++) {
-		hk_sink_t *sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, i);
+	for (i = 0; i < hk_endpoints.sinks.nmemb; i++) {
+		hk_sink_t *sink = HK_TAB_VALUE(hk_endpoints.sinks, hk_sink_t *, i);
                 if ((sink != NULL) && (sink->ep.obj != NULL) && (sink->ep.obj->name != NULL)) {
 			if (strcmp(sink->ep.obj->name, name) == 0) {
 				return sink;
@@ -184,14 +227,14 @@ hk_sink_t *hk_sink_retrieve_by_name(hk_endpoints_t *eps, char *name)
 }
 
 
-static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local)
+static hk_sink_t *hk_sink_alloc(hk_obj_t *obj, int local)
 {
 	hk_sink_t *sink = NULL;
 	int i;
 
         /* Search a free entry in the sink table */
-	for (i = 0; (i < eps->sinks.nmemb) && (sink == NULL); i++) {
-		sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, i);
+	for (i = 0; (i < hk_endpoints.sinks.nmemb) && (sink == NULL); i++) {
+		sink = HK_TAB_VALUE(hk_endpoints.sinks, hk_sink_t *, i);
 		if (sink->ep.obj != NULL) {
                         sink = NULL;
 		}
@@ -199,12 +242,12 @@ static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local)
 
         /* If no free entry found, create a new one */
         if (sink == NULL) {
-                hk_sink_t **psink = hk_tab_push(&eps->sinks);
+                hk_sink_t **psink = hk_tab_push(&hk_endpoints.sinks);
                 *psink = sink = (hk_sink_t *) malloc(sizeof(hk_sink_t));
                 memset(sink, 0, sizeof(hk_sink_t));
         }
 
-        hk_ep_init(&sink->ep, HK_EP_SINK, i, obj, eps->trace_depth);
+        hk_ep_init(&sink->ep, HK_EP_SINK, i, obj, hk_endpoints.trace_depth);
 
 	if (local) {
 		sink->ep.flag |= HK_FLAG_LOCAL;
@@ -262,24 +305,24 @@ static void hk_sink_local_connect(hk_sink_t *sink, hk_source_t *source)
 }
 
 
-hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local)
+hk_sink_t *hk_sink_register(hk_obj_t *obj, int local)
 {
 	hk_sink_t *sink;
 
 	/* Ensure there is not sink with this name */
-        sink = hk_sink_retrieve_by_name(eps, obj->name);
+        sink = hk_sink_retrieve_by_name(obj->name);
 	if (sink != NULL) {
 		log_str("ERROR: Cannot register sink '%s': sink #%d is already registered with this name\n", obj->name, sink->ep.id);
 		return NULL;
 	}
 
 	/* Allocate new sink */
-	sink = hk_sink_alloc(eps, obj, local);
-	log_debug(2, "hk_sink_register '%s' #%d (%d elements)", obj->name, sink->ep.id, eps->sinks.nmemb);
+	sink = hk_sink_alloc(obj, local);
+	log_debug(2, "hk_sink_register '%s' #%d (%d elements)", obj->name, sink->ep.id, hk_endpoints.sinks.nmemb);
 
         /* Establish local connection with source, if any */
         if (!local) {
-                hk_source_t *source = hk_source_retrieve_by_name(eps, obj->name);
+                hk_source_t *source = hk_source_retrieve_by_name(obj->name);
                 if (source != NULL) {
                         hk_sink_local_connect(sink, source);
                 }
@@ -290,9 +333,9 @@ hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local)
 
 
 #if 0
-static void hk_sink_unregister(hk_endpoints_t *eps, char *name)
+static void hk_sink_unregister(char *name)
 {
-	hk_sink_t *sink = hk_sink_retrieve_by_name(eps, name);
+	hk_sink_t *sink = hk_sink_retrieve_by_name(name);
 	int i, j;
 
 	if (sink == NULL) {
@@ -302,8 +345,8 @@ static void hk_sink_unregister(hk_endpoints_t *eps, char *name)
         log_debug(2, "hk_sink_unregister '%s' #%d", name, sink->ep.id);
 
         /* Cancel connections to local sources */
-        for (i = 0; i < eps->sources.nmemb; i++) {
-                hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
+        for (i = 0; i < hk_endpoints.sources.nmemb; i++) {
+                hk_source_t *source = HK_TAB_VALUE(hk_endpoints.sources, hk_source_t *, i);
                 for (j = 0; j < source->local_sinks.nmemb; j++) {
                         hk_sink_t **psink = HK_TAB_PTR(source->local_sinks, hk_sink_t *, j);
                         if (*psink == sink) {
@@ -361,15 +404,9 @@ char *hk_sink_update(hk_sink_t *sink, char *value)
 }
 
 
-int hk_sink_id(hk_sink_t *sink)
+void hk_sink_update_by_name(char *name, char *value)
 {
-        return hk_ep_id(HK_EP(sink));
-}
-
-
-void hk_sink_update_by_name(hk_endpoints_t *eps, char *name, char *value)
-{
-	hk_sink_t *sink = hk_sink_retrieve_by_name(eps, name);
+	hk_sink_t *sink = hk_sink_retrieve_by_name(name);
 
 	if (sink != NULL) {
 		log_debug(2, "hk_sink_update %s='%s'", name, value);
@@ -381,12 +418,12 @@ void hk_sink_update_by_name(hk_endpoints_t *eps, char *name, char *value)
 }
 
 
-void hk_sink_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *user_data)
+void hk_sink_foreach(hk_ep_foreach_func_t func, void *user_data)
 {
 	int i;
 
-	for (i = 0; i < eps->sinks.nmemb; i++) {
-		hk_sink_t *sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, i);
+	for (i = 0; i < hk_endpoints.sinks.nmemb; i++) {
+		hk_sink_t *sink = HK_TAB_VALUE(hk_endpoints.sinks, hk_sink_t *, i);
                 if ((sink != NULL) && (sink->ep.obj != NULL)) {
                         if (func(user_data, HK_EP(sink)) == 0) {
                                 return;
@@ -396,12 +433,12 @@ void hk_sink_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *user_
 }
 
 
-void hk_sink_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_data)
+void hk_sink_foreach_public(hk_ep_func_t func, void *user_data)
 {
 	int i;
 
-	for (i = 0; i < eps->sinks.nmemb; i++) {
-		hk_sink_t *sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, i);
+	for (i = 0; i < hk_endpoints.sinks.nmemb; i++) {
+		hk_sink_t *sink = HK_TAB_VALUE(hk_endpoints.sinks, hk_sink_t *, i);
                 if ((sink != NULL) && (sink->ep.obj != NULL)) {
                         if ((sink->ep.flag & HK_FLAG_LOCAL) == 0) {
                                 func(user_data, &sink->ep);
@@ -415,13 +452,13 @@ void hk_sink_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_d
  * Sources
  */
 
-int hk_source_to_advertise(hk_endpoints_t *eps)
+int hk_source_to_advertise(void)
 {
 	int count = 0;
 	int i;
 
-	for (i = 0; i < eps->sources.nmemb; i++) {
-		hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
+	for (i = 0; i < hk_endpoints.sources.nmemb; i++) {
+		hk_source_t *source = HK_TAB_VALUE(hk_endpoints.sources, hk_source_t *, i);
                 if (hk_source_is_public(source)) {
 			count++;
 		}
@@ -431,12 +468,12 @@ int hk_source_to_advertise(hk_endpoints_t *eps)
 }
 
 
-hk_source_t *hk_source_retrieve_by_name(hk_endpoints_t *eps, char *name)
+hk_source_t *hk_source_retrieve_by_name(char *name)
 {
 	int i;
 
-	for (i = 0; i < eps->sources.nmemb; i++) {
-		hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
+	for (i = 0; i < hk_endpoints.sources.nmemb; i++) {
+		hk_source_t *source = HK_TAB_VALUE(hk_endpoints.sources, hk_source_t *, i);
 		if ((source != NULL) && (source->ep.obj != NULL)) {
 			if (strcmp(source->ep.obj->name, name) == 0) {
 				return source;
@@ -448,14 +485,14 @@ hk_source_t *hk_source_retrieve_by_name(hk_endpoints_t *eps, char *name)
 }
 
 
-static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local, int event)
+static hk_source_t *hk_source_alloc(hk_obj_t *obj, int local, int event)
 {
 	hk_source_t *source = NULL;
 	int i;
 
         /* Search a free entry in the source table */
-	for (i = 0; (i < eps->sources.nmemb) && (source == NULL); i++) {
-		source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
+	for (i = 0; (i < hk_endpoints.sources.nmemb) && (source == NULL); i++) {
+		source = HK_TAB_VALUE(hk_endpoints.sources, hk_source_t *, i);
 		if (source->ep.obj != NULL) {
                         source = NULL;
 		}
@@ -463,12 +500,12 @@ static hk_source_t *hk_source_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int loca
 
         /* If no free entry found, create a new one */
         if (source == NULL) {
-                hk_source_t **psource = hk_tab_push(&eps->sources);
+                hk_source_t **psource = hk_tab_push(&hk_endpoints.sources);
                 *psource = source = (hk_source_t *) malloc(sizeof(hk_source_t));
                 memset(source, 0, sizeof(hk_source_t));
         }
 
-        hk_ep_init(&source->ep, HK_EP_SOURCE, i, obj, eps->trace_depth);
+        hk_ep_init(&source->ep, HK_EP_SOURCE, i, obj, hk_endpoints.trace_depth);
 
 	if (local) {
 		source->ep.flag |= HK_FLAG_LOCAL;
@@ -502,23 +539,23 @@ static int hk_source_free(void *user_data, hk_source_t *source)
 }
 
 
-hk_source_t *hk_source_register(hk_endpoints_t *eps, hk_obj_t *obj, int local, int event)
+hk_source_t *hk_source_register(hk_obj_t *obj, int local, int event)
 {
 	hk_source_t *source;
 
 	/* Ensure there is not source with this name */
-        source = hk_source_retrieve_by_name(eps, obj->name);
+        source = hk_source_retrieve_by_name(obj->name);
 	if (source != NULL) {
 		log_str("ERROR: Cannot register source '%s': source #%d is already registered with this name\n", obj->name, source->ep.id);
 		return NULL;
 	}
 
 	/* Allocate new source */
-	source = hk_source_alloc(eps, obj, local, event);
-	log_debug(2, "hk_source_register '%s' #%d (%d elements)", obj->name, source->ep.id, eps->sources.nmemb);
+	source = hk_source_alloc(obj, local, event);
+	log_debug(2, "hk_source_register '%s' #%d (%d elements)", obj->name, source->ep.id, hk_endpoints.sources.nmemb);
 
         /* Establish local connection with sink, if any */
-        hk_sink_t *sink = hk_sink_retrieve_by_name(eps, obj->name);
+        hk_sink_t *sink = hk_sink_retrieve_by_name(obj->name);
 	if (sink != NULL) {
                 hk_sink_local_connect(sink, source);
 	}
@@ -528,9 +565,9 @@ hk_source_t *hk_source_register(hk_endpoints_t *eps, hk_obj_t *obj, int local, i
 
 
 #if 0
-void hk_source_unregister(hk_endpoints_t *eps, char *name)
+void hk_source_unregister(char *name)
 {
-	hk_source_t *source = hk_source_retrieve_by_name(eps, name);
+	hk_source_t *source = hk_source_retrieve_by_name(name);
 
 	if (source == NULL) {
                 return;
@@ -562,12 +599,12 @@ int hk_source_is_event(hk_source_t *source)
 }
 
 
-void hk_source_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *user_data)
+void hk_source_foreach(hk_ep_foreach_func_t func, void *user_data)
 {
 	int i;
 
-	for (i = 0; i < eps->sources.nmemb; i++) {
-		hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
+	for (i = 0; i < hk_endpoints.sources.nmemb; i++) {
+		hk_source_t *source = HK_TAB_VALUE(hk_endpoints.sources, hk_source_t *, i);
                 if (func(user_data, HK_EP(source)) == 0) {
                         return;
                 }
@@ -575,12 +612,12 @@ void hk_source_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *use
 }
 
 
-void hk_source_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_data)
+void hk_source_foreach_public(hk_ep_func_t func, void *user_data)
 {
 	int i;
 
-	for (i = 0; i < eps->sources.nmemb; i++) {
-		hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, i);
+	for (i = 0; i < hk_endpoints.sources.nmemb; i++) {
+		hk_source_t *source = HK_TAB_VALUE(hk_endpoints.sources, hk_source_t *, i);
 		if ((source->ep.obj != NULL) && ((source->ep.flag & HK_FLAG_LOCAL) == 0)) {
 			////int event = (source->ep.flag & HK_FLAG_EVENT) ? 1:0;
 			////func(user_data, source->ep.obj->name, (char *) source->ep.value.base, event);
@@ -622,46 +659,4 @@ char *hk_source_update(hk_source_t *source, char *value)
         source->ep.locked = 0;
 
 	return name;
-}
-
-
-int hk_source_id(hk_source_t *source)
-{
-        return hk_ep_id(HK_EP(source));
-}
-
-
-/*
- * Endpoint collection
- */
-
-int hk_endpoints_init(hk_endpoints_t *eps)
-{
-	hk_tab_init(&eps->sinks, sizeof(hk_sink_t *));
-	hk_tab_init(&eps->sources, sizeof(hk_source_t *));
-	return 0;
-}
-
-
-void hk_endpoints_set_trace_depth(hk_endpoints_t *eps, int depth)
-{
-        if (depth > HK_TRACE_MAX_DEPTH) {
-                log_str("WARNING: Trace depth too high: limiting to %d points.", depth, HK_TRACE_MAX_DEPTH);
-                depth = HK_TRACE_MAX_DEPTH;
-        }
-        else if (depth <= 0) {
-                depth = HK_TRACE_DEFAULT_DEPTH;
-        }
-
-        eps->trace_depth = depth;
-}
-
-
-void hk_endpoints_shutdown(hk_endpoints_t *eps)
-{
-        hk_sink_foreach(eps, (hk_ep_foreach_func_t) hk_sink_free, NULL);
-	hk_tab_cleanup(&eps->sinks);
-
-        hk_source_foreach(eps, (hk_ep_foreach_func_t) hk_source_free, NULL);
-	hk_tab_cleanup(&eps->sources);
 }

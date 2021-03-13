@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation KIT - www.hakit.net
- * Copyright (C) 2014-2017 Sylvain Giroudon
+ * Copyright (C) 2014-2021 Sylvain Giroudon
  *
  * HAKit Connectivity Protocol - command processing
  *
@@ -15,6 +15,6 @@
 #include "hkcp.h"
 
 extern void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf);
-extern void hkcp_command_watch(hk_endpoints_t *eps, int argc, char **argv, buf_t *out_buf, int *pwatch);
+extern void hkcp_command_watch(int argc, char **argv, buf_t *out_buf, int *pwatch);
 
 #endif /* __HAKIT_HKCP_CMD_H__ */

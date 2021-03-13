@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation KIT - www.hakit.net
- * Copyright (C) 2014 Sylvain Giroudon
+ * Copyright (C) 2014-2021 Sylvain Giroudon
  *
  * This file is subject to the terms and conditions of the GNU Lesser
  * General Public License v2.1. See the file LICENSE in the top level
@@ -38,7 +38,6 @@
 #define HAKIT_SHARE_DIR "/usr/share/hakit/"
 
 typedef struct {
-	hk_endpoints_t eps;
 	hk_advertise_t adv;
 	int use_hkcp;
 	hkcp_t hkcp;
@@ -89,8 +88,8 @@ static void comm_mqtt_subscribe(mqtt_t *mqtt, hk_ep_t *ep)
 
 static void comm_mqtt_connected(comm_t *comm)
 {
-	hk_source_foreach_public(&comm->eps, (hk_ep_func_t) comm_mqtt_publish, &comm->mqtt);
-	hk_sink_foreach_public(&comm->eps, (hk_ep_func_t) comm_mqtt_subscribe, &comm->mqtt);
+	hk_source_foreach_public((hk_ep_func_t) comm_mqtt_publish, &comm->mqtt);
+	hk_sink_foreach_public((hk_ep_func_t) comm_mqtt_subscribe, &comm->mqtt);
 }
 
 
@@ -98,7 +97,7 @@ static void comm_mqtt_update(comm_t *comm, char *name, char *value)
 {
 	if (name != NULL) {
 		log_debug(2, "comm_mqtt_update %s='%s'", name, value);
-		hk_sink_update_by_name(&comm->eps, name, value);
+		hk_sink_update_by_name(name, value);
 	}
 	else {
 		log_debug(2, "comm_mqtt_update CONNECTED");
@@ -169,9 +168,9 @@ static int comm_command_trace(comm_t *comm, int argc, char **argv, buf_t *out_bu
         }
 
         if (name != NULL) {
-                hk_ep_t *ep = HK_EP(hk_source_retrieve_by_name(&comm->eps, name));
+                hk_ep_t *ep = HK_EP(hk_source_retrieve_by_name(name));
                 if (ep == NULL) {
-                        ep = HK_EP(hk_sink_retrieve_by_name(&comm->eps, name));
+                        ep = HK_EP(hk_sink_retrieve_by_name(name));
                         if (ep == NULL) {
                                 log_str("ERROR: Unknown endpoint '%s'", name);
                                 return -1;
@@ -188,8 +187,8 @@ static int comm_command_trace(comm_t *comm, int argc, char **argv, buf_t *out_bu
                         .t2 = t2,
                 };
 
-                hk_source_foreach(&comm->eps, (hk_ep_foreach_func_t) comm_command_trace_dump, &ctx);
-                hk_sink_foreach(&comm->eps, (hk_ep_foreach_func_t) comm_command_trace_dump, &ctx);
+                hk_source_foreach((hk_ep_foreach_func_t) comm_command_trace_dump, &ctx);
+                hk_sink_foreach((hk_ep_foreach_func_t) comm_command_trace_dump, &ctx);
         }
 
 	buf_append_str(out_buf, ".\n");
@@ -275,7 +274,7 @@ int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise)
 	memset(&comm, 0, sizeof(comm));
 
 	/* Init endpoint management */
-	hk_endpoints_init(&comm.eps);
+	hk_endpoints_init();
 
 	/* Init advertising protocol */
         if (hk_advertise_init(&comm.adv, advertise ? HAKIT_HKCP_PORT:0)) {
@@ -285,7 +284,7 @@ int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise)
 
 	/* Init HKCP gears */
 	comm.use_hkcp = use_hkcp;
-	ret = hkcp_init(&comm.hkcp, &comm.eps, use_hkcp ? HAKIT_HKCP_PORT:0, certs);
+	ret = hkcp_init(&comm.hkcp, use_hkcp ? HAKIT_HKCP_PORT:0, certs);
 	if (ret != 0) {
 		goto DONE;
 	}
@@ -338,7 +337,7 @@ DONE:
 	if (ret != 0) {
 		hkcp_shutdown(&comm.hkcp);
 		hk_advertise_shutdown(&comm.adv);
-		hk_endpoints_shutdown(&comm.eps);
+		hk_endpoints_shutdown();
 	}
 
 	return ret;
@@ -378,7 +377,7 @@ int comm_enable_mqtt(char *certs, char *mqtt_broker)
 
 void comm_set_trace_depth(int depth)
 {
-	hk_endpoints_set_trace_depth(&comm.eps, depth);
+	hk_endpoints_set_trace_depth(depth);
 }
 
 
@@ -412,7 +411,7 @@ int comm_tile_register(char *path)
 
 hk_sink_t *comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data)
 {
-	hk_sink_t *sink = hk_sink_register(&comm.eps, obj, local);
+	hk_sink_t *sink = hk_sink_register(obj, local);
 
 	if (sink != NULL) {
 		hk_sink_add_handler(sink, func, user_data);
@@ -439,7 +438,7 @@ void comm_sink_update_str(hk_sink_t *sink, char *value)
 
 hk_source_t *comm_source_register(hk_obj_t *obj, int local, int event)
 {
-	hk_source_t *source = hk_source_register(&comm.eps, obj, local, event);
+	hk_source_t *source = hk_source_register(obj, local, event);
 
 	if (source != NULL) {
 		if (comm.use_hkcp && (!local)) {

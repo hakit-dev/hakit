@@ -1,6 +1,6 @@
 /*
  * HAKit - The Home Automation KIT - www.hakit.net
- * Copyright (C) 2014 Sylvain Giroudon
+ * Copyright (C) 2014-2021 Sylvain Giroudon
  *
  * HAKit Connectivity Protocol
  *
@@ -183,7 +183,7 @@ static void hkcp_node_recv_sinks(hkcp_node_t *node, char *str)
 		}
 		
 		/* Check for local sources matching this remote sink */
-		hk_source_t *source = hk_source_retrieve_by_name(node->hkcp->eps, str);
+		hk_source_t *source = hk_source_retrieve_by_name(str);
 
 		/* If matching source is found, check for requesting node connection */
 		if (source != NULL) {
@@ -375,7 +375,7 @@ void hkcp_node_add(hkcp_t *hkcp, char *remote_ip)
 	}
 
 	/* Do nothing if we do not have any public source */
-	if (hk_source_to_advertise(hkcp->eps) <= 0) {
+	if (hk_source_to_advertise() <= 0) {
 		log_debug(2, "  => No public source found");
 		return;
 	}
@@ -544,7 +544,7 @@ static int hkcp_command_tcp(hkcp_t *hkcp, int argc, char **argv, tcp_sock_t *tcp
 
 	if (strcmp(argv[0], "watch") == 0) {
 		hkcp_command_ctx_t *ctx = tcp_sock_get_data(tcp_sock);
-		hkcp_command_watch(hkcp->eps, argc, argv, &out_buf, &ctx->watch);
+		hkcp_command_watch(argc, argv, &out_buf, &ctx->watch);
 	}
 	else {
 		hkcp_command(hkcp, argc, argv, &out_buf);
@@ -592,15 +592,13 @@ static void hkcp_tcp_event(tcp_sock_t *tcp_sock, tcp_io_t io, char *rbuf, int rs
  * Management engine
  */
 
-int hkcp_init(hkcp_t *hkcp, hk_endpoints_t *eps, int port, char *certs)
+int hkcp_init(hkcp_t *hkcp, int port, char *certs)
 {
 	int ret = -1;
 
 	log_debug(3, "hkcp_init port=%d", port);
 
 	memset(hkcp, 0, sizeof(hkcp_t));
-
-	hkcp->eps = eps;
 
 	/* Init node management */
 	hk_tab_init(&hkcp->nodes, sizeof(hkcp_node_t *));
