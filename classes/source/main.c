@@ -13,6 +13,7 @@
 
 #include "log.h"
 #include "mod.h"
+#include "endpoint.h"
 #include "comm.h"
 #include "version.h"
 
@@ -22,27 +23,33 @@
 typedef struct {
 	hk_obj_t *obj;
 	hk_pad_t *input;
-	int id;
+        hk_source_t *source;
 } ctx_t;
 
 
 static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
-	int local, event;
 
 	ctx = malloc(sizeof(ctx_t));
 	ctx->obj = obj;
 	obj->ctx = ctx;
 
 	ctx->input = hk_pad_create(obj, HK_PAD_IN, "in");
-	local = (hk_prop_get(&obj->props, "local") != NULL) ? 1:0;
-	event = (hk_prop_get(&obj->props, "event") != NULL) ? 1:0;
+	int local = (hk_prop_get(&obj->props, "local") != NULL) ? 1:0;
+	int event = (hk_prop_get(&obj->props, "event") != NULL) ? 1:0;
 
-	ctx->id = comm_source_register(obj, local, event);
+	ctx->source = comm_source_register(obj, local, event);
 
-	comm_source_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
-	comm_source_set_chart(ctx->id, hk_prop_get(&obj->props, "chart"));
+        char *widget = hk_prop_get(&obj->props, "widget");
+        if (widget != NULL) {
+                hk_ep_set_widget(HK_EP(ctx->source), widget);
+        }
+
+        char *chart = hk_prop_get(&obj->props, "chart");
+        if (chart != NULL) {
+                hk_ep_set_chart(HK_EP(ctx->source), chart);
+        }
 
 	return 0;
 }
@@ -51,7 +58,7 @@ static int _new(hk_obj_t *obj)
 static void _input(hk_pad_t *pad, char *value)
 {
 	ctx_t *ctx = pad->obj->ctx;
-	comm_source_update_str(ctx->id, value);
+	comm_source_update_str(ctx->source, value);
 }
 
 

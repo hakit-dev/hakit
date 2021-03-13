@@ -19,14 +19,10 @@ extern void comm_set_trace_depth(int depth);
 
 extern int comm_tile_register(char *path);
 
-extern int comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data);
-extern void comm_sink_set_widget(int id, char *widget_name);
-extern void comm_sink_set_chart(int id, char *chart_name);
-extern void comm_sink_update_str(int id, char *value);
+extern hk_sink_t *comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data);
+extern void comm_sink_update_str(hk_sink_t *sink, char *value);
 
-extern int comm_source_register(hk_obj_t *obj, int local, int event);
-extern void comm_source_set_widget(int id, char *widget_name);
-extern void comm_source_set_chart(int id, char *chart_name);
-extern void comm_source_update_str(int id, char *value);
+extern hk_source_t *comm_source_register(hk_obj_t *obj, int local, int event);
+extern void comm_source_update_str(hk_source_t *source, char *value);
 
 #endif /* __HAKIT_COMM_H__ */

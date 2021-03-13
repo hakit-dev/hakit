@@ -184,26 +184,6 @@ hk_sink_t *hk_sink_retrieve_by_name(hk_endpoints_t *eps, char *name)
 }
 
 
-hk_sink_t *hk_sink_retrieve_by_id(hk_endpoints_t *eps, int id)
-{
-	if (id < 0) {
-		return NULL;
-	}
-
-	if (id >= eps->sinks.nmemb) {
-		return NULL;
-	}
-	
-	hk_sink_t *sink = HK_TAB_VALUE(eps->sinks, hk_sink_t *, id);
-
-	if (sink->ep.obj == NULL) {
-		return NULL;
-	}
-
-	return sink;
-}
-
-
 static hk_sink_t *hk_sink_alloc(hk_endpoints_t *eps, hk_obj_t *obj, int local)
 {
 	hk_sink_t *sink = NULL;
@@ -448,26 +428,6 @@ int hk_source_to_advertise(hk_endpoints_t *eps)
 	}
 
 	return count;
-}
-
-
-hk_source_t *hk_source_retrieve_by_id(hk_endpoints_t *eps, int id)
-{
-	if (id < 0) {
-		return NULL;
-	}
-
-	if (id >= eps->sources.nmemb) {
-		return NULL;
-	}
-	
-	hk_source_t *source = HK_TAB_VALUE(eps->sources, hk_source_t *, id);
-
-	if (source->ep.obj == NULL) {
-		return NULL;
-	}
-
-	return source;
 }
 
 

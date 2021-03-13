@@ -97,7 +97,6 @@ typedef struct {
 
 extern hk_sink_t *hk_sink_register(hk_endpoints_t *eps, hk_obj_t *obj, int local);
 extern hk_sink_t *hk_sink_retrieve_by_name(hk_endpoints_t *eps, char *name);
-extern hk_sink_t *hk_sink_retrieve_by_id(hk_endpoints_t *eps, int id);
 extern void hk_sink_update_by_name(hk_endpoints_t *eps, char *name, char *value);
 extern void hk_sink_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *user_data);
 extern void hk_sink_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_data);
@@ -119,7 +118,6 @@ typedef struct {
 
 extern hk_source_t *hk_source_register(hk_endpoints_t *eps, hk_obj_t *obj, int local, int event);
 extern hk_source_t *hk_source_retrieve_by_name(hk_endpoints_t *eps, char *name);
-extern hk_source_t *hk_source_retrieve_by_id(hk_endpoints_t *eps, int id);
 extern int hk_source_to_advertise(hk_endpoints_t *eps);
 extern void hk_source_foreach(hk_endpoints_t *eps, hk_ep_foreach_func_t func, void *user_data);
 extern void hk_source_foreach_public(hk_endpoints_t *eps, hk_ep_func_t func, void *user_data);

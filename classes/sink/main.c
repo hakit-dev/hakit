@@ -13,8 +13,8 @@
 
 #include "log.h"
 #include "mod.h"
+#include "endpoint.h"
 #include "comm.h"
-
 #include "version.h"
 
 
@@ -23,8 +23,7 @@
 typedef struct {
 	hk_obj_t *obj;
 	hk_pad_t *output;
-	int id;
-	int local;
+        hk_sink_t *sink;
 } ctx_t;
 
 
@@ -37,7 +36,6 @@ static void _event(ctx_t *ctx, hk_ep_t *ep)
 static int _new(hk_obj_t *obj)
 {
 	ctx_t *ctx;
-	int local;
 
 	ctx = malloc(sizeof(ctx_t));
 	ctx->obj = obj;
@@ -45,11 +43,18 @@ static int _new(hk_obj_t *obj)
 
 	ctx->output = hk_pad_create(obj, HK_PAD_OUT, "out");
 
-	local = (hk_prop_get(&obj->props, "local") != NULL) ? 1:0;
-	ctx->id = comm_sink_register(obj, local, (hk_ep_func_t) _event, ctx);
+	int local = (hk_prop_get(&obj->props, "local") != NULL) ? 1:0;
+	ctx->sink = comm_sink_register(obj, local, (hk_ep_func_t) _event, ctx);
 
-	comm_sink_set_widget(ctx->id, hk_prop_get(&obj->props, "widget"));
-	comm_sink_set_chart(ctx->id, hk_prop_get(&obj->props, "chart"));
+        char *widget = hk_prop_get(&obj->props, "widget");
+        if (widget != NULL) {
+                hk_ep_set_widget(HK_EP(ctx->sink), widget);
+        }
+
+        char *chart = hk_prop_get(&obj->props, "chart");
+        if (chart != NULL) {
+                hk_ep_set_chart(HK_EP(ctx->sink), chart);
+        }
 
 	return 0;
 }
@@ -59,7 +64,7 @@ static void _start(hk_obj_t *obj)
 	ctx_t *ctx = obj->ctx;
 
 	if (ctx->output->value.base != NULL) {
-		comm_sink_update_str(ctx->id, (char *) ctx->output->value.base);
+		comm_sink_update_str(ctx->sink, (char *) ctx->output->value.base);
 	}
 }
 

@@ -410,7 +410,7 @@ int comm_tile_register(char *path)
 }
 
 
-int comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data)
+hk_sink_t *comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data)
 {
 	hk_sink_t *sink = hk_sink_register(&comm.eps, obj, local);
 
@@ -423,49 +423,12 @@ int comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_d
 		}
 	}
 
-	return hk_sink_id(sink);
+	return sink;
 }
 
 
-void comm_sink_set_widget(int id, char *widget_name)
+void comm_sink_update_str(hk_sink_t *sink, char *value)
 {
-        if (widget_name != NULL) {
-                hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
-
-                if (sink != NULL) {
-                        hk_ep_set_widget(HK_EP(sink), widget_name);
-                }
-                else {
-                        log_str("PANIC: Attempting to set widget on unknown sink #%d\n", id);
-                }
-        }
-}
-
-
-void comm_sink_set_chart(int id, char *chart_name)
-{
-        if (chart_name != NULL) {
-                hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
-
-                if (sink != NULL) {
-                        hk_ep_set_chart(HK_EP(sink), chart_name);
-                }
-                else {
-                        log_str("PANIC: Attempting to set chart on unknown sink #%d\n", id);
-                }
-        }
-}
-
-
-void comm_sink_update_str(int id, char *value)
-{
-        hk_sink_t *sink = hk_sink_retrieve_by_id(&comm.eps, id);
-
-        if (sink == NULL) {
-		log_str("PANIC: Attempting to update unknown sink #%d\n", id);
-                return;
-        }
-
         /* Update endpoint */
         hk_sink_update(sink, value);
 
@@ -474,7 +437,7 @@ void comm_sink_update_str(int id, char *value)
 }
 
 
-int comm_source_register(hk_obj_t *obj, int local, int event)
+hk_source_t *comm_source_register(hk_obj_t *obj, int local, int event)
 {
 	hk_source_t *source = hk_source_register(&comm.eps, obj, local, event);
 
@@ -485,49 +448,12 @@ int comm_source_register(hk_obj_t *obj, int local, int event)
 		}
 	}
 
-	return hk_source_id(source);
+	return source;
 }
 
 
-void comm_source_set_widget(int id, char *widget_name)
+void comm_source_update_str(hk_source_t *source, char *value)
 {
-        if (widget_name != NULL) {
-                hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
-
-                if (source != NULL) {
-                        hk_ep_set_widget(HK_EP(source), widget_name);
-                }
-                else {
-                        log_str("PANIC: Attempting to set widget on unknown source #%d\n", id);
-                }
-        }
-}
-
-
-void comm_source_set_chart(int id, char *chart_name)
-{
-        if (chart_name != NULL) {
-                hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
-
-                if (source != NULL) {
-                        hk_ep_set_chart(HK_EP(source), chart_name);
-                }
-                else {
-                        log_str("PANIC: Attempting to set chart on unknown source #%d\n", id);
-                }
-        }
-}
-
-
-void comm_source_update_str(int id, char *value)
-{
-	hk_source_t *source = hk_source_retrieve_by_id(&comm.eps, id);
-
-	if (source == NULL) {
-		log_str("PANIC: Attempting to update unknown source #%d\n", id);
-		return;
-	}
-
         /* Update endpoint */
 	hk_source_update(source, value);
 
