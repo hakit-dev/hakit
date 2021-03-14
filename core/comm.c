@@ -116,12 +116,6 @@ static void comm_mqtt_discover(mqtt_t *mqtt, char *remote_ip, char *broker)
 #endif /* WITH_MQTT */
 
 
-static void comm_wget_recv(void *user_data, char *buf, int len)
-{
-       fwrite(buf, 1, len, stdout);
-}
-
-
 typedef struct {
         buf_t *out_buf;
         uint64_t t1;
@@ -235,19 +229,7 @@ static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 	if (argc > 0) {
 		buf_init(&out_buf);
 
-		if (strcmp(argv[0], "wget") == 0) {
-			if (argc > 1) {
-				// HTTP/HTTPS get operation. This command is for debug/testing purpose only.
-				// Result will be displayed to the debug log
-				ws_client_get(&comm->ws->client, argv[1], NULL, comm_wget_recv, NULL);
-			}
-			else {
-				log_str("ERROR: Usage: %s <uri>", argv[0]);
-			}
-		}
-		else {
-			comm_command_ws(hkcp, argc, argv, &out_buf);
-		}
+                comm_command_ws(hkcp, argc, argv, &out_buf);
 
                 if (out_buf.len > 0) {
 			if (fwrite(out_buf.base, 1, out_buf.len, stdout) < 0) {
