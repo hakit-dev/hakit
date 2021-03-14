@@ -14,37 +14,16 @@
 
 #ifdef WITH_MQTT
 
-#include <mqueue.h>
-#include "sys.h"
-#include "mosquitto.h"
-
-/* MQTT default settings */
-#define MQTT_DEFAULT_PORT 1883
-#define MQTT_DEFAULT_SSL_PORT 8883
-#define MQTT_DEFAULT_KEEPALIVE 60
-
-/* MQTT instance descriptor */
+/* MQTT topic update handler */
 typedef void (*mqtt_update_func_t)(void *user_data, char *name, char *value);
 
-typedef enum {
-	MQTT_ST_DISCONNECTED=0,
-	MQTT_ST_CONNECTING,
-	MQTT_ST_CONNECTED,
-	MQTT_ST_RECONNECT
-} mqtt_state_t;
+/* MQTT instance descriptor */
+typedef struct __mqtt_s mqtt_t;
 
-typedef struct {
-	char *broker;
-	struct mosquitto *mosq;
-	mqtt_update_func_t update_func;
-	void *user_data;
-	mqtt_state_t state;
-	sys_tag_t timeout_tag;
-	mqd_t mq;
-	sys_tag_t mq_tag;
-	int port;
-	int qos;
-} mqtt_t;
+#ifndef __HAKIT_MQTT_C__
+/* MQTT instance descriptor is opaque from outside MQTT protocol implementation lib */
+struct __mqtt_s {};
+#endif
 
 
 /* MQTT instance functions */

@@ -22,14 +22,41 @@
 #include "mosquitto.h"
 #include "options.h"
 #include "log.h"
+
+#define __HAKIT_MQTT_C__
 #include "mqtt.h"
 
+
+/* MQTT default settings */
+#define MQTT_DEFAULT_PORT 1883
+#define MQTT_DEFAULT_SSL_PORT 8883
+#define MQTT_DEFAULT_KEEPALIVE 60
 
 /* Message queue */
 #define MSG_MAXSIZE 1024
 
 /* Reconnect delay */
 #define MQTT_RECONNECT_DELAY 60
+
+typedef enum {
+	MQTT_ST_DISCONNECTED=0,
+	MQTT_ST_CONNECTING,
+	MQTT_ST_CONNECTED,
+	MQTT_ST_RECONNECT
+} mqtt_state_t;
+
+struct __mqtt_s {
+	char *broker;
+	struct mosquitto *mosq;
+	mqtt_update_func_t update_func;
+	void *user_data;
+	mqtt_state_t state;
+	sys_tag_t timeout_tag;
+	mqd_t mq;
+	sys_tag_t mq_tag;
+	int port;
+	int qos;
+};
 
 
 static int mqtt_connect_now(mqtt_t *mqtt);
