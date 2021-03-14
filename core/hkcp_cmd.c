@@ -148,7 +148,7 @@ static int hkcp_command_sources_dump(hkcp_command_sources_ctx_t *ctx, hk_source_
 }
 
 
-static void hkcp_command_sources(hkcp_t *hkcp, buf_t *out_buf)
+static void hkcp_command_sources(buf_t *out_buf, hkcp_t *hkcp)
 {
         hkcp_command_sources_ctx_t ctx = {
                 .hkcp = hkcp,
@@ -240,7 +240,7 @@ void hkcp_command(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 		hkcp_command_sinks(out_buf);
 	}
 	else if (strcmp(argv[0], "sources") == 0) {
-		hkcp_command_sources(hkcp, out_buf);
+		hkcp_command_sources(out_buf, hkcp);
 	}
 	else if (strcmp(argv[0], "props") == 0) {
 		buf_append_str(out_buf, "VERSION: " HAKIT_VERSION "\n");

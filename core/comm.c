@@ -86,14 +86,14 @@ static void comm_mqtt_subscribe(mqtt_t *mqtt, hk_ep_t *ep)
 }
 
 
-static void comm_mqtt_connected(comm_t *comm)
+static void comm_mqtt_connected(mqtt_t *mqtt)
 {
-	hk_source_foreach_public((hk_ep_func_t) comm_mqtt_publish, &comm->mqtt);
-	hk_sink_foreach_public((hk_ep_func_t) comm_mqtt_subscribe, &comm->mqtt);
+	hk_source_foreach_public((hk_ep_func_t) comm_mqtt_publish, mqtt);
+	hk_sink_foreach_public((hk_ep_func_t) comm_mqtt_subscribe, mqtt);
 }
 
 
-static void comm_mqtt_update(comm_t *comm, char *name, char *value)
+static void comm_mqtt_update(mqtt_t *mqtt, char *name, char *value)
 {
 	if (name != NULL) {
 		log_debug(2, "comm_mqtt_update %s='%s'", name, value);
@@ -101,15 +101,15 @@ static void comm_mqtt_update(comm_t *comm, char *name, char *value)
 	}
 	else {
 		log_debug(2, "comm_mqtt_update CONNECTED");
-		comm_mqtt_connected(comm);
+		comm_mqtt_connected(mqtt);
 	}
 }
 
-static void comm_mqtt_discover(comm_t *comm, char *remote_ip, char *broker)
+static void comm_mqtt_discover(mqtt_t *mqtt, char *remote_ip, char *broker)
 {
 	log_debug(2, "comm_mqtt_discover %s '%s'", remote_ip, broker);
 	if (broker != NULL) {
-		mqtt_connect(&comm->mqtt, broker);
+		mqtt_connect(mqtt, broker);
 	}
 }
 
@@ -118,12 +118,11 @@ static void comm_mqtt_discover(comm_t *comm, char *remote_ip, char *broker)
 
 static void comm_wget_recv(void *user_data, char *buf, int len)
 {
-	fwrite(buf, 1, len, stdout);
+       fwrite(buf, 1, len, stdout);
 }
 
 
 typedef struct {
-        comm_t *comm;
         buf_t *out_buf;
         uint64_t t1;
         uint64_t t2;
@@ -136,7 +135,7 @@ static int comm_command_trace_dump(comm_command_ctx_t *ctx, hk_ep_t *ep)
 }
 
 
-static int comm_command_trace(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+static int comm_command_trace(int argc, char **argv, buf_t *out_buf)
 {
         char *name = NULL;
         uint64_t t1 = 0;
@@ -181,7 +180,6 @@ static int comm_command_trace(comm_t *comm, int argc, char **argv, buf_t *out_bu
         }
         else {
                 comm_command_ctx_t ctx = {
-                        .comm = comm,
                         .out_buf = out_buf,
                         .t1 = t1,
                         .t2 = t2,
@@ -208,7 +206,7 @@ static void comm_command_tiles_dump(buf_t *out_buf, hk_tile_t *tile)
 }
 
 
-static int comm_command_tiles(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+static int comm_command_tiles(int argc, char **argv, buf_t *out_buf)
 {
         hk_tile_foreach((hk_tile_foreach_func) comm_command_tiles_dump, out_buf);
 	buf_append_str(out_buf, ".\n");
@@ -216,21 +214,21 @@ static int comm_command_tiles(comm_t *comm, int argc, char **argv, buf_t *out_bu
 }
 
 
-static void comm_command_ws(comm_t *comm, int argc, char **argv, buf_t *out_buf)
+static void comm_command_ws(hkcp_t *hkcp, int argc, char **argv, buf_t *out_buf)
 {
         if (strcmp(argv[0], "trace") == 0) {
-                comm_command_trace(comm, argc, argv, out_buf);
+                comm_command_trace(argc, argv, out_buf);
         }
         else if (strcmp(argv[0], "tiles") == 0) {
-                comm_command_tiles(comm, argc, argv, out_buf);
+                comm_command_tiles(argc, argv, out_buf);
         }
         else {
-                hkcp_command(&comm->hkcp, argc, argv, out_buf);
+                hkcp_command(hkcp, argc, argv, out_buf);
         }
 }
 
 
-static void comm_command_stdin(comm_t *comm, int argc, char **argv)
+static void comm_command_stdin(hkcp_t *hkcp, int argc, char **argv)
 {
 	buf_t out_buf;
 
@@ -248,7 +246,7 @@ static void comm_command_stdin(comm_t *comm, int argc, char **argv)
 			}
 		}
 		else {
-			comm_command_ws(comm, argc, argv, &out_buf);
+			comm_command_ws(hkcp, argc, argv, &out_buf);
 		}
 
                 if (out_buf.len > 0) {
@@ -325,11 +323,11 @@ int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise)
 	}
 
 
-	ws_set_command_handler(comm.ws, (ws_command_handler_t) comm_command_ws, &comm);
+	ws_set_command_handler(comm.ws, (ws_command_handler_t) comm_command_ws, &comm.hkcp);
 
 	/* Setup stdin command handler if not running as a daemon */
 	if (!opt_daemon) {
-		command_t *cmd = command_new((command_handler_t) comm_command_stdin, &comm);
+		command_t *cmd = command_new((command_handler_t) comm_command_stdin, &comm.hkcp);
 		io_channel_setup(&comm.io_stdin, fileno(stdin), (io_func_t) command_recv, cmd);
 	}
 
@@ -348,7 +346,7 @@ int comm_enable_mqtt(char *certs, char *mqtt_broker)
 {
 #ifdef WITH_MQTT
         /* Init MQTT gears */
-        if (mqtt_init(&comm.mqtt, certs, (mqtt_update_func_t) comm_mqtt_update, &comm)) {
+        if (mqtt_init(&comm.mqtt, certs, (mqtt_update_func_t) comm_mqtt_update, &comm.mqtt)) {
                 return -1;
         }
 
@@ -361,7 +359,7 @@ int comm_enable_mqtt(char *certs, char *mqtt_broker)
         }
         else {
                 /* Handle MQTT advertisement */
-                hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_MQTT, (hk_advertise_func_t) comm_mqtt_discover, &comm);
+                hk_advertise_handler(&comm.adv, ADVERTISE_PROTO_MQTT, (hk_advertise_func_t) comm_mqtt_discover, &comm.mqtt);
         }
 
         /* Advertise MQTT protocol */
@@ -372,12 +370,6 @@ int comm_enable_mqtt(char *certs, char *mqtt_broker)
         log_str("ERROR: MQTT not available in this release");
         return -1;
 #endif /* !WITH_MQTT */
-}
-
-
-void comm_set_trace_depth(int depth)
-{
-	hk_endpoints_set_trace_depth(depth);
 }
 
 
@@ -432,7 +424,7 @@ void comm_sink_update_str(hk_sink_t *sink, char *value)
         hk_sink_update(sink, value);
 
         /* Update websocket link */
-        comm_ws_send(comm.ws, &sink->ep);
+        comm_ws_send(comm.ws, HK_EP(sink));
 }
 
 
@@ -458,13 +450,13 @@ void comm_source_update_str(hk_source_t *source, char *value)
 
         /* Update networked links */
 	if (hk_source_is_public(source)) { 
-		hkcp_source_update(&comm.hkcp, source, value);
+		hkcp_source_update(&comm.hkcp, source);
 
 #ifdef WITH_MQTT
-		mqtt_publish(&comm.mqtt, hk_ep_get_name(HK_EP(source)), value, hk_ep_flag_retain(&source->ep));
+                comm_mqtt_publish(&comm.mqtt, HK_EP(source));
 #endif
 	}
 
         /* Update websocket link */
-	comm_ws_send(comm.ws, &source->ep);
+	comm_ws_send(comm.ws, HK_EP(source));
 }

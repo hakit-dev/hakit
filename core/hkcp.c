@@ -469,10 +469,11 @@ static void hkcp_source_send_nodes(hkcp_t *hkcp, hk_source_t *source, char *str,
 }
 
 
-void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source, char *value)
+void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source)
 {
-	char *name = source->ep.obj->name;
-	log_debug(3, "hkcp_source_update name='%s.%s' value='%s'", source->ep.obj->tile->name, name, value);
+	char *name = hk_ep_get_name(&source->ep);
+        char *value = hk_ep_get_value(&source->ep);
+	log_debug(3, "hkcp_source_update name='%s.%s' value='%s'", hk_ep_get_tile_name(&source->ep), name, value);
 
 	int size = strlen(name) + strlen(value) + 20;
 	char str[size];

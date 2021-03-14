@@ -64,6 +64,6 @@ extern void hkcp_shutdown(hkcp_t *hkcp);
 extern void hkcp_node_add(hkcp_t *hkcp, char *remote_ip);
 extern void hkcp_node_dump(hkcp_t *hkcp, hk_source_t *source, buf_t *out_buf);
 
-extern void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source, char *value);
+extern void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source);
 
 #endif /* __HAKIT_HKCP_H__ */

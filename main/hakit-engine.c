@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
                 }
         }
 
-        comm_set_trace_depth(opt_trace_depth);
+        hk_endpoints_set_trace_depth(opt_trace_depth);
 
 	if (opt_http_auth != NULL) {
 		ws_auth_init(opt_http_auth);
