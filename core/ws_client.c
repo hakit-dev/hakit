@@ -9,6 +9,7 @@
 
 #include <libwebsockets.h>
 
+#include "lws_config.h"
 #include "options.h"
 #include "log.h"
 #include "buf.h"
@@ -234,6 +235,8 @@ static struct lws_protocols ws_client_protocols[] = {
 int ws_client_init(ws_client_t *client, int use_ssl)
 {
 	struct lws_context_creation_info info;
+
+	log_str("Using libwebsockets version " LWS_LIBRARY_VERSION " build " LWS_BUILD_HASH);
 
 	// Setup LWS logging
 	ws_log_init(opt_debug);

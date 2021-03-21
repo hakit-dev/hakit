@@ -21,7 +21,6 @@
 #include "mod_init.h"
 #include "ws_auth.h"
 
-#include "lws_config.h"
 #include "hakit_version.h"
 
 
@@ -87,7 +86,6 @@ int main(int argc, char *argv[])
 	/* Init log management */
 	log_init("hakit");
 	log_str(options_summary);
-	log_str("Using libwebsockets version " LWS_LIBRARY_VERSION " build " LWS_BUILD_HASH);
 
         /* Enable per-line output buffering */
         setlinebuf(stdout);

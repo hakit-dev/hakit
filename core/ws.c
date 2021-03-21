@@ -14,6 +14,7 @@
 #include <dirent.h>
 #include <libwebsockets.h>
 
+#include "lws_config.h"
 #include "options.h"
 #include "log.h"
 #include "tab.h"
@@ -694,6 +695,8 @@ static int ws_server_init(ws_t *ws, int port, char *ssl_dir)
 ws_t *ws_new(int port, int use_ssl, char *ssl_dir)
 {
 	ws_t *ws = NULL;
+
+	log_str("Using libwebsockets version " LWS_LIBRARY_VERSION " build " LWS_BUILD_HASH);
 
 	// Setup LWS logging
 	ws_log_init(opt_debug);
