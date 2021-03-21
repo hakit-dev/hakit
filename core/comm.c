@@ -17,9 +17,7 @@
 #include "tstamp.h"
 #include "log.h"
 #include "io.h"
-#include "ws.h"
-#include "ws_events.h"
-#include "ws_client.h"
+#include "ws_server.h"
 #include "hkcp.h"
 #include "hkcp_cmd.h"
 #include "mqtt.h"
@@ -44,14 +42,14 @@ typedef struct {
 #ifdef WITH_MQTT
 	mqtt_t mqtt;
 #endif
-	ws_t *ws;
+	ws_server_t server;
 	io_channel_t io_stdin;
 } comm_t;
 
 static comm_t comm;
 
 
-static void comm_ws_send(ws_t *ws, hk_ep_t *ep)
+static void comm_ws_send(ws_server_t *server, hk_ep_t *ep)
 {
         char *tile_name = hk_ep_get_tile_name(ep);
         char *name = hk_ep_get_name(ep);
@@ -68,7 +66,7 @@ static void comm_ws_send(ws_t *ws, hk_ep_t *ep)
                 snprintf(str, size, "!%llu,%s=%s", t, name, value);
         }
 
-	ws_events_send(ws, str);
+	ws_server_send_event(server, str);
 }
 
 
@@ -284,28 +282,28 @@ int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise)
 	}
 
 	/* Init HTTP/WebSocket server */
-	comm.ws = ws_new(HAKIT_HTTP_PORT, use_ssl, path);
+        if (ws_server_init(&comm.server, HAKIT_HTTP_PORT, path) == -1) {
+		ret = -1;
+		goto DONE;
+        }
+
+	/* Setup document root directory stack */
         if (path != NULL) {
                 free(path);
         }
-	if (comm.ws == NULL) {
-		ret = -1;
-		goto DONE;
-	}
-
-	/* Setup document root directory stack */
 	path = env_devdir(NULL);
 	if (path != NULL) {
 		log_debug(2, "Running from development environment: %s", path);
-                ws_add_document_root(comm.ws, path);
+                ws_add_document_root(&comm.server, path);
                 free(path);
+                path = NULL;
 	}
 	else {
-                ws_add_document_root(comm.ws, HAKIT_SHARE_DIR);
+                ws_add_document_root(&comm.server, HAKIT_SHARE_DIR);
 	}
 
 
-	ws_set_command_handler(comm.ws, (ws_command_handler_t) comm_command_ws, &comm.hkcp);
+	ws_server_set_command_handler(&comm.server, (ws_command_handler_t) comm_command_ws, &comm.hkcp);
 
 	/* Setup stdin command handler if not running as a daemon */
 	if (!opt_daemon) {
@@ -314,6 +312,11 @@ int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise)
 	}
 
 DONE:
+        if (path != NULL) {
+                free(path);
+                path = NULL;
+        }
+
 	if (ret != 0) {
 		hkcp_shutdown(&comm.hkcp);
 		hk_advertise_shutdown(&comm.adv);
@@ -376,7 +379,7 @@ int comm_tile_register(char *path)
 
 	/* Add this tile to document root directory stack */
 	char *rootdir = hk_tile_rootdir(tile);
-        ws_add_document_root(comm.ws, rootdir);
+        ws_add_document_root(&comm.server, rootdir);
         free(rootdir);
 
 	return 0;
@@ -389,7 +392,7 @@ hk_sink_t *comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void 
 
 	if (sink != NULL) {
 		hk_sink_add_handler(sink, func, user_data);
-		hk_sink_add_handler(sink, (hk_ep_func_t) comm_ws_send, comm.ws);
+		hk_sink_add_handler(sink, (hk_ep_func_t) comm_ws_send, &comm.server);
 		if (comm.use_hkcp && (!local)) {
 			/* Trigger advertising */
 			hk_advertise_hkcp(&comm.adv);
@@ -406,7 +409,7 @@ void comm_sink_update_str(hk_sink_t *sink, char *value)
         hk_sink_update(sink, value);
 
         /* Update websocket link */
-        comm_ws_send(comm.ws, HK_EP(sink));
+        comm_ws_send(&comm.server, HK_EP(sink));
 }
 
 
@@ -440,5 +443,5 @@ void comm_source_update_str(hk_source_t *source, char *value)
 	}
 
         /* Update websocket link */
-	comm_ws_send(comm.ws, HK_EP(source));
+	comm_ws_send(&comm.server, HK_EP(source));
 }

@@ -22,7 +22,7 @@ LDFLAGS += -rdynamic -ldl
 
 LIB_SRCS = options.c log.c buf.c tab.c str_argv.c tstamp.c command.c endpoint.c mod.c mod_load.c prop.c \
 	advertise.c hkcp.c hkcp_cmd.c mqtt.c comm.c trace.c \
-	mime.c ws.c ws_utils.c ws_auth.c ws_events.c ws_client.c
+	mime.c ws_server.c ws_utils.c ws_auth.c ws_http.c ws_events.c ws_client.c
 LIB_OBJS = $(LIB_SRCS:%.c=$(OUTDIR)/%.o)
 
 $(ARCH_LIB): $(LIB_OBJS)

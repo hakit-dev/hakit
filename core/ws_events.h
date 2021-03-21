@@ -13,10 +13,10 @@
 #define __HAKIT_WS_EVENTS_H__
 
 #include <libwebsockets.h>
-#include "ws.h"
+#include "ws_server.h"
 
 extern void ws_events_init(struct lws_protocols *protocol);
 
-extern void ws_events_send(ws_t *ws, char *str);
+extern void ws_events_send(ws_server_t *server, char *str);
 
 #endif /* __HAKIT_WS_EVENTS_H__ */

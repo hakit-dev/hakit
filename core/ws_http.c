@@ -1,6 +1,8 @@
 /*
  * HAKit - The Home Automation KIT - www.hakit.net
- * Copyright (C) 2014-2015 Sylvain Giroudon
+ * Copyright (C) 2014-2021 Sylvain Giroudon
+ *
+ * HTTP server
  *
  * This file is subject to the terms and conditions of the GNU Lesser
  * General Public License v2.1. See the file LICENSE in the top level
@@ -14,23 +16,17 @@
 #include <dirent.h>
 #include <libwebsockets.h>
 
-#include "lws_config.h"
-#include "options.h"
 #include "log.h"
+#include "buf.h"
 #include "tab.h"
 #include "mime.h"
-#include "ws.h"
+#include "ws_server.h"
 #include "ws_utils.h"
-#include "ws_client.h"
-#include "ws_events.h"
 #include "ws_auth.h"
+#include "ws_http.h"
+
 
 #define SERVER_NAME "HAKit"
-
-
-/*
- * Protocol handling: HTTP
- */
 
 struct per_session_data__http {
 	FILE *f;
@@ -40,7 +36,7 @@ struct per_session_data__http {
 };
 
 
-static char *search_file(ws_t *ws, char *uri)
+static char *search_file(ws_server_t *server, char *uri)
 {
         char *subdir = NULL;
         int subdir_len = 0;
@@ -68,8 +64,8 @@ static char *search_file(ws_t *ws, char *uri)
 
         log_debug(3, "  subdir='%s' uri='%s'", subdir, uri);
 
-	for (i = 0; (file_path == NULL) && (i < ws->server.document_roots.nmemb); i++) {
-		char *dir = HK_TAB_VALUE(ws->server.document_roots, char *, i);
+	for (i = 0; (file_path == NULL) && (i < server->document_roots.nmemb); i++) {
+		char *dir = HK_TAB_VALUE(server->document_roots, char *, i);
 		int file_path_len = strlen(dir);
 		int file_path_size = file_path_len + uri_len + 20;
 		file_path = malloc(file_path_size);
@@ -156,7 +152,7 @@ static void show_connection_info(struct lws *wsi)
 }
 
 
-static int ws_http_request(ws_t *ws,
+static int ws_http_request(ws_server_t *server,
 			   struct lws *wsi,
 			   struct per_session_data__http *pss,
 			   char *uri, size_t len)
@@ -224,8 +220,8 @@ static int ws_http_request(ws_t *ws,
 	}
 
 	/* Try to match URL aliases */
-	for (i = 0; i < ws->server.aliases.nmemb; i++) {
-		ws_alias_t *alias = HK_TAB_PTR(ws->server.aliases, ws_alias_t, i);
+	for (i = 0; i < server->aliases.nmemb; i++) {
+		ws_alias_t *alias = HK_TAB_PTR(server->aliases, ws_alias_t, i);
 		if ((alias->location != NULL) && (alias->handler != NULL)) {
 			if (strncmp(alias->location, uri, alias->len) == 0) {
 				alias->handler(alias->user_data, uri, &pss->rsp);
@@ -240,14 +236,14 @@ static int ws_http_request(ws_t *ws,
 	}
 	else {
 		/* Search file among root directory list */
-		file_path = search_file(ws, uri);
+		file_path = search_file(server, uri);
                 if (file_path == NULL) {
                         int len = strlen(uri);
                         char uri2[len+2];
                         memcpy(uri2, uri, len);
                         uri2[len++] = '/';
                         uri2[len] = '\0';
-                        file_path = search_file(ws, uri2);
+                        file_path = search_file(server, uri2);
                 }
 
 		if (file_path == NULL) {
@@ -363,8 +359,7 @@ done:
 }
 
 
-static int ws_http_body(ws_t *ws,
-			struct lws *wsi,
+static int ws_http_body(struct lws *wsi,
 			void *in, size_t len)
 {
 	log_debug(2, "ws_http_body: %d bytes", (int) len);
@@ -374,8 +369,7 @@ static int ws_http_body(ws_t *ws,
 }
 
 
-static int ws_http_body_completion(ws_t *ws,
-				   struct lws *wsi)
+static int ws_http_body_completion(struct lws *wsi)
 {
 	log_debug(2, "ws_http_body_completion");
 
@@ -387,8 +381,7 @@ static int ws_http_body_completion(ws_t *ws,
 }
 
 
-static int ws_http_file_completion(ws_t *ws,
-				   struct lws *wsi)
+static int ws_http_file_completion(struct lws *wsi)
 {
 	log_debug(2, "ws_http_file_completion");
 
@@ -399,8 +392,7 @@ static int ws_http_file_completion(ws_t *ws,
 }
 
 
-static int ws_http_writeable(ws_t *ws,
-			     struct lws *wsi,
+static int ws_http_writeable(struct lws *wsi,
 			     struct per_session_data__http *pss)
 {
 	int n, m;
@@ -527,7 +519,7 @@ static int ws_http_callback(struct lws *wsi,
 			    void *in, size_t len)
 {
 	struct lws_context *context = lws_get_context(wsi);
-	ws_t *ws = lws_context_user(context);
+	ws_server_t *server = lws_context_user(context);
 	struct per_session_data__http *pss = (struct per_session_data__http *) user;
 	struct lws_pollargs *pa = (struct lws_pollargs *) in;
 	int ret = 0;
@@ -538,23 +530,23 @@ static int ws_http_callback(struct lws *wsi,
 		break;
 	case LWS_CALLBACK_HTTP:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP");
-		ret = ws_http_request(ws, wsi, pss, in, len);
+		ret = ws_http_request(server, wsi, pss, in, len);
 		break;
 	case LWS_CALLBACK_HTTP_BODY:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_BODY");
-		ret = ws_http_body(ws, wsi, in, len);
+		ret = ws_http_body(wsi, in, len);
 		break;
 	case LWS_CALLBACK_HTTP_BODY_COMPLETION:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_BODY_COMPLETION");
-		ret = ws_http_body_completion(ws, wsi);
+		ret = ws_http_body_completion(wsi);
 		break;
 	case LWS_CALLBACK_HTTP_FILE_COMPLETION:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_FILE_COMPLETION");
-		ret = ws_http_file_completion(ws, wsi);
+		ret = ws_http_file_completion(wsi);
 		break;
 	case LWS_CALLBACK_HTTP_WRITEABLE:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_HTTP_WRITEABLE");
-		ret = ws_http_writeable(ws, wsi, pss);
+		ret = ws_http_writeable(wsi, pss);
 		break;
 	case LWS_CALLBACK_FILTER_NETWORK_CONNECTION:
 		log_debug(3, "ws_http_callback LWS_CALLBACK_FILTER_NETWORK_CONNECTION");
@@ -617,249 +609,10 @@ static int ws_http_callback(struct lws *wsi,
 }
 
 
-/*
- * Table of available protocols
- */
-
-static struct lws_protocols ws_server_protocols[] = {
-	/* first protocol must always be HTTP handler */
-	{
-		.name = "http-server",
-		.callback = ws_http_callback,
-		.per_session_data_size = sizeof(struct per_session_data__http),
-		.rx_buffer_size = 0,
-	},
-	{ }, /* Room for hakit-events-protocol */
-	{ NULL, NULL, 0, 0 } /* terminator */
-};
-
-
-/*
- * HTTP/WebSocket server init
- */
-
-static int ws_server_init(ws_t *ws, int port, char *ssl_dir)
+void ws_http_init(struct lws_protocols *protocol)
 {
-#ifdef WITH_SSL
-	int ssl_dir_len = ssl_dir ? strlen(ssl_dir) : 0;
-	char cert_path[ssl_dir_len+16];
-	char key_path[ssl_dir_len+16];
-#endif
-	struct lws_context_creation_info info;
-
-	ws_events_init(&ws_server_protocols[1]);
-
-	memset(&info, 0, sizeof(info));
-	info.port = port;
-	info.protocols = ws_server_protocols;
-	//info.extensions = lws_get_internal_extensions();
-
-#ifdef WITH_SSL
-	/* Setup server SSL info */
-	if (ssl_dir != NULL) {
-		snprintf(cert_path, sizeof(cert_path), "%s/cert.pem", ssl_dir);
-		info.ssl_cert_filepath = cert_path;
-
-		snprintf(key_path, sizeof(key_path), "%s/privkey.pem", ssl_dir);
-		info.ssl_private_key_filepath = key_path;
-
-		log_debug(2, "SSL info: cert='%s' key='%s'", cert_path, key_path);
-
-		info.options |= LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS;
-	}
-#endif
-
-	info.gid = -1;
-	info.uid = -1;
-	info.user = ws;
-
-	/* Create libwebsockets context */
-	ws->server.context = lws_create_context(&info);
-	if (ws->server.context == NULL) {
-		return -1;
-	}
-
-	/* Init table of document root directories */
-	hk_tab_init(&ws->server.document_roots, sizeof(char *));
-
-	/* Init table of aliases */
-	hk_tab_init(&ws->server.aliases, sizeof(ws_alias_t));
-
-	/* Init table of websocket sessions */
-	hk_tab_init(&ws->server.sessions, sizeof(void *));
-
-	return 0;
-}
-
-
-ws_t *ws_new(int port, int use_ssl, char *ssl_dir)
-{
-	ws_t *ws = NULL;
-
-	log_str("Using libwebsockets version " LWS_LIBRARY_VERSION " build " LWS_BUILD_HASH);
-
-	// Setup LWS logging
-	ws_log_init(opt_debug);
-
-	// Alloc HTTP/WS client & server environment
-	ws = malloc(sizeof(ws_t));
-	memset(ws, 0, sizeof(ws_t));
-
-	// Init HTTP client gears
-	if (ws_client_init(&ws->client, use_ssl) < 0) {
-		goto failed;
-	}
-
-	// Init HTTP and WS server
-	if (ws_server_init(ws, port, ssl_dir) < 0) {
-		goto failed;
-	}
-
-	return ws;
-
-failed:
-	log_str("ERROR: libwebsocket init failed");
-	ws_destroy(ws);
-
-	return NULL;
-}
-
-
-void ws_destroy(ws_t *ws)
-{
-	int i;
-
-	/* Free document root directory list */
-	for (i = 0; i < ws->server.document_roots.nmemb; i++) {
-		char **p = HK_TAB_PTR(ws->server.document_roots, char *, i);
-		free(*p);
-		*p = NULL;
-	}
-	hk_tab_cleanup(&ws->server.document_roots);
-
-	/* Destroy libwebsockets contexts */
-	ws_client_destroy(&ws->client);
-
-	if (ws->client.context != NULL) {
-		lws_context_destroy((struct lws_context *) ws->client.context);
-	}
-
-	memset(ws, 0, sizeof(ws_t));
-	free(ws);
-}
-
-
-/*
- * HTTP directory and aliased locations
- */
-
-void ws_add_document_root(ws_t *ws, char *dir)
-{
-        int i;
-
-	log_debug(2, "ws_add_document_root '%s'", dir);
-
-	for (i = 0; i < ws->server.document_roots.nmemb; i++) {
-		char *dir0 = HK_TAB_VALUE(ws->server.document_roots, char *, i);
-                if (strcmp(dir0, dir) == 0) {
-                        log_debug(2, "  -> Already exists");
-                        return;
-                }
-        }
-
-	char **p = hk_tab_push(&ws->server.document_roots);
-	*p = strdup(dir);
-
-        log_debug(2, "  -> Added");
-}
-
-
-void ws_alias(ws_t *ws, char *location, ws_alias_handler_t handler, void *user_data)
-{
-	ws_alias_t *alias = hk_tab_push(&ws->server.aliases);
-
-	if (location != NULL) {
-		alias->location = strdup(location);
-		alias->len = strlen(location);
-	}
-
-	alias->handler = handler;
-	alias->user_data = user_data;
-
-	log_debug(2, "ws_alias '%s'", location);
-}
-
-
-/*
- * WebSocket running sessions
- */
-
-int ws_session_add(ws_t *ws, void *pss)
-{
-	void **ppss = NULL;
-	int i;
-
-	ws->server.salt++;
-	ws->server.salt &= 0xFF;
-
-	for (i = 0; i < ws->server.sessions.nmemb; i++) {
-		ppss = HK_TAB_PTR(ws->server.sessions, void *, i);
-		if (*ppss == NULL) {
-			goto done;
-		}
-	}
-
-	ppss = hk_tab_push(&ws->server.sessions);
-done:
-	*ppss = pss;
-
-	return (ws->server.salt << 8) + (i & 0xFF);
-}
-
-
-void ws_session_remove(ws_t *ws, void *pss)
-{
-	void **ppss = NULL;
-	int i;
-
-	for (i = 0; i < ws->server.sessions.nmemb; i++) {
-		ppss = HK_TAB_PTR(ws->server.sessions, void *, i);
-		if (*ppss == pss) {
-			*ppss = NULL;
-		}
-	}
-}
-
-
-void ws_session_foreach(ws_t *ws, ws_session_foreach_func func, void *user_data)
-{
-	int i;
-
-	for (i = 0; i < ws->server.sessions.nmemb; i++) {
-		void *pss = HK_TAB_VALUE(ws->server.sessions, void *, i);
-		if (pss != NULL) {
-			if (func != NULL) {
-				func(user_data, pss);
-			}
-		}
-	}
-}
-
-
-/*
- * WebSocket command handler
- */
-
-void ws_set_command_handler(ws_t *ws, ws_command_handler_t handler, void *user_data)
-{
-	ws->server.command_handler = handler;
-	ws->server.command_user_data = user_data;
-}
-
-
-void ws_call_command_handler(ws_t *ws, int argc, char **argv, buf_t *out_buf)
-{
-	if (ws->server.command_handler != NULL) {
-		ws->server.command_handler(ws->server.command_user_data, argc, argv, out_buf);
-	}
+	protocol->name = "http-server";
+	protocol->callback = ws_http_callback;
+	protocol->per_session_data_size = sizeof(struct per_session_data__http);
+	protocol->rx_buffer_size = 0;
 }

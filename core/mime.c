@@ -17,9 +17,9 @@
 typedef struct {
 	const char *suffix;
 	const char *type;
-} ws_mime_t;
+} mime_t;
 
-static const ws_mime_t ws_mimes[] = {
+static const mime_t mimes[] = {
 	{"ico",  "image/x-icon"},
 	{"png",  "image/png"},
 	{"jpg",  "image/jpeg"},
@@ -35,7 +35,7 @@ static const ws_mime_t ws_mimes[] = {
 const char *get_mimetype(const char *file)
 {
 	char *suffix = strrchr(file, '.');
-	const ws_mime_t *mime = ws_mimes;
+	const mime_t *mime = mimes;
 
 	if (suffix != NULL) {
 		suffix++;

@@ -10,18 +10,20 @@
  */
 
 #include <stdio.h>
+#include <libwebsockets.h>
 
 #include "log.h"
-#include "sys.h"
 #include "buf.h"
+#include "tab.h"
 #include "command.h"
+#include "ws_server.h"
 #include "ws_utils.h"
 #include "ws_auth.h"
 #include "ws_events.h"
 
 
 struct per_session_data__events {
-	ws_t *ws;
+	ws_server_t *server;
 	command_t *cmd;
 	buf_t out_buf;
 	int id;
@@ -34,7 +36,7 @@ static struct lws_protocols *ws_events_protocol = NULL;
 static void ws_events_command(struct per_session_data__events *pss, int argc, char **argv)
 {
 	log_debug(2, "ws_events_command [%04X]: '%s'%s", pss->id, argv[0], (argc > 1) ? " ...":"");
-	ws_call_command_handler(pss->ws, argc, argv, &pss->out_buf);
+	ws_server_receive_event(pss->server, argc, argv, &pss->out_buf);
 	log_debug_data(pss->out_buf.base, pss->out_buf.len);
 }
 
@@ -44,17 +46,17 @@ static int ws_events_callback(struct lws *wsi,
 			      void *in, size_t len)
 {
 	struct lws_context *context = lws_get_context(wsi);
-	ws_t *ws = lws_context_user(context);
+	ws_server_t *server = lws_context_user(context);
 	struct per_session_data__events *pss = user;
 	int ret = 0;
 	int i;
 
 	switch (reason) {
 	case LWS_CALLBACK_ESTABLISHED:
-		pss->ws = ws;
+		pss->server = server;
 		pss->cmd = command_new((command_handler_t) ws_events_command, pss);
 		buf_init(&pss->out_buf);
-		pss->id = ws_session_add(ws, pss);
+		pss->id = ws_session_add(server, pss);
 		log_debug(2, "ws_events_callback LWS_CALLBACK_ESTABLISHED [%04X]", pss->id);
 
 		//ws_show_http_token(wsi);
@@ -103,7 +105,7 @@ static int ws_events_callback(struct lws *wsi,
 	case LWS_CALLBACK_CLOSED:
 		log_debug(2, "ws_events_callback LWS_CALLBACK_CLOSED [%04X]", pss->id);
 
-		pss->ws = NULL;
+		pss->server = NULL;
 
 		if (pss->cmd != NULL) {
 			command_destroy(pss->cmd);
@@ -113,7 +115,7 @@ static int ws_events_callback(struct lws *wsi,
 		buf_cleanup(&pss->out_buf);
 		pss->id = -1;
 
-		ws_session_remove(ws, pss);
+		ws_session_remove(server, pss);
 		break;
 
 	/*
@@ -166,11 +168,11 @@ static void ws_events_send_session(char *str, struct per_session_data__events *p
 }
 
 
-void ws_events_send(ws_t *ws, char *str)
+void ws_events_send(ws_server_t *server, char *str)
 {
 	log_debug(2, "ws_events_send '%s'", str);
 
-	ws_session_foreach(ws, (hk_tab_foreach_func) ws_events_send_session, str);
+	ws_session_foreach(server, (hk_tab_foreach_func) ws_events_send_session, str);
 
-	lws_callback_on_writable_all_protocol(ws->server.context, ws_events_protocol);
+	lws_callback_on_writable_all_protocol(server->context, ws_events_protocol);
 }
