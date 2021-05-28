@@ -29,7 +29,7 @@ include $(HAKIT_DIR)tools/check.mk
 #
 
 CFLAGS  = -Wall -fPIC -I$(HAKIT_DIR)utils/include -I$(HAKIT_DIR)os/include -I$(HAKIT_DIR)core/include
-LDFLAGS =
+LDFLAGS = -lpthread
 SOFLAGS =
 
 ifdef DEBUG
@@ -125,7 +125,7 @@ LDFLAGS += -L$(LWS_LIB_DIR) -lwebsockets
 ifneq ($(WITHOUT_MQTT),yes) 
 MQTT_DIR = $(HAKIT_DIR)mqtt/mosquitto/lib
 CFLAGS += -DWITH_MQTT -I$(MQTT_DIR)
-LDFLAGS += -L$(MQTT_DIR) -lmosquitto -lpthread -lrt
+LDFLAGS += -L$(MQTT_DIR) -lmosquitto -lrt
 endif
 
 #

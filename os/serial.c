@@ -169,6 +169,14 @@ int serial_modem_get(int fd)
                 ret |= SERIAL_DSR;
         }
 
+        if (status & TIOCM_DTR) {
+                ret |= SERIAL_DTR;
+        }
+
+        if (status & TIOCM_RTS) {
+                ret |= SERIAL_RTS;
+        }
+
         return ret;
 }
 
@@ -186,7 +194,7 @@ int serial_modem_wait(int fd)
 }
 
 
-int serial_modem_set(int fd, int flags)
+int serial_modem_set(int fd, int flags, int value)
 {
         unsigned int status = 0;
 
@@ -196,17 +204,21 @@ int serial_modem_set(int fd, int flags)
         }
 
         if (flags & SERIAL_RTS) {
-                status |= TIOCM_RTS;
-        }
-        else {
-                status &= ~TIOCM_RTS;
+                if (value) {
+                        status |= TIOCM_RTS;
+                }
+                else {
+                        status &= ~TIOCM_RTS;
+                }
         }
 
         if (flags & SERIAL_DTR) {
-                status |= TIOCM_DTR;
-        }
-        else {
-                status &= ~TIOCM_DTR;
+                if (value) {
+                        status |= TIOCM_DTR;
+                }
+                else {
+                        status &= ~TIOCM_DTR;
+                }
         }
 
         if (ioctl(fd, TIOCMSET, &status) < 0) {

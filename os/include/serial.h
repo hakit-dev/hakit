@@ -13,6 +13,6 @@ extern void serial_close(int fd);
 
 extern int serial_modem_wait(int fd);
 extern int serial_modem_get(int fd);
-extern int serial_modem_set(int fd, int flags);
+extern int serial_modem_set(int fd, int flags, int value);
 
 #endif // __HAKIT_SERIAL_H__
