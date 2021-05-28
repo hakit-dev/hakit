@@ -33,7 +33,7 @@ typedef struct {
 	void (*input)(hk_pad_t *pad, char *value);    /**< Signal input method */
 } hk_class_t;
 
-extern void hk_class_register(hk_class_t *class);
+extern int hk_class_register(hk_class_t *class);
 extern hk_class_t *hk_class_find(char *name);
 
 

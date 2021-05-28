@@ -56,6 +56,7 @@ static int hk_mod_init_dir(char *dir)
                         if (!is_file(path)) {
                                 continue;
                         }
+                        log_debug(3, "  %s: %s", name, path);
 
                         void *dl = dlopen(path, RTLD_LAZY);
 			if (dl != NULL) {
@@ -76,9 +77,13 @@ static int hk_mod_init_dir(char *dir)
                                 }
 
 				if (class != NULL) {
-					hk_class_register(class);
-					log_str("%s: Class '%s' registered (%s)", path, class->name, class->version ? class->version:"");
-					// Keep library open
+					if (hk_class_register(class)) {
+                                                dlclose(dl);
+                                        }
+                                        else {
+                                                log_str("%s: Class '%s' registered (%s)", path, class->name, class->version ? class->version:"");
+                                                // Keep library open
+                                        }
 				}
 				else {
 					log_str("Class '%s': %s", name, dlerror());

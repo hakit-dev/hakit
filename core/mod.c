@@ -45,17 +45,19 @@ hk_class_t *hk_class_find(char *name)
 }
 
 
-void hk_class_register(hk_class_t *class)
+int hk_class_register(hk_class_t *class)
 {
 	hk_class_t **pclass;
 
 	if (hk_class_find(class->name) != NULL) {
 		log_str("ERROR: Class '%s' already exists", class->name);
-		return;
+		return -1;
 	}
 
 	pclass = hk_tab_push(&classes);
 	*pclass = class;
+
+        return 0;
 }
 
 
