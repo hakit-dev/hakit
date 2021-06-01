@@ -234,15 +234,21 @@ static int tty_connect(ctx_t *ctx)
         }
 
         /* Create MODEM input watch thread */
-        int ret = pthread_create(&ctx->thr, NULL, tty_thread, ctx);
-        if (ret < 0) {
-                log_str("WARNING: pthread_create: %s", strerror(errno));
-                ctx->thr_ok = 1;
+        ctx->thr_ok = 0;
+        if (hk_pad_is_connected(ctx->dsr) || hk_pad_is_connected(ctx->cts) || hk_pad_is_connected(ctx->cd) || hk_pad_is_connected(ctx->ri)) {
+                log_debug(1, "%s: Starting watch thread for Modem control signals", ctx->obj->name);
+                int ret = pthread_create(&ctx->thr, NULL, tty_thread, ctx);
+                if (ret < 0) {
+                        log_str("WARNING: pthread_create: %s", strerror(errno));
+                }
+                else {
+                        ctx->thr_ok = 1;
+                }
         }
         else {
-                ctx->thr_ok = 0;
+                log_debug(1, "%s: No pad connected for Modem control signals => no watch thread started", ctx->obj->name);
         }
-        
+
 	return 0;
 }
 

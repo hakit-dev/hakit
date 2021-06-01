@@ -65,6 +65,7 @@ extern void hk_pad_update_int(hk_pad_t *pad, int value);
 
 extern char *hk_pad_get_value(hk_obj_t *obj, char *ref);
 
+extern int hk_pad_is_connected(hk_pad_t *pad);
 
 /**
  * HAKit nets

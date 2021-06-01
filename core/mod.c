@@ -222,6 +222,12 @@ char *hk_pad_get_value(hk_obj_t *obj, char *ref)
 }
 
 
+int hk_pad_is_connected(hk_pad_t *pad)
+{
+        return (pad->net != NULL);
+}
+
+
 /*
  * HAKit nets
  */
