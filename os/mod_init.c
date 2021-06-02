@@ -123,9 +123,12 @@ int hk_mod_init(char *class_path)
 
 	if (ret == 0) {
                 char *dir = env_bindir("classes");
-                if ((dir != NULL) && is_dir(dir)) {
-                        hk_mod_init_dir(dir);
+                if (dir != NULL) {
                         /* Don't care if this directory does not exist */
+                        if (is_dir(dir)) {
+                                hk_mod_init_dir(dir);
+                        }
+                        free(dir);
                 }
 
 		hk_mod_init_dir("/usr/lib/hakit/classes");

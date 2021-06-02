@@ -86,11 +86,18 @@ void env_init(int argc, char *argv[])
 		free(env_devdir_);
 		env_devdir_ = NULL;
 	}
-	if (access(env_bindir(".version"), R_OK) == 0) {
-		path = strdup(env_bindir_);
-		env_devdir_ = strdup(dirname(dirname(path)));
-		free(path);
-	}
+
+        char *dir = env_bindir(".version");
+        if (dir != NULL) {
+                if (access(dir, R_OK) == 0) {
+                        path = strdup(env_bindir_);
+                        if (path != NULL) {
+                                env_devdir_ = strdup(dirname(dirname(path)));
+                                free(path);
+                        }
+                }
+                free(dir);
+        }
 }
 
 
@@ -112,10 +119,11 @@ static char *env_dir(char *rootdir, char *subpath)
 
         /* Alloc path buffer */
         path = malloc(size);
-
-        len = snprintf(path, size, "%s", rootdir);
-        if (subpath != NULL) {
-                len += snprintf(path+len, size-len, "/%s", subpath);
+        if (path != NULL) {
+                len = snprintf(path, size, "%s", rootdir);
+                if (subpath != NULL) {
+                        len += snprintf(path+len, size-len, "/%s", subpath);
+                }
         }
 
 	return path;
