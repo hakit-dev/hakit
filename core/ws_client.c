@@ -14,7 +14,8 @@
 #include "log.h"
 #include "buf.h"
 #include "netif.h"
-#include "ws_utils.h"
+#include "ws_log.h"
+#include "ws_io.h"
 #include "ws_client.h"
 
 

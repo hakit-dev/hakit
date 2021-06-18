@@ -21,7 +21,7 @@
 #include "tab.h"
 #include "mime.h"
 #include "ws_server.h"
-#include "ws_utils.h"
+#include "ws_io.h"
 #include "ws_auth.h"
 #include "ws_http.h"
 
