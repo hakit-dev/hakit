@@ -275,6 +275,11 @@ void ws_client_destroy(ws_client_t *client)
 		lws_context_destroy((struct lws_context *) client->context);
 		client->context = NULL;
 	}
+
+        if (client->socket_signature != NULL) {
+                free(client->socket_signature);
+                client->socket_signature = NULL;
+        }
 }
 
 
