@@ -24,7 +24,4 @@ extern void ws_client_destroy(ws_client_t *client);
 extern int ws_client_get(ws_client_t *client, char *uri, char *headers,
                          ws_client_func_t *func, void *user_data);
 
-// Get socket signature collected during the first HTTP connection
-extern char *ws_client_socket_signature(ws_client_t *client);
-
 #endif /* __HAKIT_WS_CLIENT_H__ */

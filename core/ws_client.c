@@ -374,9 +374,3 @@ int ws_client_get(ws_client_t *client, char *uri, char *headers, ws_client_func_
 
 	return (wsi != NULL) ? 0:-1;
 }
-
-
-char *ws_client_socket_signature(ws_client_t *client)
-{
-        return client->socket_signature;
-}
