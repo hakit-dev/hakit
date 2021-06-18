@@ -20,7 +20,7 @@ ARCH_BINS = $(ENGINE_BIN) $(CLIENT_BIN) $(LAUNCHER_BIN)
 
 include ../defs.mk
 
-CFLAGS += -I$(HAKIT_DIR)os -I$(HAKIT_DIR)core
+CFLAGS += -I$(HAKIT_DIR)core
 LDFLAGS += -rdynamic -ldl
 
 ARCH_LIB = $(OUTDIR)/libhakit.a

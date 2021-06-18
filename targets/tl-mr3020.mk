@@ -9,6 +9,7 @@
 # directory for more details.
 #
 ARCH = ar71xx
+OS = linux
 DISTRO = openwrt
 
 export CROSS_COMPILE := mips-openwrt-linux-

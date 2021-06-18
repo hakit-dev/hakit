@@ -19,6 +19,8 @@ ifdef TARGET
 include $(HAKIT_DIR)targets/$(TARGET).mk
 endif
 
+OS ?= linux
+
 #
 # Check build tools dependencies
 #

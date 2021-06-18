@@ -9,6 +9,7 @@
 # directory for more details.
 #
 ARCH = armhf
+OS = linux
 DISTRO = debian
 
 export CROSS_COMPILE := arm-linux-gnueabihf-

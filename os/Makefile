@@ -8,13 +8,20 @@ ARCH_LIBS = $(ARCH_LIB)
 
 include ../defs.mk
 
-SRCS = env.c io.c iputils.c logio.c mod_init.c netif.c netif_watch.c \
-	proc.c serial.c sys.c tcpio.c udpio.c
+vpath %.c $(OS)
+
+SRCS = $(wildcard *.c) $(notdir $(wildcard $(OS)/*.c))
 OBJS = $(SRCS:%.c=$(OUTDIR)/%.o)
 
 $(ARCH_LIB): $(OBJS)
 
 all:: $(ARCH_LIBS)
 
+list:
+	@echo $(SRCS)
+
 install::
 	@true
+
+clean::
+	$(RM) $(OBJS)
