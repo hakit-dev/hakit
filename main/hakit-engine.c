@@ -125,9 +125,7 @@ int main(int argc, char *argv[])
         }
         
 	/* Init loadable class module management */
-	if (hk_mod_init(opt_class_path)) {
-		return 2;
-	}
+	hk_mod_init(opt_class_path);
 
         /* Load application */
 	for (i = 1; i < argc; i++) {

@@ -10,6 +10,6 @@
 #ifndef __HAKIT_MOD_INIT_H__
 #define __HAKIT_MOD_INIT_H__
 
-extern int hk_mod_init(char *class_path);
+extern void hk_mod_init(char *class_path);
 
 #endif /* __HAKIT_MOD_INIT_H__ */

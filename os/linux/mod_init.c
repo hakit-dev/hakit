@@ -23,9 +23,10 @@
 #include "files.h"
 #include "mod.h"
 #include "hakit_version.h"
+#include "mod_init.h"
 
 
-static int hk_mod_init_dir(char *dir)
+static void hk_mod_init_dir(char *dir)
 {
 	int dirlen = strlen(dir);
 	DIR *d;
@@ -34,7 +35,7 @@ static int hk_mod_init_dir(char *dir)
 	d = opendir(dir);
 	if (d == NULL) {
 		log_debug(2, "Directory '%s' not found", dir);
-		return 0;
+		return;
 	}
 
 	log_str("Scanning class directory '%s' ...", dir);
@@ -97,17 +98,14 @@ static int hk_mod_init_dir(char *dir)
 	}
 
 	closedir(d);
-
-	return 0;
 }
 
 
-int hk_mod_init(char *class_path)
+void hk_mod_init(char *class_path)
 {
 	char *s1 = class_path;
-	int ret = 0;
 
-	while ((s1 != NULL) && (ret == 0)) {
+	while (s1 != NULL) {
 		char *s2 = strchr(s1, ':');
 		if (s2 == NULL) {
 			s2 = strchr(s1, ',');
@@ -116,24 +114,19 @@ int hk_mod_init(char *class_path)
 			*(s2++) = '\0';
 		}
 
-		ret = hk_mod_init_dir(s1);
+		hk_mod_init_dir(s1);
 
 		s1 = s2;
 	}
 
-	if (ret == 0) {
-                char *dir = env_bindir("classes");
-                if (dir != NULL) {
-                        /* Don't care if this directory does not exist */
-                        if (is_dir(dir)) {
-                                hk_mod_init_dir(dir);
-                        }
-                        free(dir);
+        char *dir = env_bindir("classes");
+        if (dir != NULL) {
+                /* Don't care if this directory does not exist */
+                if (is_dir(dir)) {
+                        hk_mod_init_dir(dir);
                 }
+                free(dir);
+        }
 
-		hk_mod_init_dir("/usr/lib/hakit/classes");
-		/* Don't care if this directory does not exist */
-	}
-
-	return ret;
+        hk_mod_init_dir("/usr/lib/hakit/classes");
 }
