@@ -27,7 +27,7 @@ clean::
 
 install: all
 	$(MKDIR) $(INSTALL_SHARE)
-	$(CP) -a *.html *.css *.js favicon.ico vendor $(INSTALL_SHARE)/
+	$(CP) -a *.html *.css *.js favicon.ico $(INSTALL_SHARE)/
 
 %.css: %.scss
 	sass $< $@
