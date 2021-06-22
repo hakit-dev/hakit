@@ -77,6 +77,7 @@ function hakit_chart_init(depth)
         if (!canvas) {
             canvas = document.createElement('canvas');
             canvas.setAttribute('id', canvas_id);
+            canvas.height = 100;
             hakit_chart.container.appendChild(canvas);
         }
 
@@ -87,6 +88,7 @@ function hakit_chart_init(depth)
 	    },
 	    options: {
 	        responsive: true,
+	        responsiveresponsive: false,
 	        title: {
 		    display: true,
 		    text: chart_name,
