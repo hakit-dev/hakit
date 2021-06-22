@@ -122,7 +122,7 @@ static int tty_send(ctx_t *ctx, char *str)
 
 	int ret = io_channel_write(&ctx->tty_chan, str, strlen(str));
         if (ret > 0) {
-                io_channel_write(&ctx->tty_chan, "\n", 1);
+                io_channel_write(&ctx->tty_chan, "\r", 1);
         }
 
         return ret;
