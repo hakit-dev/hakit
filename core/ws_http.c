@@ -66,8 +66,8 @@ static char *search_file(ws_server_t *server, char *uri)
 
 	for (i = 0; (file_path == NULL) && (i < server->document_roots.nmemb); i++) {
 		char *dir = HK_TAB_VALUE(server->document_roots, char *, i);
-		int file_path_len = strlen(dir);
-		int file_path_size = file_path_len + uri_len + 20;
+                int file_path_len = strlen(dir);
+		int file_path_size = file_path_len + subdir_len + uri_len + 20;
 		file_path = malloc(file_path_size);
 
 		strcpy(file_path, dir);
@@ -85,6 +85,8 @@ static char *search_file(ws_server_t *server, char *uri)
 
 		strcpy(file_path+file_path_len, uri);
 		file_path_len += uri_len;
+
+                log_debug(3, "  file_path='%s'", file_path);
 
 		/* Check if URI targets a directory */
 		DIR *d = opendir(file_path);
