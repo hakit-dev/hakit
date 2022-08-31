@@ -64,7 +64,7 @@ deb: check check_pkg_vars install
 	    -e 's/@ARCH@/$(DEBARCH)/' \
 	    -e 's/@VERSION@/$(VERSION)-$(PKGRELEASE)/' \
 	    $(APP_DIR)control.in > $(DESTDIR)/DEBIAN/control
-	fakeroot dpkg-deb --build $(DESTDIR) $(PKGDIR)/$(DEBNAME)
+	fakeroot dpkg-deb -Zxz --build $(DESTDIR) $(PKGDIR)/$(DEBNAME)
 
 ipk: check check_pkg_vars install
 	$(MKDIR) $(DESTDIR)/DEBIAN
