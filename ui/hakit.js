@@ -110,9 +110,11 @@ function hakit_recv_get(line)
 
     hakit_updated(signal_name, value, dir, widget);
 
-    var chart_name = chart_args[0];
-    if (chart_name != '-') {
-        hakit_chart_add(chart_name, signal_name, chart_args[1]);
+    if ((typeof hakit_chart_enabled === "function") && hakit_chart_enabled()) {
+        let chart_name = chart_args[0];
+        if (chart_name != '-') {
+            hakit_chart_add(chart_name, signal_name, chart_args[1]);
+        }
     }
 }
 
@@ -133,7 +135,9 @@ function hakit_recv_trace(line)
         }
         data.push(pt);
     }
-    hakit_chart_set(name, data);
+    if ((typeof hakit_chart_enabled === "function") && hakit_chart_enabled()) {
+        hakit_chart_set(name, data);
+    }
 }
 
 
