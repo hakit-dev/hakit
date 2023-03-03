@@ -524,7 +524,7 @@ static void engine_start(ctx_t *ctx)
         HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(bin));
 
         if (opt_debug > 0) {
-                char debug[16];
+                char debug[20];
                 snprintf(debug, sizeof(debug), "--debug=%d", opt_debug);
                 HK_TAB_PUSH_VALUE(engine_argv, (char *) strdup(debug));
         }
