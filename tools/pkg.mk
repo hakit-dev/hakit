@@ -4,9 +4,11 @@
 
 VERSION ?= "0"
 
-ifeq ($(ARCH),)
+HOST_ARCH := $(shell arch)
+
+ifeq ($(ARCH),$(HOST_ARCH))
 DEBARCH = $(shell dpkg-architecture -qDEB_HOST_ARCH)
-RPMARCH = $(shell arch)
+RPMARCH = $(HOST_ARCH)
 else
 
 ifeq ($(ARCH),x86_64)
