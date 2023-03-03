@@ -73,7 +73,7 @@ static void hk_mod_init_dir(char *dir)
 
 				hk_class_t *class = dlsym(dl, varname);
                                 if (class == NULL) {
-                                        log_debug(3, "Class '%s': symbol '%s' not found, trying '_class'", varname);
+                                        log_debug(3, "Class '%s': symbol '%s' not found, trying '_class'", name, varname);
                                         class = dlsym(dl, "_class");
                                 }
 
