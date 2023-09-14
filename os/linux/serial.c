@@ -88,6 +88,11 @@ int serial_open(char *devname, unsigned int speed, int rtscts)
 		goto failed;
 	}
 
+        /* If speed is 0, keep termios unchanged */
+        if (speed == 0) {
+                return fd;
+        }
+
 	/* Get serial device settings */
 	if (tcgetattr(fd, &termio)) {
 		log_str("ERROR: tcgetattr(%s): %s", devname, strerror(errno));

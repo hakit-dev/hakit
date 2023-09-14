@@ -14,6 +14,7 @@
 #include <malloc.h>
 #include <pthread.h>
 #include <errno.h>
+#include <mqueue.h>
 
 #include "types.h"
 #include "log.h"
@@ -51,6 +52,9 @@ typedef struct {
 	buf_t lbuf;
         pthread_t thr;
         int thr_ok;
+	mqd_t thr_mq;
+	sys_tag_t thr_mq_tag;
+        int io_only;
 } ctx_t;
 
 
@@ -142,25 +146,97 @@ static void *tty_thread(void *arg)
 {
         ctx_t *ctx = arg;
 
-        log_str("%s: Thread started", ctx->tty_name);
+        log_str("%s: Thread started", ctx->obj->name);
 
         pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
         pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
 
-        while (1) {
-                int flags = serial_modem_wait(ctx->tty_chan.fd);
-                if (flags >= 0) {
-                        tty_set_modem_outputs(ctx, flags);
-                }
-                else {
-                        log_str("%s: Thread i/o error", ctx->tty_name);
+        int flags = 0;
+        while (flags >= 0) {
+                flags = serial_modem_wait(ctx->tty_chan.fd);
+
+                char mbuf = flags & 0xFF;
+                if (mq_send(ctx->thr_mq, &mbuf, sizeof(mbuf), 0) < 0) {
+                        log_str("PANIC: %s: Cannot send message: %s", ctx->obj->name, strerror(errno));
                         break;
                 }
         }
 
         ctx->thr_ok = 0;
 
+        log_str("%s: Thread terminated", ctx->obj->name);
+
         return NULL;
+}
+
+
+static int tty_thread_recv(ctx_t *ctx, int fd)
+{
+	char mbuf;
+	ssize_t msize = mq_receive(ctx->thr_mq, &mbuf, sizeof(mbuf), NULL);
+	if (msize < 0) {
+		if ((errno != EAGAIN) && (errno != EINTR)) {
+			log_str("PANIC: %s: Cannot handle thread message: %s", ctx->obj->name, strerror(errno));
+		}
+		return 0;
+	}
+
+	if (msize != 1) {
+		log_str("PANIC: %s: Received thread message with illegal size (%d)", ctx->obj->name, msize);
+		return 0;
+	}
+
+        /* Hangup signal */
+        if (mbuf == 0xFF) {
+                log_str("PANIC: %s: Watch thread i/o error", ctx->tty_name);
+
+                /* Trigger hangup procedure if in i/o mode only */
+                if (ctx->io_only) {
+                        tty_hangup(ctx);
+                }
+                return 0;
+        }
+
+        /* Normal data */
+        tty_set_modem_outputs(ctx, mbuf);
+
+	return 1;
+}
+
+
+static int tty_thread_init(ctx_t *ctx)
+{
+        /* Only one init required */
+        if (ctx->thr_mq_tag > 0) {
+                return 0;
+        }
+
+        /* Create private messaging queue */
+	char id[64];
+        snprintf(id, sizeof(id), "/hakit-%s", ctx->obj->name);
+
+        int flags = O_RDWR | O_CREAT | O_EXCL | O_NONBLOCK;
+
+        struct mq_attr attr = {
+                .mq_flags   = O_NONBLOCK,
+                .mq_maxmsg  = 8,
+                .mq_msgsize = 1,
+        };
+
+        ctx->thr_mq = mq_open(id, flags, 0600, &attr);
+        if (ctx->thr_mq == -1) {
+                log_str("ERROR: %s: Cannot create message queue: %s", ctx->obj->name, strerror(errno));
+                return -1;
+        }
+
+        mq_unlink(id);  // Hide message queue from other processes
+
+        /* Message queue receive callback */
+        ctx->thr_mq_tag = sys_io_watch(ctx->thr_mq, (sys_io_func_t) tty_thread_recv, ctx);
+
+        log_debug(1, "%s: Message queue initialized", ctx->obj->name);
+
+        return 0;
 }
 
 
@@ -222,7 +298,12 @@ static int tty_connect(ctx_t *ctx)
 	}
 
 	/* Hook TTY to io channel */
-	io_channel_setup(&ctx->tty_chan, fd, (io_func_t) tty_recv, ctx);
+        if (ctx->io_only) {
+                ctx->tty_chan.fd = fd;
+        }
+        else {
+                io_channel_setup(&ctx->tty_chan, fd, (io_func_t) tty_recv, ctx);
+        }
 
 	/* Update connection state pad */
 	hk_pad_update_int(ctx->connected, 1);
@@ -237,12 +318,15 @@ static int tty_connect(ctx_t *ctx)
         ctx->thr_ok = 0;
         if (hk_pad_is_connected(ctx->dsr) || hk_pad_is_connected(ctx->cts) || hk_pad_is_connected(ctx->cd) || hk_pad_is_connected(ctx->ri)) {
                 log_debug(1, "%s: Starting watch thread for Modem control signals", ctx->obj->name);
-                int ret = pthread_create(&ctx->thr, NULL, tty_thread, ctx);
-                if (ret < 0) {
-                        log_str("WARNING: pthread_create: %s", strerror(errno));
-                }
-                else {
-                        ctx->thr_ok = 1;
+                int ret = tty_thread_init(ctx);
+                if (ret == 0) {
+                        ret = pthread_create(&ctx->thr, NULL, tty_thread, ctx);
+                        if (ret < 0) {
+                                log_str("ERROR: %s, pthread_create: %s", ctx->obj->name, strerror(errno));
+                        }
+                        else {
+                                ctx->thr_ok = 1;
+                        }
                 }
         }
         else {
@@ -271,6 +355,14 @@ static void _start(hk_obj_t *obj)
 {
 	ctx_t *ctx = obj->ctx;
 
+        /* Assume io_only mode if neither TxD or RxD are used */
+        if (!(hk_pad_is_connected(ctx->txd) || hk_pad_is_connected(ctx->rxd))) {
+                ctx->tty_speed = 0;
+                ctx->io_only = 1;
+                log_str("tx/rx pads are not used => enable IO-Only mode");
+        }
+
+        /* Try to connect serial device ; Start periodic retry if it fails */
 	if (tty_connect(ctx)) {
 		ctx->timeout = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
 	}
