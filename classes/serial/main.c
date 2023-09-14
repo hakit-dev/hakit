@@ -333,6 +333,14 @@ static int tty_connect(ctx_t *ctx)
                 log_debug(1, "%s: No pad connected for Modem control signals => no watch thread started", ctx->obj->name);
         }
 
+        /* Set initial state for MODEM outputs */
+        if (hk_pad_is_connected(ctx->rts)) {
+                serial_modem_set(ctx->tty_chan.fd, SERIAL_RTS, ctx->rts->state);
+        }
+        if (hk_pad_is_connected(ctx->dtr)) {
+                serial_modem_set(ctx->tty_chan.fd, SERIAL_DTR, ctx->dtr->state);
+        }
+
 	return 0;
 }
 
