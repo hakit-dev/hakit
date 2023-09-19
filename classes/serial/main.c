@@ -63,15 +63,15 @@ static int tty_retry(ctx_t *ctx);
 
 static void tty_hangup(ctx_t *ctx)
 {
-        log_str("%s: Serial device hung up.", ctx->tty_name);
+        log_str("%s: Serial device %s hung up.", ctx->obj->name, ctx->tty_name);
 
         /* Cancel MODEM input watch thread */
         if (ctx->thr_ok) {
                 if (pthread_cancel(ctx->thr) != 0) {
-                        log_str("%s: Thread cancel failed: %s", ctx->tty_name, strerror(errno));
+                        log_str("%s: Watch thread cancel failed: %s", ctx->obj->name, strerror(errno));
                 }                        
                 pthread_join(ctx->thr, NULL);
-                log_str("%s: Thread canceled", ctx->tty_name);
+                log_str("%s: Watch thread canceled", ctx->obj->name);
                 ctx->thr_ok = 0;
         }
 
@@ -91,7 +91,7 @@ static void tty_recv_line(ctx_t *ctx, char *str)
 		return;
 	}
 
-	log_debug(2, "%s [RECV]: '%s'", ctx->tty_name, str);
+	log_debug(2, "%s [RECV]: '%s'", ctx->obj->name, str);
 
         hk_pad_update_str(ctx->rxd, str);
 }
@@ -122,7 +122,7 @@ static void tty_recv(ctx_t *ctx, char *buf, int size)
 
 static int tty_send(ctx_t *ctx, char *str)
 {
-	log_debug(2, "%s [SEND]: '%s'", ctx->tty_name, str);
+	log_debug(2, "%s [SEND]: '%s'", ctx->obj->name, str);
 
 	int ret = io_channel_write(&ctx->tty_chan, str, strlen(str));
         if (ret > 0) {
@@ -188,7 +188,7 @@ static int tty_thread_recv(ctx_t *ctx, int fd)
 
         /* Hangup signal */
         if (mbuf == 0xFF) {
-                log_str("PANIC: %s: Watch thread i/o error", ctx->tty_name);
+                log_str("PANIC: %s: Watch thread i/o error", ctx->obj->name);
 
                 /* Trigger hangup procedure if in i/o mode only */
                 if (ctx->io_only) {
@@ -335,9 +335,11 @@ static int tty_connect(ctx_t *ctx)
 
         /* Set initial state for MODEM outputs */
         if (hk_pad_is_connected(ctx->rts)) {
+                log_debug(2, "%s: Initial state RTS = %d", ctx->obj->name, ctx->rts->state);
                 serial_modem_set(ctx->tty_chan.fd, SERIAL_RTS, ctx->rts->state);
         }
         if (hk_pad_is_connected(ctx->dtr)) {
+                log_debug(2, "%s: Initial state DTR = %d", ctx->obj->name, ctx->rts->state);
                 serial_modem_set(ctx->tty_chan.fd, SERIAL_DTR, ctx->dtr->state);
         }
 
@@ -351,7 +353,7 @@ static int tty_retry(ctx_t *ctx)
 		return 1;
 	}
 
-	log_str("%s: Serial device is back...", ctx->tty_name);
+	log_str("%s: Serial device %s is back...", ctx->obj->name, ctx->tty_name);
 
 	ctx->timeout = 0;
 
@@ -367,7 +369,7 @@ static void _start(hk_obj_t *obj)
         if (!(hk_pad_is_connected(ctx->txd) || hk_pad_is_connected(ctx->rxd))) {
                 ctx->tty_speed = 0;
                 ctx->io_only = 1;
-                log_str("tx/rx pads are not used => enable IO-Only mode");
+                log_str("%s: tx/rx pads are not used => enable IO-Only mode", ctx->obj->name);
         }
 
         /* Try to connect serial device ; Start periodic retry if it fails */
