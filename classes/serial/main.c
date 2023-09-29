@@ -48,22 +48,36 @@ typedef struct {
 	char *tty_name;
 	int tty_speed;
 	io_channel_t tty_chan;
-	sys_tag_t timeout;
+	sys_tag_t timeout_tag;
 	buf_t lbuf;
         pthread_t thr;
         int thr_ok;
 	mqd_t thr_mq;
 	sys_tag_t thr_mq_tag;
         int io_only;
+	int debounce_delay;
+        int debounce_flags;
 } ctx_t;
 
 
 static int tty_retry(ctx_t *ctx);
 
 
+static void timeout_clear(ctx_t *ctx)
+{
+	if (ctx->timeout_tag != 0) {
+		sys_remove(ctx->timeout_tag);
+		ctx->timeout_tag = 0;
+	}
+}
+
+
 static void tty_hangup(ctx_t *ctx)
 {
         log_str("%s: Serial device %s hung up.", ctx->obj->name, ctx->tty_name);
+
+        /* Cancel debounce timer */
+        timeout_clear(ctx);
 
         /* Cancel MODEM input watch thread */
         if (ctx->thr_ok) {
@@ -81,7 +95,7 @@ static void tty_hangup(ctx_t *ctx)
         hk_pad_update_int(ctx->connected, 0);
 
         /* Start connect watch timer */
-        ctx->timeout = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
+        ctx->timeout_tag = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
 }
 
 
@@ -133,12 +147,20 @@ static int tty_send(ctx_t *ctx, char *str)
 }
 
 
-static void tty_set_modem_outputs(ctx_t *ctx, int flags)
+static void tty_update_outputs(ctx_t *ctx, int flags)
 {
         hk_pad_update_int(ctx->dsr, (flags & SERIAL_DSR) ? 1:0);
         hk_pad_update_int(ctx->cts, (flags & SERIAL_CTS) ? 1:0);
         hk_pad_update_int(ctx->cd, (flags & SERIAL_CD) ? 1:0);
         hk_pad_update_int(ctx->ri, (flags & SERIAL_RI) ? 1:0);
+}
+
+
+static int debounce_timeout_cb(ctx_t *ctx)
+{
+	ctx->timeout_tag = 0;
+        tty_update_outputs(ctx, ctx->debounce_flags);
+	return 0;
 }
 
 
@@ -198,7 +220,14 @@ static int tty_thread_recv(ctx_t *ctx, int fd)
         }
 
         /* Normal data */
-        tty_set_modem_outputs(ctx, mbuf);
+	if (ctx->debounce_delay > 0) {
+                timeout_clear(ctx);
+                ctx->debounce_flags = mbuf;
+		ctx->timeout_tag = sys_timeout(ctx->debounce_delay, (sys_func_t) debounce_timeout_cb, ctx);
+	}
+	else {
+                tty_update_outputs(ctx, mbuf);
+        }
 
 	return 1;
 }
@@ -262,6 +291,9 @@ static int _new(hk_obj_t *obj)
 		ctx->tty_speed = DEFAULT_SPEED;
 	}
 
+        /* Get debounce delay */
+	ctx->debounce_delay = hk_prop_get_int(&obj->props, "debounce");
+
 	/* Clear io channel */
 	io_channel_clear(&ctx->tty_chan);
 
@@ -311,7 +343,7 @@ static int tty_connect(ctx_t *ctx)
         /* Get MODEM input states */
         int flags = serial_modem_get(ctx->tty_chan.fd);
         if (flags >= 0) {
-                tty_set_modem_outputs(ctx, flags);
+                tty_update_outputs(ctx, flags);
         }
 
         /* Create MODEM input watch thread */
@@ -355,7 +387,7 @@ static int tty_retry(ctx_t *ctx)
 
 	log_str("%s: Serial device %s is back...", ctx->obj->name, ctx->tty_name);
 
-	ctx->timeout = 0;
+	ctx->timeout_tag = 0;
 
 	return 0;
 }
@@ -374,7 +406,7 @@ static void _start(hk_obj_t *obj)
 
         /* Try to connect serial device ; Start periodic retry if it fails */
 	if (tty_connect(ctx)) {
-		ctx->timeout = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
+		ctx->timeout_tag = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
 	}
 }
 
