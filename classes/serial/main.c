@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <mqueue.h>
+#include <glob.h>
 
 #include "types.h"
 #include "log.h"
@@ -36,6 +37,7 @@
 
 typedef struct {
 	hk_obj_t *obj;
+	hk_pad_t *connect;
 	hk_pad_t *connected;
 	hk_pad_t *txd;
 	hk_pad_t *rxd;
@@ -60,7 +62,8 @@ typedef struct {
 } ctx_t;
 
 
-static int tty_retry(ctx_t *ctx);
+static int tty_retry_cb(ctx_t *ctx);
+static int tty_connect(ctx_t *ctx);
 
 
 static void timeout_clear(ctx_t *ctx)
@@ -72,12 +75,20 @@ static void timeout_clear(ctx_t *ctx)
 }
 
 
-static void tty_hangup(ctx_t *ctx)
+static void tty_open(ctx_t *ctx)
 {
-        log_str("%s: Serial device %s hung up.", ctx->obj->name, ctx->tty_name);
+        log_debug(1, "%s: tty_open", ctx->obj->name);
 
-        /* Cancel debounce timer */
-        timeout_clear(ctx);
+        /* Try to connect serial device ; Start periodic retry if it fails */
+	if (tty_connect(ctx)) {
+		ctx->timeout_tag = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry_cb, ctx);
+	}
+}
+
+
+static void tty_close(ctx_t *ctx)
+{
+        log_debug(1, "%s: tty_close", ctx->obj->name);
 
         /* Cancel MODEM input watch thread */
         if (ctx->thr_ok) {
@@ -93,9 +104,20 @@ static void tty_hangup(ctx_t *ctx)
 
         /* Update connection state pad */
         hk_pad_update_int(ctx->connected, 0);
+}
+
+
+static void tty_hangup(ctx_t *ctx)
+{
+        log_str("%s: Serial device %s hung up.", ctx->obj->name, ctx->tty_name);
+
+        /* Cancel debounce timer */
+        timeout_clear(ctx);
+
+        tty_close(ctx);
 
         /* Start connect watch timer */
-        ctx->timeout_tag = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
+        ctx->timeout_tag = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry_cb, ctx);
 }
 
 
@@ -156,7 +178,7 @@ static void tty_update_outputs(ctx_t *ctx, int flags)
 }
 
 
-static int debounce_timeout_cb(ctx_t *ctx)
+static int tty_debounce_cb(ctx_t *ctx)
 {
 	ctx->timeout_tag = 0;
         tty_update_outputs(ctx, ctx->debounce_flags);
@@ -223,7 +245,7 @@ static int tty_thread_recv(ctx_t *ctx, int fd)
 	if (ctx->debounce_delay > 0) {
                 timeout_clear(ctx);
                 ctx->debounce_flags = mbuf;
-		ctx->timeout_tag = sys_timeout(ctx->debounce_delay, (sys_func_t) debounce_timeout_cb, ctx);
+		ctx->timeout_tag = sys_timeout(ctx->debounce_delay, (sys_func_t) tty_debounce_cb, ctx);
 	}
 	else {
                 tty_update_outputs(ctx, mbuf);
@@ -313,16 +335,34 @@ static int _new(hk_obj_t *obj)
 	ctx->connected = hk_pad_create(obj, HK_PAD_OUT, "connected");
 	hk_pad_update_int(ctx->connected, 0);
 
+        /* Create connection reset pad */
+        ctx->connect = hk_pad_create(obj, HK_PAD_IN, "connect");
+
 	return 0;
 }
 
 
 static int tty_connect(ctx_t *ctx)
 {
+        glob_t globlist;
 	int fd;
 
+        /* Find device name */
+        int ret = glob(ctx->tty_name, 0, NULL, &globlist);
+        if (ret != 0) {
+                log_str("ERROR: %s: Failed to retrieve device name '%s' (%d)", ctx->obj->name, ctx->tty_name, ret);
+		return -1;
+        }
+
+        if (globlist.gl_pathc <= 0) {
+                log_str("ERROR: %s: Device name '%s' not found", ctx->obj->name, ctx->tty_name);
+		return -1;
+        }
+
 	/* Open serial device */
-        fd = serial_open(ctx->tty_name, ctx->tty_speed, 0);
+        fd = serial_open(globlist.gl_pathv[0], ctx->tty_speed, 0);
+
+        globfree(&globlist);
 
 	/* Abort if serial device open fails */
 	if (fd < 0) {
@@ -379,7 +419,7 @@ static int tty_connect(ctx_t *ctx)
 }
 
 
-static int tty_retry(ctx_t *ctx)
+static int tty_retry_cb(ctx_t *ctx)
 {
 	if (tty_connect(ctx)) {
 		return 1;
@@ -404,10 +444,15 @@ static void _start(hk_obj_t *obj)
                 log_str("%s: tx/rx pads are not used => enable IO-Only mode", ctx->obj->name);
         }
 
-        /* Try to connect serial device ; Start periodic retry if it fails */
-	if (tty_connect(ctx)) {
-		ctx->timeout_tag = sys_timeout(RETRY_DELAY, (sys_func_t) tty_retry, ctx);
-	}
+        /* Open serial device if connect pad is unconnected or active */
+        if (hk_pad_is_connected(ctx->connect)) {
+                if (ctx->connected->state) {
+                        tty_open(ctx);
+                }
+        }
+        else {
+                tty_open(ctx);
+        }
 }
 
 
@@ -423,6 +468,14 @@ static void _input(hk_pad_t *pad, char *value)
         }
         else if (pad == ctx->dtr) {
                 serial_modem_set(ctx->tty_chan.fd, SERIAL_DTR, atoi(value));
+        }
+        else if (pad == ctx->connect) {
+                if (atoi(value)) {
+                        tty_open(ctx);
+                }
+                else {
+                        tty_close(ctx);
+                }
         }
 }
 
