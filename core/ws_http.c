@@ -221,22 +221,34 @@ static int ws_http_request(ws_server_t *server,
 		return 0;
 	}
 
-	/* Try to match URL aliases */
-	for (i = 0; i < server->aliases.nmemb; i++) {
-		ws_alias_t *alias = HK_TAB_PTR(server->aliases, ws_alias_t, i);
-		if ((alias->location != NULL) && (alias->handler != NULL)) {
-			if (strncmp(alias->location, uri, alias->len) == 0) {
-				alias->handler(alias->user_data, uri, &pss->rsp);
-				break;
-			}
-		}
-	}
+        /* Replace URI prefix with declared aliases */
+        for (i = 0; (i < server->aliases.nmemb) && (file_path == NULL); i++) {
+                ws_alias_t *alias = HK_TAB_PTR(server->aliases, ws_alias_t, i);
+                if ((alias->location != NULL) && (alias->dir != NULL)) {
+                        if (strncmp(alias->location, uri, alias->len) == 0) {
+                                char *uri_base = &uri[alias->len];
+                                int size = strlen(alias->dir) + strlen(uri_base) + 12;
+                                file_path = malloc(size);
+                                int file_path_len = snprintf(file_path, size, "%s%s", alias->dir, uri_base);
 
-	/* if no alias matched, read file */
-	if (pss->rsp.len > 0) {
-		content_length = pss->rsp.len;
-	}
-	else {
+                                /* Check if URI targets a directory */
+                                DIR *d = opendir(file_path);
+                                if (d != NULL) {
+                                        closedir(d);
+
+                                        /* Try to access 'index.html' in this directory */
+                                        if (file_path[file_path_len-1] != '/') {
+                                                file_path[file_path_len++] = '/';
+                                        }
+                                        strcpy(file_path+file_path_len, "index.html");
+                                }
+
+                                log_debug(2, "HTTP alias '%s' matched: '%s' => '%s'", alias->location, uri, file_path);
+                        }
+                }
+        }
+
+        if (file_path == NULL) {
 		/* Search file among root directory list */
 		file_path = search_file(server, uri);
                 if (file_path == NULL) {
@@ -249,34 +261,34 @@ static int ws_http_request(ws_server_t *server,
                 }
 
 		if (file_path == NULL) {
-			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
+			log_str("HTTP ERROR: No path found for '%s'", uri);
 			lws_return_http_status(wsi, HTTP_STATUS_NOT_FOUND, NULL);
 			goto failed;
 		}
+        }
 
-		/* Get and check mime type */
-		mimetype = get_mimetype(file_path);
-		if (mimetype == NULL) {
-			log_str("HTTP ERROR: Unknown mimetype for '%s'", file_path);
-			lws_return_http_status(wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
-			goto failed;
-		}
+        /* Get and check mime type */
+        mimetype = get_mimetype(file_path);
+        if (mimetype == NULL) {
+                log_str("HTTP ERROR: Unknown mimetype for '%s'", file_path);
+                lws_return_http_status(wsi, HTTP_STATUS_UNSUPPORTED_MEDIA_TYPE, NULL);
+                goto failed;
+        }
 
-		/* Open file */
-		pss->f = fopen(file_path, "r");
-		if (pss->f == NULL) {
-			log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
-			lws_return_http_status(wsi, HTTP_STATUS_NOT_FOUND, NULL);
-			goto failed;
-		}
+        /* Open file */
+        pss->f = fopen(file_path, "r");
+        if (pss->f == NULL) {
+                log_str("HTTP ERROR: Cannot open file '%s': %s", file_path, strerror(errno));
+                lws_return_http_status(wsi, HTTP_STATUS_NOT_FOUND, NULL);
+                goto failed;
+        }
 
-		/* Get file size */
-		fseek(pss->f, 0, SEEK_END);
-		content_length = ftell(pss->f);
-		fseek(pss->f, 0, SEEK_SET);
+        /* Get file size */
+        fseek(pss->f, 0, SEEK_END);
+        content_length = ftell(pss->f);
+        fseek(pss->f, 0, SEEK_SET);
 
-		log_debug(2, "=> '%s' %s (%d bytes)", file_path, mimetype, content_length);
-	}
+        log_debug(2, "=> '%s' %s (%d bytes)", file_path, mimetype, content_length);
 
 	/*
 	 * Construct HTTP header.

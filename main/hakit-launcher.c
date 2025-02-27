@@ -81,6 +81,7 @@ static int opt_mqtt_port = MQTT_PORT;
 #endif
 static int opt_no_ssl = 0;
 static char *opt_tile = NULL;
+static char *opt_http_alias = NULL;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
@@ -96,7 +97,8 @@ static const options_entry_t options_entries[] = {
 	{ "mqtt-port", 'p', 0, OPTIONS_TYPE_INT, &opt_mqtt_port, "MQTT broker port number (default: " xstr(MQTT_PORT) ")", "PORT" },
 #endif
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl, "Disable SSL for all engine protocols (HKCP, MQTT and HTTP)" },
-	{ "tile",    't', 0, OPTIONS_TYPE_STRING,  &opt_tile, "Start local tile (implies --offline)" },
+	{ "http-alias", 'a', 0, OPTIONS_TYPE_STRING, &opt_http_alias, "Set list of HTTP alias to file paths", "ALIAS=DIR,..." },
+	{ "tile",    't', 0, OPTIONS_TYPE_STRING,  &opt_tile, "Set list of local tiles (implies --offline)", "TILE,..." },
 	{ NULL }
 };
 
@@ -583,6 +585,13 @@ static void engine_start(ctx_t *ctx)
 		HK_TAB_PUSH_VALUE(engine_argv, strdup("--no-advertise"));
 	}
 
+	if (opt_http_alias != NULL) {
+                int size = 14 + strlen(opt_http_alias);
+                char *str = malloc(size);
+                snprintf(str, size, "--http-alias=%s", opt_http_alias);
+		HK_TAB_PUSH_VALUE(engine_argv, str);
+	}
+
         for (i = 0; i < ctx->tiles.nmemb; i++) {
                 tile_t *tile = HK_TAB_PTR(ctx->tiles, tile_t, i);
                 int size = strlen(tile->path) + 1;
@@ -597,6 +606,7 @@ static void engine_start(ctx_t *ctx)
                 len += snprintf(str+len, size-len, "%s", tile->path);
                 HK_TAB_PUSH_VALUE(engine_argv, str);
         }
+
         HK_TAB_PUSH_VALUE(engine_argv, (char *) NULL);
 
         // Start engine. Restart if it is already running

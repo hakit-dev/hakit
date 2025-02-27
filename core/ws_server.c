@@ -136,7 +136,7 @@ void ws_add_document_root(ws_server_t *server, char *dir)
 }
 
 
-void ws_alias(ws_server_t *server, char *location, ws_alias_handler_t handler, void *user_data)
+void ws_alias(ws_server_t *server, char *location, char *dir)
 {
 	ws_alias_t *alias = hk_tab_push(&server->aliases);
 
@@ -145,10 +145,9 @@ void ws_alias(ws_server_t *server, char *location, ws_alias_handler_t handler, v
 		alias->len = strlen(location);
 	}
 
-	alias->handler = handler;
-	alias->user_data = user_data;
+	alias->dir = strdup(dir);
 
-	log_debug(2, "ws_alias '%s'", location);
+	log_debug(2, "ws_alias_dir '%s' -> '%s'", location, dir);
 }
 
 

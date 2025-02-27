@@ -17,6 +17,7 @@ extern int comm_init(int use_ssl, char *certs, int use_hkcp, int advertise);
 extern int comm_enable_mqtt(char *certs, char *mqtt_broker);
 
 extern int comm_tile_register(char *path);
+extern int comm_alias_register(char *alias, char *dir);
 
 extern hk_sink_t *comm_sink_register(hk_obj_t *obj, int local, hk_ep_func_t func, void *user_data);
 extern void comm_sink_update_str(hk_sink_t *sink, char *value);

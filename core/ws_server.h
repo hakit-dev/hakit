@@ -13,14 +13,12 @@
 #include "buf.h"
 #include "tab.h"
 
-typedef void (*ws_alias_handler_t)(void *user_data, char *uri, buf_t *rsp);
 typedef void (*ws_command_handler_t)(void *user_data, int argc, char **argv, buf_t *out_buf);
 
 typedef struct {
 	char *location;
 	int len;
-	ws_alias_handler_t handler;
-	void *user_data;
+        char *dir;
 } ws_alias_t;
 
 typedef struct {
@@ -39,7 +37,7 @@ extern void ws_server_destroy(ws_server_t *server);
 
 /* HTTP server configuration */
 extern void ws_add_document_root(ws_server_t *server, char *dir);
-extern void ws_alias(ws_server_t *server, char *location, ws_alias_handler_t handler, void *user_data);
+extern void ws_alias(ws_server_t *server, char *location, char *dir);
 
 /* WebSocket command handling */
 extern void ws_server_set_command_handler(ws_server_t *server, ws_command_handler_t handler, void *user_data);

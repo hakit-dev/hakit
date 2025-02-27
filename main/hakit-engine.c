@@ -39,6 +39,7 @@ static int opt_no_hkcp = 0;
 static int opt_no_https = 0;
 static int opt_insecure_ssl = 0;
 static char *opt_http_auth = NULL;
+static char *opt_http_alias = NULL;
 static char *opt_certs = NULL;
 static int opt_no_mqtt = 0;
 static char *opt_mqtt_broker = NULL;
@@ -55,7 +56,8 @@ static const options_entry_t options_entries[] = {
 	{ "insecure", 'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl,  "Allow insecure HTTP TLS/SSL for client connections (self-signed certificates)" },
 	{ "certs",      'e', 0, OPTIONS_TYPE_STRING, &opt_certs,  "TLS/SSL certificate directory for HKCP/MQTT exchanges", "DIR" },
 #endif
-	{ "http-auth", 'A', 0, OPTIONS_TYPE_STRING, &opt_http_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
+	{ "http-auth",  'A', 0, OPTIONS_TYPE_STRING, &opt_http_auth, "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
+	{ "http-alias", 'a', 0, OPTIONS_TYPE_STRING, &opt_http_alias, "Set HTTP alias to directory", "ALIAS=DIR,..." },
 #ifdef WITH_MQTT
 	{ "no-mqtt",        'm', 0, OPTIONS_TYPE_NONE,   &opt_no_mqtt, "Disable MQTT protocol" },
 	{ "mqtt-broker",    'b', 0, OPTIONS_TYPE_STRING, &opt_mqtt_broker, "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
@@ -118,6 +120,21 @@ int main(int argc, char *argv[])
 	if (opt_http_auth != NULL) {
 		ws_auth_init(opt_http_auth);
 	}
+
+        /* Register HTTP URL aliases */
+        char *alias = opt_http_alias;
+        while (alias != NULL) {
+                char *sep = strchr(alias, ',');
+                if (sep != NULL) {
+                        *(sep++) = '\0';
+                }
+                char *eq = strchr(alias, '=');
+                if (eq != NULL) {
+                        *(eq++) = '\0';
+                        comm_alias_register(alias, eq);
+                }
+                alias = sep;
+        }
 
         /* Init static class modules */
         for (i = 0; static_classes[i] != NULL; i++) {
