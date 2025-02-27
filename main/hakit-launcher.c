@@ -311,16 +311,31 @@ static void ctx_tile_feed(ctx_t *ctx, char *str)
 
 static void ctx_tile_feed_local(ctx_t *ctx, char *path)
 {
-        char *rpath = realpath(path, NULL);
+        char *name = NULL;
+        char *path1 = strchr(path, '=');
+        if (path1 != NULL) {
+                name = path;
+                *(path1++) = '\0';
+        }
+        else {
+                path1 = path;
+        }
+
+        char *rpath = realpath(path1, NULL);
         if (rpath == NULL) {
-                log_str("ERROR: Local tile '%s' not found", path);
+                log_str("ERROR: Local tile '%s' not found", path1);
                 return;
         }
 
         tile_t *tile = hk_tab_push(&ctx->tiles);
         int ofs;
 
-        tile->name = NULL;
+        if (name != NULL) {
+                tile->name = strdup(name);
+        }
+        else {
+                tile->name = NULL;
+        }
         tile->rev = NULL;
         tile->path = rpath;
         tile->ready = 1;
@@ -332,7 +347,12 @@ static void ctx_tile_feed_local(ctx_t *ctx, char *path)
 
         tile->basename = &tile->path[ofs];
 
-        log_debug(2, "Preparing to start local tile: %s", tile->path);
+        if (name != NULL) {
+                log_debug(2, "Preparing to start local tile '%s' as '%s'", tile->path, tile->name);
+        }
+        else {
+                log_debug(2, "Preparing to start local tile '%s'", tile->path);
+        }
 }
 
 
@@ -565,7 +585,17 @@ static void engine_start(ctx_t *ctx)
 
         for (i = 0; i < ctx->tiles.nmemb; i++) {
                 tile_t *tile = HK_TAB_PTR(ctx->tiles, tile_t, i);
-                HK_TAB_PUSH_VALUE(engine_argv, strdup(tile->path));
+                int size = strlen(tile->path) + 1;
+                if (tile->name != NULL) {
+                        size += strlen(tile->name) + 1;
+                }
+                char *str = malloc(size);
+                int len = 0;
+                if (tile->name != NULL) {
+                        len += snprintf(str+len, size-len, "%s=", tile->name);
+                }
+                len += snprintf(str+len, size-len, "%s", tile->path);
+                HK_TAB_PUSH_VALUE(engine_argv, str);
         }
         HK_TAB_PUSH_VALUE(engine_argv, (char *) NULL);
 

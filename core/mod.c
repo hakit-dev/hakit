@@ -555,13 +555,23 @@ hk_tile_t *hk_tile_create(char *path)
 
 	log_debug(2, "hk_tile_register '%s'", path);
 
+        // Get explicit tile name
+        char *sep = strchr(path, '=');
+        if (sep != NULL) {
+                *(sep++) = '\0';
+                tile->name = strdup(path);
+                path = sep;
+        }
+
 	// Setup name, directory and tile file
 	if (is_dir(path)) {
 		tile->dir = realpath(path, NULL);
 
-		char *str = strdup(path);
-		tile->name = strdup(basename(str));
-		free(str);
+                if (tile->name == NULL) {
+                        char *str = strdup(path);
+                        tile->name = strdup(basename(str));
+                        free(str);
+                }
 
 		int size = strlen(path) + 10;
 		tile->fname = malloc(size);
@@ -572,13 +582,15 @@ hk_tile_t *hk_tile_create(char *path)
 		tile->dir = realpath(dirname(str), NULL);
 		free(str);
 
-		str = strdup(path);
-		tile->name = strdup(basename(str));
-		free(str);
-		char *dot = strrchr(tile->name, '.');
-		if ((dot != NULL) && (strcmp(dot, ".hk") == 0)) {
-			*dot = '\0';
-		}
+                if (tile->name == NULL) {
+                        str = strdup(path);
+                        tile->name = strdup(basename(str));
+                        free(str);
+                        char *dot = strrchr(tile->name, '.');
+                        if ((dot != NULL) && (strcmp(dot, ".hk") == 0)) {
+                                *dot = '\0';
+                        }
+                }
 
 		tile->fname = strdup(path);
 	}
