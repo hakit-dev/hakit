@@ -15,6 +15,7 @@
 
 #include "tab.h"
 #include "log.h"
+#include "mod.h"
 #include "endpoint.h"
 
 
@@ -145,6 +146,10 @@ void hk_ep_set_chart(hk_ep_t *ep, char *chart_name)
 
 void hk_ep_append_name(hk_ep_t *ep, buf_t *out_buf)
 {
+        if (hk_tile_nmemb() > 1) {
+                buf_append_str(out_buf, hk_ep_get_tile_name(ep));
+                buf_append_str(out_buf, ".");
+        }
 	buf_append_str(out_buf, ep->obj->name);
 }
 

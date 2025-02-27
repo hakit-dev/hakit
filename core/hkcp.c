@@ -470,9 +470,10 @@ static void hkcp_source_send_nodes(hkcp_t *hkcp, hk_source_t *source, char *str,
 
 void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source)
 {
+        char *tile_name = hk_ep_get_tile_name(&source->ep);
 	char *name = hk_ep_get_name(&source->ep);
         char *value = hk_ep_get_value(&source->ep);
-	log_debug(3, "hkcp_source_update name='%s.%s' value='%s'", hk_ep_get_tile_name(&source->ep), name, value);
+	log_debug(3, "hkcp_source_update name='%s.%s' value='%s'", tile_name, name, value);
 
 	int size = strlen(name) + strlen(value) + 20;
 	char str[size];
@@ -485,7 +486,12 @@ void hkcp_source_update(hkcp_t *hkcp, hk_source_t *source)
 	hkcp_source_send_nodes(hkcp, source, str, len);
 
 	/* Send event to watchers */
-	snprintf(str, size, "!%s=%s\n", name, value);
+        if (hk_tile_nmemb() > 1) {
+                snprintf(str, size, "!%s.%s=%s\n", tile_name, name, value);
+        }
+        else {
+                snprintf(str, size, "!%s=%s\n", name, value);
+        }
 	tcp_srv_foreach_client(&hkcp->tcp_srv, (tcp_foreach_func_t) hkcp_source_send_watch, str);
 }
 
