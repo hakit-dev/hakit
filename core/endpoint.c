@@ -19,8 +19,11 @@
 #include "endpoint.h"
 
 
+int opt_full_name = 0;
+
 static int hk_sink_free(void *user_data, hk_sink_t *sink);
 static int hk_source_free(void *user_data, hk_source_t *source);
+static hk_source_t *hk_source_retrieve_by_full_name(char *tile_name, char *name);
 
 
 /*
@@ -215,20 +218,48 @@ static void hk_ep_cleanup(hk_ep_t *ep)
  * Sinks
  */
 
-hk_sink_t *hk_sink_retrieve_by_name(char *name)
+static hk_sink_t *hk_sink_retrieve_by_full_name(char *tile_name, char *name)
 {
 	int i;
 
 	for (i = 0; i < hk_endpoints.sinks.nmemb; i++) {
 		hk_sink_t *sink = HK_TAB_VALUE(hk_endpoints.sinks, hk_sink_t *, i);
-                if ((sink != NULL) && (sink->ep.obj != NULL) && (sink->ep.obj->name != NULL)) {
-			if (strcmp(sink->ep.obj->name, name) == 0) {
-				return sink;
-			}
-		}
+                if (sink != NULL) {
+                        hk_obj_t *obj = sink->ep.obj;
+                        if ((obj != NULL) && (obj->name != NULL)) {
+                                if ((tile_name == NULL) || (strcmp(obj->tile->name, tile_name) == 0)) {
+                                        if (strcmp(obj->name, name) == 0) {
+                                                return sink;
+                                        }
+                                }
+                        }
+                }
 	}
 
 	return NULL;
+}
+
+
+hk_sink_t *hk_sink_retrieve_by_name(char *name)
+{
+        char *tile_name = NULL;
+
+        char *pt = strrchr(name, '.');
+        if (pt != NULL) {
+                if (opt_full_name) {
+                        tile_name = name;
+                }
+                *pt = '\0';
+                name = pt + 1;
+        }
+
+        hk_sink_t *sink = hk_sink_retrieve_by_full_name(tile_name, name);
+
+        if (pt != NULL) {
+                *pt = '.';
+        }
+
+        return sink;
 }
 
 
@@ -314,20 +345,29 @@ hk_sink_t *hk_sink_register(hk_obj_t *obj, int local)
 {
 	hk_sink_t *sink;
 
-	/* Ensure there is not sink with this name */
-        sink = hk_sink_retrieve_by_name(obj->name);
-	if (sink != NULL) {
-		log_str("ERROR: Cannot register sink '%s': sink #%d is already registered with this name\n", obj->name, sink->ep.id);
-		return NULL;
-	}
+        char *tile_name = NULL;
+        if (opt_full_name) {
+                tile_name = obj->tile->name;
+                log_debug(3, "hk_sink_register obj='%s.%s' local=%d", obj->tile->name, obj->name, local);
+        }
+        else {
+                log_debug(3, "hk_sink_register obj='*.%s' local=%d", obj->name, local);
+        }
+
+	/* Ensure there is no other sink with this name */
+        sink = hk_sink_retrieve_by_full_name(tile_name, obj->name);
+        if (sink != NULL) {
+                log_str("ERROR: Cannot register sink '%s': sink #%d is already registered with this name\n", obj->name, sink->ep.id);
+                return NULL;
+        }
 
 	/* Allocate new sink */
 	sink = hk_sink_alloc(obj, local);
 	log_debug(2, "hk_sink_register '%s' #%d (%d elements)", obj->name, sink->ep.id, hk_endpoints.sinks.nmemb);
 
         /* Establish local connection with source, if any */
-        if (!local) {
-                hk_source_t *source = hk_source_retrieve_by_name(obj->name);
+        if (!opt_full_name && !local) {
+                hk_source_t *source = hk_source_retrieve_by_full_name(NULL, obj->name);
                 if (source != NULL) {
                         hk_sink_local_connect(sink, source);
                 }
@@ -335,35 +375,6 @@ hk_sink_t *hk_sink_register(hk_obj_t *obj, int local)
 
 	return sink;
 }
-
-
-#if 0
-static void hk_sink_unregister(char *name)
-{
-	hk_sink_t *sink = hk_sink_retrieve_by_name(name);
-	int i, j;
-
-	if (sink == NULL) {
-                return;
-        }
-
-        log_debug(2, "hk_sink_unregister '%s' #%d", name, sink->ep.id);
-
-        /* Cancel connections to local sources */
-        for (i = 0; i < hk_endpoints.sources.nmemb; i++) {
-                hk_source_t *source = HK_TAB_VALUE(hk_endpoints.sources, hk_source_t *, i);
-                for (j = 0; j < source->local_sinks.nmemb; j++) {
-                        hk_sink_t **psink = HK_TAB_PTR(source->local_sinks, hk_sink_t *, j);
-                        if (*psink == sink) {
-                                *psink = NULL;
-                        }
-                }
-        }
-
-        /* Cleanup sink */
-        hk_sink_cleanup(sink);
-}
-#endif
 
 
 int hk_sink_is_public(hk_sink_t *sink)
@@ -473,20 +484,48 @@ int hk_source_to_advertise(void)
 }
 
 
-hk_source_t *hk_source_retrieve_by_name(char *name)
+static hk_source_t *hk_source_retrieve_by_full_name(char *tile_name, char *name)
 {
 	int i;
 
 	for (i = 0; i < hk_endpoints.sources.nmemb; i++) {
 		hk_source_t *source = HK_TAB_VALUE(hk_endpoints.sources, hk_source_t *, i);
-		if ((source != NULL) && (source->ep.obj != NULL)) {
-			if (strcmp(source->ep.obj->name, name) == 0) {
-				return source;
-			}
-		}
+                if (source != NULL) {
+                        hk_obj_t *obj = source->ep.obj;
+                        if ((obj != NULL) && (obj->name != NULL)) {
+                                if ((tile_name == NULL) || (strcmp(obj->tile->name, tile_name) == 0)) {
+                                        if (strcmp(obj->name, name) == 0) {
+                                                return source;
+                                        }
+                                }
+                        }
+                }
 	}
 
 	return NULL;
+}
+
+
+hk_source_t *hk_source_retrieve_by_name(char *name)
+{
+        char *tile_name = NULL;
+
+        char *pt = strrchr(name, '.');
+        if (pt != NULL) {
+                if (opt_full_name) {
+                        tile_name = name;
+                }
+                *pt = '\0';
+                name = pt + 1;
+        }
+
+        hk_source_t *source = hk_source_retrieve_by_full_name(tile_name, name);
+
+        if (pt != NULL) {
+                *pt = '.';
+        }
+
+        return source;
 }
 
 
@@ -548,8 +587,13 @@ hk_source_t *hk_source_register(hk_obj_t *obj, int local, int event)
 {
 	hk_source_t *source;
 
+        char *tile_name = NULL;
+        if (opt_full_name) {
+                tile_name = obj->tile->name;
+        }
+
 	/* Ensure there is not source with this name */
-        source = hk_source_retrieve_by_name(obj->name);
+        source = hk_source_retrieve_by_full_name(tile_name, obj->name);
 	if (source != NULL) {
 		log_str("ERROR: Cannot register source '%s': source #%d is already registered with this name\n", obj->name, source->ep.id);
 		return NULL;
@@ -560,30 +604,15 @@ hk_source_t *hk_source_register(hk_obj_t *obj, int local, int event)
 	log_debug(2, "hk_source_register '%s' #%d (%d elements)", obj->name, source->ep.id, hk_endpoints.sources.nmemb);
 
         /* Establish local connection with sink, if any */
-        hk_sink_t *sink = hk_sink_retrieve_by_name(obj->name);
-	if (sink != NULL) {
-                hk_sink_local_connect(sink, source);
-	}
+        if (opt_full_name) {
+                hk_sink_t *sink = hk_sink_retrieve_by_full_name(NULL, obj->name);
+                if (sink != NULL) {
+                        hk_sink_local_connect(sink, source);
+                }
+        }
 
 	return source;
 }
-
-
-#if 0
-void hk_source_unregister(char *name)
-{
-	hk_source_t *source = hk_source_retrieve_by_name(name);
-
-	if (source == NULL) {
-                return;
-	}
-
-        log_debug(2, "hk_source_unregister '%s' #%d", name, source->ep.id);
-
-        /* Cleanup source */
-        hk_source_cleanup(source);
-}
-#endif
 
 
 int hk_source_is_public(hk_source_t *source)

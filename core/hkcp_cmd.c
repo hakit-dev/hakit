@@ -26,20 +26,13 @@ static void hkcp_command_set(int argc, char **argv, buf_t *out_buf)
 	int i;
 
 	for (i = 1; i < argc; i++) {
-		char *args = argv[i];
-		char *value = strchr(args, '=');
+		char *name = argv[i];
+		char *value = strchr(name, '=');
 
 		if (value != NULL) {
 			hk_sink_t *sink;
 
 			*(value++) = '\0';
-                        char *name = strrchr(args, '.');
-                        if (name != NULL) {
-                                name++;
-                        }
-                        else {
-                                name = args;
-                        }
 
 			sink = hk_sink_retrieve_by_name(name);
 			if (sink != NULL) {
@@ -55,7 +48,7 @@ static void hkcp_command_set(int argc, char **argv, buf_t *out_buf)
 		}
 		else {
 			buf_append_str(out_buf, ".ERROR: Syntax error in command: ");
-			buf_append_str(out_buf, args);
+			buf_append_str(out_buf, name);
 			buf_append_str(out_buf, "\n");
 		}
 	}

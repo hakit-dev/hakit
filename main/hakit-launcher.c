@@ -82,6 +82,7 @@ static int opt_mqtt_port = MQTT_PORT;
 static int opt_no_ssl = 0;
 static char *opt_tile = NULL;
 static char *opt_http_alias = NULL;
+static int opt_full_name = 0;
 
 static const options_entry_t options_entries[] = {
 	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
@@ -99,6 +100,7 @@ static const options_entry_t options_entries[] = {
 	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl, "Disable SSL for all engine protocols (HKCP, MQTT and HTTP)" },
 	{ "http-alias", 'a', 0, OPTIONS_TYPE_STRING, &opt_http_alias, "Set list of HTTP alias to file paths", "ALIAS=DIR,..." },
 	{ "tile",    't', 0, OPTIONS_TYPE_STRING,  &opt_tile, "Set list of local tiles (implies --offline)", "TILE,..." },
+	{ "full-name",    'f', 0, OPTIONS_TYPE_NONE,   &opt_full_name,    "Use fully qualified endpoint names. Do not connect local sinks/sources together." },
 	{ NULL }
 };
 
@@ -583,6 +585,10 @@ static void engine_start(ctx_t *ctx)
 
 	if (opt_no_advertise) {
 		HK_TAB_PUSH_VALUE(engine_argv, strdup("--no-advertise"));
+	}
+
+	if (opt_full_name) {
+		HK_TAB_PUSH_VALUE(engine_argv, strdup("--full-name"));
 	}
 
 	if (opt_http_alias != NULL) {
