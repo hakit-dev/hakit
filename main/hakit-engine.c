@@ -47,22 +47,22 @@ static int opt_trace_depth = 0;
 extern int opt_full_name;
 
 static const options_entry_t options_entries[] = {
-	{ "debug",        'd', 0, OPTIONS_TYPE_INT,    &opt_debug,        "Set debug level", "N" },
-	{ "no-advertise", 'N', 0, OPTIONS_TYPE_NONE,   &opt_no_advertise, "Disable HKCP/MQTT advertising" },
-	{ "no-hkcp",      'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp,      "Disable HKCP protocol" },
-	{ "class-path",   'C', 0, OPTIONS_TYPE_STRING, &opt_class_path,   "Comma-separated list of class directory pathes", "DIRS" },
-	{ "trace-depth",  't', 0, OPTIONS_TYPE_INT,    &opt_trace_depth,  "Set trace recording depth for user interface charts.", "DEPTH" },
-	{ "full-name",    'f', 0, OPTIONS_TYPE_NONE,   &opt_full_name,    "Use fully qualified endpoint names. Do not connect local sinks/sources together." },
+	{ "debug",        'd', OPTION_FLAG_NONE, OPTIONS_TYPE_INT,    &opt_debug,        "Set debug level", "N" },
+	{ "no-advertise", 'N', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_no_advertise, "Disable HKCP/MQTT advertising" },
+	{ "no-hkcp",      'n', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_no_hkcp,      "Disable HKCP protocol" },
+	{ "class-path",   'C', OPTION_FLAG_LIST, OPTIONS_TYPE_STRING, &opt_class_path,   "Comma-separated list of class directory pathes", "DIRS" },
+	{ "trace-depth",  't', OPTION_FLAG_NONE, OPTIONS_TYPE_INT,    &opt_trace_depth,  "Set trace recording depth for user interface charts.", "DEPTH" },
+	{ "full-name",    'f', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_full_name,    "Use fully qualified endpoint names. Do not connect local sinks/sources together." },
 #ifdef WITH_SSL
-	{ "no-https",     's', 0, OPTIONS_TYPE_NONE,   &opt_no_https,     "Use HTTP instead of HTTPS" },
-	{ "insecure",     'k', 0, OPTIONS_TYPE_NONE,   &opt_insecure_ssl, "Allow insecure HTTP TLS/SSL for client connections (self-signed certificates)" },
-	{ "certs",        'e', 0, OPTIONS_TYPE_STRING, &opt_certs,        "TLS/SSL certificate directory for HKCP/MQTT exchanges", "DIR" },
+	{ "no-https",     's', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_no_https,     "Use HTTP instead of HTTPS" },
+	{ "insecure",     'k', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_insecure_ssl, "Allow insecure HTTP TLS/SSL for client connections (self-signed certificates)" },
+	{ "certs",        'e', OPTION_FLAG_NONE, OPTIONS_TYPE_STRING, &opt_certs,        "TLS/SSL certificate directory for HKCP/MQTT exchanges", "DIR" },
 #endif
-	{ "http-auth",    'A', 0, OPTIONS_TYPE_STRING, &opt_http_auth,    "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
-	{ "http-alias",   'a', 0, OPTIONS_TYPE_STRING, &opt_http_alias,   "Set HTTP alias to directory", "ALIAS=DIR,..." },
+	{ "http-auth",    'A', OPTION_FLAG_NONE, OPTIONS_TYPE_STRING, &opt_http_auth,    "HTTP Authentication file. Authentication is disabled if none is specified", "FILE" },
+	{ "http-alias",   'a', OPTION_FLAG_LIST, OPTIONS_TYPE_STRING, &opt_http_alias,   "Set HTTP alias to directory", "ALIAS=DIR,..." },
 #ifdef WITH_MQTT
-	{ "no-mqtt",      'm', 0, OPTIONS_TYPE_NONE,   &opt_no_mqtt,      "Disable MQTT protocol" },
-	{ "mqtt-broker",  'b', 0, OPTIONS_TYPE_STRING, &opt_mqtt_broker,  "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
+	{ "no-mqtt",      'm', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_no_mqtt,      "Disable MQTT protocol" },
+	{ "mqtt-broker",  'b', OPTION_FLAG_NONE, OPTIONS_TYPE_STRING, &opt_mqtt_broker,  "MQTT broker specification", "[USER[:PASSWORD]@]HOST[:PORT]" },
 #endif
 	{ NULL }
 };

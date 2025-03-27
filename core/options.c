@@ -154,7 +154,26 @@ static int options_parse_value(const options_entry_t *entry, char *value)
 			return -1;
 		}
 		else {
-			*((char **) entry->value_ptr) = strdup(value);
+                        char **ptr = entry->value_ptr;
+                        if (entry->flags & OPTION_FLAG_LIST) {
+                                int len1 = 0;
+                                if (*ptr != NULL) {
+                                        len1 = strlen(*ptr);
+                                }
+                                int len = len1 + 1 + strlen(value);
+                                *ptr = realloc(*ptr, len+1);
+                                char *str = *ptr;
+                                if (len1 > 0) {
+                                        str[len1++] = ',';
+                                }
+                                strcpy(&str[len1], value);
+                        }
+                        else {
+                                if (*ptr != NULL) {
+                                        free(*ptr);
+                                }
+                                *ptr = strdup(value);
+                        }
 		}
 		break;
 	default:

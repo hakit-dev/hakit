@@ -16,6 +16,9 @@ extern "C" {
 
 #define OPTIONS_DEFAULT_CONF_DIR "/etc/hakit"
 
+#define OPTION_FLAG_NONE 0
+#define OPTION_FLAG_LIST 1
+
 typedef enum {
 	OPTIONS_TYPE_NONE=0,
 	OPTIONS_TYPE_INT,
@@ -27,7 +30,7 @@ typedef enum {
 typedef struct {
 	const char *long_opt;
 	const char short_opt;
-	const int x;
+	const unsigned int flags;
 	const options_type_t type;
 	const void *value_ptr;
 	const char *description;

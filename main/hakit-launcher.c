@@ -85,22 +85,22 @@ static char *opt_http_alias = NULL;
 static int opt_full_name = 0;
 
 static const options_entry_t options_entries[] = {
-	{ "debug",  'd', 0,    OPTIONS_TYPE_INT,  &opt_debug,   "Set debug level", "N" },
-	{ "daemon", 'D', 0,    OPTIONS_TYPE_NONE, &opt_daemon,  "Run in background as a daemon" },
-	{ "pid-file", 'P', 0,  OPTIONS_TYPE_STRING, &opt_pid_file,  "Daemon PID file name (default: " PID_FILE ")", "FILE" },
-	{ "platform-url", 'U', 0, OPTIONS_TYPE_STRING,   &opt_platform_url,  "HAKit web platform URL (default: " PLATFORM_URL ")", "URL" },
-	{ "lib-dir", 'L', 0,   OPTIONS_TYPE_STRING,  &opt_lib_dir,  "Lib directory to store tiles and config files (default: " LIB_DIR ")", "DIR" },
-	{ "offline", 'l', 0,   OPTIONS_TYPE_NONE,  &opt_offline,  "Work off-line. Do not access the HAKit platform server" },
-	{ "no-advertise", 'N', 0, OPTIONS_TYPE_NONE,   &opt_no_advertise, "Disable HKCP/MQTT advertising" },
-	{ "no-hkcp", 'n', 0, OPTIONS_TYPE_NONE,   &opt_no_hkcp, "Disable HKCP protocol" },
+	{ "debug",        'd', OPTION_FLAG_NONE, OPTIONS_TYPE_INT,    &opt_debug,        "Set debug level", "N" },
+	{ "daemon",       'D', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_daemon,       "Run in background as a daemon" },
+	{ "pid-file",     'P', OPTION_FLAG_NONE, OPTIONS_TYPE_STRING, &opt_pid_file,     "Daemon PID file name (default: " PID_FILE ")", "FILE" },
+	{ "platform-url", 'U', OPTION_FLAG_NONE, OPTIONS_TYPE_STRING, &opt_platform_url, "HAKit web platform URL (default: " PLATFORM_URL ")", "URL" },
+	{ "lib-dir",      'L', OPTION_FLAG_NONE, OPTIONS_TYPE_STRING, &opt_lib_dir,      "Lib directory to store tiles and config files (default: " LIB_DIR ")", "DIR" },
+	{ "offline",      'l', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_offline,      "Work off-line. Do not access the HAKit platform server" },
+	{ "no-advertise", 'N', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_no_advertise, "Disable HKCP/MQTT advertising" },
+	{ "no-hkcp",      'n', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_no_hkcp,      "Disable HKCP protocol" },
 #ifdef WITH_MQTT
-	{ "no-mqtt",   'm', 0, OPTIONS_TYPE_NONE,   &opt_no_mqtt, "Disable MQTT protocol" },
-	{ "mqtt-port", 'p', 0, OPTIONS_TYPE_INT, &opt_mqtt_port, "MQTT broker port number (default: " xstr(MQTT_PORT) ")", "PORT" },
+	{ "no-mqtt",      'm', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_no_mqtt,      "Disable MQTT protocol" },
+	{ "mqtt-port",    'p', OPTION_FLAG_NONE, OPTIONS_TYPE_INT,    &opt_mqtt_port,    "MQTT broker port number (default: " xstr(MQTT_PORT) ")", "PORT" },
 #endif
-	{ "no-ssl",  's', 0, OPTIONS_TYPE_NONE,   &opt_no_ssl, "Disable SSL for all engine protocols (HKCP, MQTT and HTTP)" },
-	{ "http-alias", 'a', 0, OPTIONS_TYPE_STRING, &opt_http_alias, "Set list of HTTP alias to file paths", "ALIAS=DIR,..." },
-	{ "tile",    't', 0, OPTIONS_TYPE_STRING,  &opt_tile, "Set list of local tiles (implies --offline)", "TILE,..." },
-	{ "full-name",    'f', 0, OPTIONS_TYPE_NONE,   &opt_full_name,    "Use fully qualified endpoint names. Do not connect local sinks/sources together." },
+	{ "no-ssl",       's', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_no_ssl,       "Disable SSL for all engine protocols (HKCP, MQTT and HTTP)" },
+	{ "http-alias",   'a', OPTION_FLAG_LIST, OPTIONS_TYPE_STRING, &opt_http_alias,   "Set list of HTTP alias to file paths", "ALIAS=DIR,..." },
+	{ "tile",         't', OPTION_FLAG_LIST, OPTIONS_TYPE_STRING, &opt_tile,         "Set list of local tiles (implies --offline)", "TILE,..." },
+	{ "full-name",    'f', OPTION_FLAG_NONE, OPTIONS_TYPE_NONE,   &opt_full_name,    "Use fully qualified endpoint names. Do not connect local sinks/sources together." },
 	{ NULL }
 };
 
