@@ -389,6 +389,7 @@ int comm_tile_register(char *path)
 int comm_alias_register(char *alias, char *dir)
 {
         ws_alias(&comm.server, alias, dir);
+        return 0;
 }
 
 
