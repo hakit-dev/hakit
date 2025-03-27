@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <glob.h>
 
 #include "types.h"
 #include "log.h"
@@ -154,7 +155,7 @@ static int options_parse_value(const options_entry_t *entry, char *value)
 			return -1;
 		}
 		else {
-                        char **ptr = entry->value_ptr;
+                        char **ptr = (char **) entry->value_ptr;
                         if (entry->flags & OPTION_FLAG_LIST) {
                                 int len1 = 0;
                                 if (*ptr != NULL) {
@@ -190,22 +191,20 @@ static int options_parse_value(const options_entry_t *entry, char *value)
 }
 
 
-int options_conf_parse(const options_entry_t *entries, char *conf_file)
+static int options_conf_parse_path(const options_entry_t *entries, char *path)
 {
-	char *dir = (conf_dir != NULL) ? conf_dir : OPTIONS_DEFAULT_CONF_DIR;
-	char path[strlen(dir) + strlen(conf_file) + 2];
 	char buf[1024];
 	int lineno = 0;
 	int ret = 0;
-	FILE *f;
 
 	/* Open config file from config directory */
-	snprintf(path, sizeof(path), "%s/%s", dir, conf_file);
-	f = fopen(path, "r");
+	FILE *f = fopen(path, "r");
 	if (f == NULL) {
-		log_debug(3, "Cannot open file '%s': %s", path, strerror(errno));
+		log_str("ERROR: Cannot open file '%s': %s", path, strerror(errno));
 		return -1;
 	}
+
+        log_str("Parsing option file '%s'", path);
 
 	while ((ret == 0) && (fgets(buf, sizeof(buf), f) != NULL)) {
 		lineno++;
@@ -262,19 +261,45 @@ int options_conf_parse(const options_entry_t *entries, char *conf_file)
 			}
 
 			if (options_parse_value(entry, value)) {
-				log_str("ERROR: %s:%d: Missing config value for keyword '%s'", conf_file, lineno, entry->long_opt);
+				log_str("ERROR: %s:%d: Missing config value for keyword '%s'", path, lineno, entry->long_opt);
 				ret = -2;
 			}
 		}
 		else {
 			kw[len] = '\0';
-			log_str("WARNING: %s:%d: Unknown keyword '%s'", conf_file, lineno, kw);
+			log_str("WARNING: %s:%d: Unknown keyword '%s'", path, lineno, kw);
 		}
 	}
 
 	fclose(f);
 
 	return ret;
+}
+
+
+static char *option_conf_path(char *conf_file)
+{
+	char *dir = (conf_dir != NULL) ? conf_dir : OPTIONS_DEFAULT_CONF_DIR;
+        size_t size = strlen(dir) + strlen(conf_file) + 2;
+	char *path = malloc(size);
+        if (path != NULL) {
+                snprintf(path, size, "%s/%s", dir, conf_file);
+        }
+        return path;
+}
+
+
+int options_conf_parse(const options_entry_t *entries, char *conf_file)
+{
+        int ret = -1;
+
+        char *path = option_conf_path(conf_file);
+        if (path != NULL) {
+                ret = options_conf_parse_path(entries, path);
+                free(path);
+        }
+
+        return ret;
 }
 
 
@@ -301,7 +326,27 @@ int options_parse(const options_entry_t *entries, char *conf_file, int *_argc, c
 
 	/* Parse options from config file */
         if (conf_file != NULL) {
-                options_conf_parse(entries, conf_file);
+                char *path = option_conf_path(conf_file);
+                if (path != NULL) {
+                        glob_t globbuf = {};
+
+                        if (glob(path, 0, NULL, &globbuf) == 0) {
+                                for (i = 0; i < globbuf.gl_pathc; i++) {
+                                        char *str = globbuf.gl_pathv[i];
+                                        int len = strlen(str);
+                                        if (len > 0) {
+                                                if (str[len-1] == '~') {
+                                                        continue;
+                                                }
+                                        }
+                                        //fprintf(stderr, "[%d] = '%s'\n", i, str);
+                                        options_conf_parse_path(entries, str);
+                                }
+                        }
+
+                        globfree(&globbuf);
+                        free(path);
+                }
         }
 
 	/* Parse options from command line */

@@ -1416,7 +1416,7 @@ static int stdin_recv(void *user_data, char *buf, int len)
 
 int main(int argc, char *argv[])
 {
-	if (options_parse(options_entries, "launcher", &argc, argv) != 0) {
+	if (options_parse(options_entries, "launcher*", &argc, argv) != 0) {
 		exit(1);
 	}
 
